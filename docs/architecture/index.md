@@ -11,6 +11,7 @@ Gazer 以 `src/` 为单一代码根，按能力域拆分模块，并由 Runtime 
 - **LLM**：模型供应商接入、路由与预算治理。
 - **Memory/Soul**：长期记忆与人格认知。
 - **Bus/Channels**：消息总线与多通道适配。
+- **Devices / 硬件抽象层**：DeviceRegistry 调度设备节点；BodyDriver 抽象机体（机械臂、球形显示、LED 等），由 BodyHardwareNode 暴露给工具与 Agent。
 
 ## 架构亮点
 
@@ -39,3 +40,4 @@ Gazer 以 `src/` 为单一代码根，按能力域拆分模块，并由 Runtime 
 - [LLM 路由与部署治理](./llm-routing.md)
 - [Memory 与 Soul](./memory-soul.md)
 - [Bus 与 Channels](./bus-channels.md)
+- [设备节点](../modules/device-node.md) / [硬件抽象层](../modules/hardware-abstraction.md)

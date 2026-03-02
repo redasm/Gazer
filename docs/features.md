@@ -69,15 +69,15 @@ Gazer 已具备"评测—优化—再评测"的工程骨架：
 
 ## 6) 具身与硬件支持
 
-Gazer 面向桌面具身场景，支持设备接入与动作执行：
+Gazer 面向桌面具身场景，支持设备接入与机体控制：
 
-- 设备节点通信
-- 硬件状态回传与心跳机制
-- 高风险物理动作的策略门禁
+- **硬件抽象层（HAL）**：BodyDriver 统一接口，支持机械臂（串口）、球形/头显显示、LED、麦克风与 TTS；SerialArmDriver / NullDriver 可配置切换。
+- **设备节点**：DeviceRegistry 调度本地桌面、卫星与机体节点；BodyHardwareNode 将 HAL 暴露为 `hardware.*` 动作供工具与 Agent 调用。
+- 硬件状态回传与心跳、高风险物理动作的策略门禁。
 
-实现线索：`src/devices/*`、`src/runtime/brain.py`（设备初始化与编排）。
+实现线索：`hardware/drivers/*`（BodyDriver、SerialArmDriver）、`src/devices/*`、`src/runtime/brain.py`（设备初始化与编排）。详见 [硬件抽象层](./modules/hardware-abstraction.md)。
 
-**价值**：从"纯软件助手"扩展到"可感知、可执行"的实体交互体验。
+**价值**：从"纯软件助手"扩展到"可感知、可执行"的实体交互体验（机械臂、球形显示等）。
 
 ## 7) 卫星模式（Satellite Mode）
 

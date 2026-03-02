@@ -51,6 +51,7 @@ Gazer 是一个桌面级具身 AI 伴侣系统，采用"Agent + Tool + Memory + 
 - [Memory 系统（OpenViking）](./modules/memory-system.md)
 - [Soul 系统（认知/情感/人格）](./modules/soul-system.md)
 - [设备节点（Device Node）](./modules/device-node.md)
+- [硬件抽象层（机械臂 / 球形显示）](./modules/hardware-abstraction.md)
 - [卫星模式（Satellite Mode）](./modules/satellite-mode.md)
 - [安全模型（Security）](./modules/security.md)
 - [Web 管理台（Web Console）](./modules/web-console.md)

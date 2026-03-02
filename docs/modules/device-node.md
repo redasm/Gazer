@@ -1,4 +1,4 @@
-﻿# 设备节点（Device Node）
+# 设备节点（Device Node）
 
 设备层负责把 Agent 的工具调用映射为可执行动作，统一通过 `DeviceRegistry` 管理。
 
@@ -32,7 +32,7 @@
 
 - 本地模式：注册 `LocalDesktopNode`，可执行本机截图、输入等动作。
 - 卫星模式：存在 `perception.satellite_ids` 时注册多个 `RemoteSatelliteNode`。
-- 机体模式：`devices.body_node.enabled=true` 时注册 `BodyHardwareNode`。
+- 机体模式：`devices.body_node.enabled=true` 时注册 `BodyHardwareNode`，底层由**硬件抽象层**（BodyDriver）驱动机械臂、球形/头显、LED、音频等，详见 [硬件抽象层（Hardware Abstraction Layer）](./hardware-abstraction.md)。
 
 ## 配置关注项
 
@@ -52,3 +52,7 @@
 - `DEVICE_INVOKE_EXCEPTION`：节点执行内部异常。
 
 建议先看 Brain 启动日志中的 `Registered device node` 与节点列表接口输出，再定位动作层错误。
+
+## 相关文档
+
+- [硬件抽象层](./hardware-abstraction.md)：BodyDriver 接口、机械臂驱动（SerialArmDriver）、球形/头显显示与 LED 等机体能力。
