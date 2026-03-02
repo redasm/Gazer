@@ -12,20 +12,10 @@ const emptyProvider = {
     auth: '',
     headers: {},
     authHeader: false,
-    strict_api_mode: true,
-    reasoning_param: null,
     models: [],
     agents: {},
 };
 
-const resolveReasoningParamMode = (cfg) => {
-    const snake = cfg && typeof cfg.reasoning_param === 'boolean' ? cfg.reasoning_param : null;
-    const camel = cfg && typeof cfg.reasoningParam === 'boolean' ? cfg.reasoningParam : null;
-    const value = snake !== null ? snake : camel;
-    if (value === true) return 'enabled';
-    if (value === false) return 'disabled';
-    return 'auto';
-};
 
 const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders, t }) => {
     const providerNames = useMemo(
@@ -277,45 +267,6 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                                 onChange={(next) => updateLocal({ authHeader: next })}
                             />
                         </div>
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 8,
-                            }}
-                        >
-                            <span style={{ color: '#cbd5e1', textAlign: 'left' }}>strict_api_mode</span>
-                            <ToggleSwitch
-                                checked={
-                                    typeof selectedCfg.strict_api_mode === 'boolean'
-                                        ? selectedCfg.strict_api_mode
-                                        : (typeof selectedCfg.strictApiMode === 'boolean' ? selectedCfg.strictApiMode : true)
-                                }
-                                onChange={(next) => updateLocal({ strict_api_mode: next, strictApiMode: null })}
-                            />
-                        </div>
-                        <span style={{ color: '#cbd5e1', textAlign: 'left' }}>reasoning_param</span>
-                        <select
-                            className="w-full bg-black/30 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 transition-all"
-                            value={resolveReasoningParamMode(selectedCfg)}
-                            onChange={(e) => {
-                                const mode = String(e.target.value || 'auto');
-                                if (mode === 'enabled') {
-                                    updateLocal({ reasoning_param: true, reasoningParam: null });
-                                    return;
-                                }
-                                if (mode === 'disabled') {
-                                    updateLocal({ reasoning_param: false, reasoningParam: null });
-                                    return;
-                                }
-                                updateLocal({ reasoning_param: null, reasoningParam: null });
-                            }}
-                        >
-                            <option value="auto">auto (by model capability)</option>
-                            <option value="enabled">enabled (force send)</option>
-                            <option value="disabled">disabled (force skip)</option>
-                        </select>
                         <span style={{ color: '#cbd5e1', textAlign: 'left' }}>headers</span>
                         <textarea
                             className="w-full bg-black/30 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 transition-all"
