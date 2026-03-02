@@ -718,6 +718,21 @@ export const translations = {
         healthOk: "Health OK",
         healthFail: "Unhealthy",
 
+        // Planning Policy
+        planningPolicy: "Planning Policy",
+        minMessageChars: "Min Message Chars",
+        minHistoryMessages: "Min History Messages",
+        minLineBreaks: "Min Line Breaks",
+        minListLines: "Min List Lines",
+
+        // Smart Collaboration
+        smartCollab: "Smart Collaboration",
+        smartCollabDesc: "When enabled, the system automatically detects complex tasks and dispatches them to multiple worker agents in parallel. Simple tasks still use the single-agent path.",
+        smartCollabEnabled: "Enable Smart Collaboration",
+        smartCollabEnabledHint: "System auto-scores task complexity (fast brain, <200ms) and only activates multi-agent when beneficial",
+        smartCollabMaxWorkers: "Max Workers",
+        smartCollabMaxWorkersHint: "Upper bound for concurrent workers. The system decides actual count per task (usually 2-4). Higher = more parallelism but more token cost.",
+
         // Nav groups
         navGroupChat: "Chat",
         navGroupControl: "Control",
@@ -1449,6 +1464,21 @@ export const translations = {
         // Cron & Canvas
         cronJobs: "定时任务",
         canvas: "画布",
+
+        // Planning Policy
+        planningPolicy: "规划策略",
+        minMessageChars: "最小消息字数",
+        minHistoryMessages: "最小历史消息数",
+        minLineBreaks: "最小换行数",
+        minListLines: "最小列表行数",
+
+        // Smart Collaboration
+        smartCollab: "智能协作",
+        smartCollabDesc: "开启后，系统会自动检测复杂任务并分发给多个 Worker Agent 并行执行。简单任务仍走单 Agent 路径。",
+        smartCollabEnabled: "启用智能协作",
+        smartCollabEnabledHint: "系统自动评估任务复杂度（快脑评分，<200ms），仅在有收益时激活多 Agent",
+        smartCollabMaxWorkers: "最大 Worker 数",
+        smartCollabMaxWorkersHint: "并发 Worker 上限。系统会按任务实际需求决定数量（通常 2-4）。越高并行度越强，但 token 消耗也越多。",
 
         // Nav groups
         navGroupChat: "聊天",
