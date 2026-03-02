@@ -3,6 +3,7 @@ models:
   embedding:
     provider: dashscope
     model: text-embedding-v3
+    enabled: false
   router:
     enabled: true
     strategy: priority
@@ -306,7 +307,6 @@ coding:
     strict_host_key_checking: true
     remote_workspace: .
 runtime:
-  environment: dev
   backend: python
   rust_sidecar:
     endpoint: ''
@@ -317,9 +317,10 @@ runtime:
       enabled: false
       owner_only: false
       channels: []
+  environment: dev
 feishu:
   enabled: true
-  app_id: 
+  app_id: null
   app_secret: 
   allowed_ids: []
   simulated_typing:
@@ -344,29 +345,6 @@ discord:
   enabled: false
   token: ''
   allowed_guild_ids: []
-  dm_policy: pairing
-whatsapp:
-  enabled: false
-  phone_number_id: ''       # Meta developer portal → Phone Number ID
-  access_token: ''          # System user permanent token (or env WHATSAPP_ACCESS_TOKEN)
-  verify_token: ''          # Webhook verification token (or env WHATSAPP_VERIFY_TOKEN)
-  webhook_secret: ''        # App secret for X-Hub-Signature-256 validation
-  api_version: 'v21.0'
-  dm_policy: pairing
-signal:
-  enabled: false
-  api_url: ''               # signal-cli-rest-api URL (or env SIGNAL_API_URL)
-  phone_number: ''          # Registered Signal number (or env SIGNAL_PHONE_NUMBER)
-  dm_policy: pairing
-teams:
-  enabled: false
-  app_id: ''                # Azure AD App ID (or env TEAMS_APP_ID)
-  app_secret: ''            # Azure AD App Secret (or env TEAMS_APP_SECRET)
-  dm_policy: pairing
-google_chat:
-  enabled: false
-  service_account_file: ''  # Path to GCP service account JSON
-  project_id: ''            # Google Cloud project ID
   dm_policy: pairing
 web:
   search:
@@ -490,6 +468,8 @@ api:
     allowed_resource_prefixes: []
     allowed_prompt_names: []
     audit_retain: 500
+  cors_strict_mode: true
+  require_origin_for_mutations: true
 security:
   tool_groups:
     desktop:
@@ -627,13 +607,10 @@ sandbox:
   enabled: false
   image: python:3.11-slim
   workspace_mode: rw
-multi_agent:
-  allow_multi: false
-  max_workers: 5
 agents:
   defaults:
     model:
-      primary: gmn/gpt-5.2
+      primary: gmn/gpt-5.3-codex
       fallbacks:
       - dashscope/qwen3-vl-plus
     models:
@@ -645,6 +622,9 @@ agents:
         alias: Qwen Max
       dashscope/qwen-turbo:
         alias: Qwen Turbo
+      gmn/gpt-5:
+        '2':
+          alias: GPT 5.2
     workspace: .
     compaction:
       mode: safeguard
@@ -778,3 +758,29 @@ body:
   baudrate: 115200
 ui:
   enabled: false
+whatsapp:
+  enabled: false
+  phone_number_id: ''
+  access_token: ''
+  verify_token: ''
+  webhook_secret: ''
+  api_version: v21.0
+  dm_policy: pairing
+signal:
+  enabled: false
+  api_url: ''
+  phone_number: ''
+  dm_policy: pairing
+teams:
+  enabled: false
+  app_id: ''
+  app_secret: ''
+  dm_policy: pairing
+google_chat:
+  enabled: false
+  service_account_file: ''
+  project_id: ''
+  dm_policy: pairing
+multi_agent:
+  allow_multi: false
+  max_workers: 5

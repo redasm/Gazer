@@ -80,6 +80,8 @@ GOOGLE_CHAT_CHANNEL: Optional[Any] = None
 
 # Usage / tracking
 USAGE_TRACKER: Optional[Any] = None
+IPC_USAGE_SNAPSHOT: Optional[Dict[str, Any]] = None
+IPC_ROUTER_STATUS: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------

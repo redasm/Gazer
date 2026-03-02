@@ -325,6 +325,7 @@ class GazerAgent:
             memory_manager=self.memory_manager,
             tool_registry=self.loop.tools,
             llm_provider=self.provider,
+            usage_tracker=self.loop.usage,
         )
         self._register_turn_hooks()
         

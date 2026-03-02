@@ -52,6 +52,7 @@ class GazerPersonality:
         memory_manager: "MemoryManager",
         tool_registry: Optional[ToolRegistry] = None,
         llm_provider: Optional[LLMProvider] = None,
+        usage_tracker: Optional[Any] = None,
     ) -> None:
         states, initial_state_name, transitions = self._load_mental_process_config()
         initial_state = states.get(initial_state_name) or states.get("IDLE") or self.IDLE
@@ -60,7 +61,8 @@ class GazerPersonality:
         self.state_history: deque[MentalState] = deque([initial_state], maxlen=100)
         # Shared instances (no longer created here)
         self.memory_manager = memory_manager
-        self.tool_registry = tool_registry or ToolRegistry()
+        self.tool_registry = tool_registry if tool_registry is not None else ToolRegistry()
+        self._usage_tracker = usage_tracker
         self._states = states
         self._on_input_transition = transitions
         self.trust_system = TrustSystem()
@@ -279,6 +281,12 @@ class GazerPersonality:
                 logger.error("LLM provider call failed: %s", e)
                 return MemoryEntry(sender="Gazer", content="[System Error: Cognitive Failure]")
 
+            if self._usage_tracker is not None and resp.usage:
+                self._usage_tracker.add(
+                    resp.usage,
+                    model=resp.model or self._llm_model or "",
+                )
+
             metadata: dict = {}
             if resp.tool_calls:
                 metadata = {
@@ -347,7 +355,19 @@ class GazerPersonality:
             social_context = self.trust_system.get_relationship_prompt(sender_id)
 
             # Populate WorkingContext slots
-            tools_desc = self.tool_registry.get_definitions()
+            channel = str(context.get_metadata("channel") or "").strip()
+            tools_desc = self.tool_registry.get_definitions(
+                sender_id=sender_id,
+                channel=channel,
+            )
+            if not tools_desc:
+                total_registered = len(self.tool_registry)
+                logger.warning(
+                    "Soul received empty tool list (Available Tools: []). "
+                    "Registry holds %d tool(s); sender_id=%r channel=%r. "
+                    "If total>0, all tools were filtered out by access policy.",
+                    total_registered, sender_id, channel,
+                )
             motivation_context = self._build_motivation_context()
 
             agent_ctx = list(context.agent_context)

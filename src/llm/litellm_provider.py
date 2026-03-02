@@ -41,6 +41,7 @@ _DEFAULT_MAX_DELAY = 30.0  # seconds
 _DEFAULT_JITTER = 0.5  # random factor
 _DEFAULT_REQUEST_TIMEOUT = 60.0  # seconds
 _OPENAI_COMPAT_API_MODES = {
+    "openai",
     "openai-responses",
     "responses",
     "openai_response",
@@ -399,7 +400,25 @@ class LiteLLMProvider(LLMProvider):
                                 }
                             )
         return converted
-    
+
+    @staticmethod
+    def _tools_to_responses_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert Chat Completions tool schema to Responses API format.
+
+        Chat Completions: {"type":"function","function":{"name":...,"parameters":...}}
+        Responses API:    {"type":"function","name":...,"parameters":...}
+        """
+        converted: List[Dict[str, Any]] = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            fn = tool.get("function")
+            if isinstance(fn, dict) and tool.get("type") == "function":
+                converted.append({"type": "function", **fn})
+            else:
+                converted.append(tool)
+        return converted
+
     async def chat(
         self,
         messages: List[Dict[str, Any]],
@@ -507,7 +526,7 @@ class LiteLLMProvider(LLMProvider):
                     if custom_provider:
                         responses_kwargs["custom_llm_provider"] = custom_provider
                     if tools:
-                        responses_kwargs["tools"] = tools
+                        responses_kwargs["tools"] = self._tools_to_responses_format(tools)
                         responses_kwargs["tool_choice"] = "auto"
                     if send_reasoning:
                         responses_kwargs["reasoning"] = {"enabled": True}

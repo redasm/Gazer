@@ -16,6 +16,7 @@ from tools.admin._shared import (
 from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER  # noqa: F401
 from tools.admin.auth import verify_admin_token
 from tools.admin._shared import _append_policy_audit
+import tools.admin._shared as _shared
 from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
 
@@ -1309,8 +1310,9 @@ async def get_observability_metrics(limit: int = 200):
     model_map: Dict[str, Dict[str, Any]] = {}
 
     _llm_router = get_llm_router()
-    if _llm_router is not None:
-        status = _llm_router.get_status()
+    _status_raw = _llm_router.get_status() if _llm_router is not None else _shared.IPC_ROUTER_STATUS
+    if _status_raw is not None:
+        status = _status_raw
         providers = status.get("providers", []) if isinstance(status, dict) else []
         all_latencies: List[float] = []
         total_calls = 0

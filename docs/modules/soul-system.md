@@ -1,4 +1,4 @@
-﻿# Soul 系统（认知/情感/人格）
+# Soul 系统（认知/情感/人格）
 
 Soul 模块负责“像谁、如何思考、如何保持连续性”，是 Gazer 的人格与认知核心。
 
@@ -61,6 +61,17 @@ Soul 不直接依赖具体存储后端，统一依赖 `MemoryPort` 抽象。
 - `doc/soul_architecture_reform_patch_v1.2.md`
 
 新增能力已落地到 `working_context`、`memory_port`、`context_budget_manager`、`proactive_inference_engine`、`identity_constitution` 等路径。
+
+## 工具列表注入（Available Tools）
+
+Soul 在组 prompt 时会把当前可用的工具定义以 `Available Tools: [...]` 注入到 `agent_context`，供 LLM 决定是否调用工具。工具列表来自 **与 AgentLoop 共用的** `ToolRegistry`（由 GazerAgent 注入）。
+
+若会话里出现 **Available Tools: []**，说明此时 `tool_registry.get_definitions()` 返回了空列表，即 Soul 拿到的工具列表为空。常见原因：
+
+1. **未走完整 Brain 启动**：工具是在 `GazerBrain.start()` → `_setup_tools()` 里注册的；若只起了 Admin API 或测试脚本、未启动 Brain，或 Brain 在 `_setup_tools()` 完成前就处理了首条消息，则 registry 可能仍为空。
+2. **多进程/多实例**：若消息由未挂载同一 Brain 的进程处理（例如单独起的 API 进程且未通过 IPC 把请求转给 Brain），该进程内的 agent 可能从未执行过 `_setup_tools()`，工具列表为空。
+
+排查建议：确认启动日志中有 `Registered N tools.`（N > 0），且处理该会话的进程就是完成 `_setup_tools()` 的 Brain 进程。Soul 在检测到空工具列表时会打一条 warning 日志，便于定位。
 
 ## 接入建议
 

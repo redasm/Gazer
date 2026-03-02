@@ -20,6 +20,7 @@ from tools.admin._shared import (
 from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER, CANVAS_STATE, ORCHESTRATOR  # noqa: F401
 from tools.admin.auth import verify_admin_token
 from tools.admin._shared import _append_policy_audit, get_provider_registry, get_owner_manager
+import tools.admin._shared as _shared
 from security.pairing import get_pairing_manager
 
 app = APIRouter()
@@ -1375,6 +1376,14 @@ async def get_usage_stats():
         except Exception:
             logger.debug("Failed to read tool batching summary", exc_info=True)
     if _usage is None:
+        ipc_snapshot = _shared.IPC_USAGE_SNAPSHOT
+        if ipc_snapshot:
+            return {
+                "status": "ok",
+                "usage": ipc_snapshot,
+                "prompt_cache": prompt_cache,
+                "tool_batching": tool_batching,
+            }
         payload: Dict[str, Any] = {"status": "ok", "note": "Usage tracker not injected yet."}
         if prompt_cache:
             payload["prompt_cache"] = prompt_cache

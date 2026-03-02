@@ -5,7 +5,7 @@ import asyncio
 import json
 from pathlib import Path
 import os
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from runtime.config_manager import config
 from perception.audio import get_audio
@@ -905,6 +905,26 @@ class GazerBrain:
         read_skill_tool.set_skill_loader(skill_loader)
         logger.info(f"Loaded {len(skill_loader.skills)} skills into context.")
 
+    def _register_ipc_usage_hook(self) -> None:
+        """Register an after-turn hook that pushes usage & router snapshots to the Admin API process."""
+        ipc_out = self._ipc_output
+        usage_tracker = self.agent.loop.usage
+        router = self.agent.router
+
+        async def _push_usage(payload: Dict[str, Any]) -> None:
+            try:
+                msg: Dict[str, Any] = {
+                    "type": "usage_update",
+                    "usage": usage_tracker.summary(),
+                }
+                if router is not None and hasattr(router, "get_status"):
+                    msg["router_status"] = router.get_status()
+                ipc_out.put(msg)
+            except Exception:
+                pass
+
+        self.agent.turn_hooks.on_after_turn(_push_usage)
+
     async def _run_cron_job(self, job) -> Optional[str]:
         """Callback for the cron scheduler — runs a job as an agent turn."""
         try:
@@ -939,6 +959,10 @@ class GazerBrain:
         self._update_ui_status("Initializing...")
 
         await self._setup_tools()
+
+        if self._ipc_output:
+            self._register_ipc_usage_hook()
+
         self._agent_task = asyncio.create_task(self.agent.start())
 
         # Start Command Queue (lane-based task execution)

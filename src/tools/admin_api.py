@@ -146,8 +146,13 @@ async def _broadcast_output_worker():
                     loop.run_in_executor(None, output_q.get, True, 0.5),
                     timeout=1.0,
                 )
+                # Intercept usage snapshots from the Brain process
+                if isinstance(msg, dict) and msg.get("type") == "usage_update":
+                    _shared.IPC_USAGE_SNAPSHOT = msg.get("usage")
+                    if msg.get("router_status") is not None:
+                        _shared.IPC_ROUTER_STATUS = msg["router_status"]
                 # Intercept log entries forwarded from the Brain process
-                if isinstance(msg, dict) and msg.get("type") == "log_entry":
+                elif isinstance(msg, dict) and msg.get("type") == "log_entry":
                     entry = msg.get("entry", {})
                     _log_buffer.append(entry)
                     # Track LLM calls in debug history
