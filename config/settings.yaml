@@ -1,0 +1,780 @@
+config_version: 2
+models:
+  embedding:
+    provider: dashscope
+    model: text-embedding-v3
+  router:
+    enabled: true
+    strategy: priority
+    strategy_template: custom
+    candidates: []
+    deployment_targets: []
+    rollout:
+      enabled: true
+      owner_only: true
+      channels: []
+    complexity_routing:
+      enabled: false
+      simple_prefer_cost: true
+      complex_prefer_success_rate: true
+    budget:
+      enabled: false
+      window_seconds: 60
+      max_calls: 120
+      max_cost_usd: 2.0
+      estimated_input_tokens_per_char: 0.25
+      provider_cost_per_1k_tokens: {}
+    outlier_ejection:
+      enabled: true
+      failure_threshold: 3
+      cooldown_seconds: 30
+    deployment_orchestrator:
+      enabled: false
+      mode: manual
+      target_ids: []
+      active_target: ''
+      standby_targets: []
+      weights: {}
+      canary:
+        enabled: false
+        target: ''
+        weight: 0.1
+      auto_failover:
+        enabled: true
+        cooldown_seconds: 30
+        auto_rollback: true
+  prompt_cache:
+    enabled: false
+    ttl_seconds: 300
+    max_items: 512
+    segment_policy: stable_prefix
+    scope_fields:
+    - session_key
+    - channel
+    - sender_id
+    sanitize_sensitive: true
+  deployment_profiles:
+    openai:
+      capacity_rpm: 120
+      cost_tier: high
+      latency_target_ms: 1800
+    dashscope:
+      capacity_rpm: 180
+      cost_tier: medium
+      latency_target_ms: 2200
+    deepseek:
+      capacity_rpm: 120
+      cost_tier: medium
+      latency_target_ms: 2000
+    ollama_local:
+      capacity_rpm: 600
+      cost_tier: low
+      latency_target_ms: 3500
+wake_word:
+  enabled: true
+  keyword: gazer
+  sensitivity: 0.5
+personality:
+  name: Gazer
+  trust_level: 0.5
+  drives:
+  - be_helpful
+  - be_truthful
+  - protect_user_safety
+  goals:
+  - deliver_reliable_task_results
+  - reduce_tool_failures
+  mental_process:
+    initial_state: IDLE
+    states:
+    - name: IDLE
+      description: Waiting, silently observing
+    - name: INTERACTING
+      description: Actively conversing
+    - name: THINKING
+      description: Deep thought / reflection
+    on_input_transition:
+      IDLE: INTERACTING
+      THINKING: INTERACTING
+  runtime:
+    enabled: true
+    signals:
+      enabled: true
+      warning_score: 0.82
+      critical_score: 0.7
+      retain: 500
+    auto_correction:
+      enabled: false
+      strategy: rewrite
+      trigger_levels:
+      - critical
+    tool_tier_guard:
+      enabled: true
+      trigger_levels:
+      - warning
+      - critical
+      high_risk_levels:
+      - critical
+      downgrade_to: safe
+      downgrade_by_level:
+        critical: safe
+      window_seconds: 1800
+      sources:
+      - agent_loop
+      - persona_eval
+    tool_policy_linkage:
+      enabled: true
+      trigger_levels:
+      - warning
+      - critical
+      high_risk_levels:
+      - critical
+      window_seconds: 1800
+      sources:
+      - persona_eval
+      allow_names: []
+      deny_names: []
+      allow_providers: []
+      deny_providers: []
+      allow_names_by_level: {}
+      deny_names_by_level:
+        warning:
+        - exec
+        - node_invoke
+        critical:
+        - exec
+        - node_invoke
+        - delegate_task
+        - remote_exec
+      allow_providers_by_level: {}
+      deny_providers_by_level:
+        critical:
+        - devices
+        - system
+        - runtime
+    memory_context_guard:
+      enabled: true
+      trigger_levels:
+      - warning
+      - critical
+      window_seconds: 1800
+      sources:
+      - agent_loop
+      - persona_eval
+      warning:
+        recent_limit: 12
+        entity_limit: 3
+        semantic_limit: 3
+        max_recall_items: 3
+        max_context_chars: 2200
+        include_relationship_context: true
+        include_time_reminders: true
+        include_emotion_context: true
+        include_recent_observation: true
+      critical:
+        recent_limit: 6
+        entity_limit: 2
+        semantic_limit: 2
+        max_recall_items: 2
+        max_context_chars: 1200
+        include_relationship_context: false
+        include_time_reminders: true
+        include_emotion_context: true
+        include_recent_observation: false
+  evolution:
+    auto_optimize:
+      enabled: false
+      min_feedback_total: 6
+      min_actionable_feedback: 3
+      cooldown_seconds: 1800
+    publish_gate:
+      enabled: true
+      min_similarity: 0.45
+      min_length_ratio: 0.5
+      max_length_ratio: 2.0
+      require_personality_name: true
+      respect_release_gate: true
+    pre_publish_eval:
+      enabled: true
+      min_score: 0.55
+      block_on_fail: true
+      set_release_gate_on_fail: true
+    history:
+      max_records: 300
+voice:
+  provider: edge-tts
+  voice_id: zh-CN-XiaoxiaoNeural
+  rate: +0%
+  volume: +0%
+  cloud:
+    provider: disabled
+    provider_ref: ''
+    base_url: ''
+    api_key: ''
+    model: gpt-4o-mini-tts
+    strict_required: false
+    request_timeout_seconds: 20
+    response_format: pcm
+    retry_count: 1
+    fallback_to_edge: true
+visual:
+  eye_color:
+  - 0
+  - 200
+  - 255
+  blink_interval: 3000
+  breathing_speed: 0.02
+perception:
+  screen_enabled: true
+  camera_enabled: false
+  camera_device_index: 0
+  capture_interval: 60
+  satellite_ids: []
+  action_enabled: true
+  spatial_enabled: false
+  spatial:
+    provider: local_mediapipe
+    route_mode: local_first
+    cloud:
+      provider: disabled
+      provider_ref: ''
+      base_url: ''
+      api_key: ''
+      model: ''
+      strict_required: false
+      request_timeout_seconds: 15
+      poll_interval_seconds: 1.5
+      max_calls_per_minute: 20
+      estimated_cost_per_call_usd: 0.001
+      max_cost_per_minute_usd: 0.03
+asr:
+  provider: whisper_local
+  model_size: base
+  input_device: null
+  route_mode: local_first
+  cloud:
+    provider: disabled
+    provider_ref: ''
+    base_url: ''
+    api_key: ''
+    model: gpt-4o-mini-transcribe
+    strict_required: false
+    request_timeout_seconds: 20
+    max_calls_per_minute: 20
+    estimated_cost_per_call_usd: 0.002
+    max_cost_per_minute_usd: 0.05
+devices:
+  default_target: local-desktop
+  local:
+    backend: python
+  local_node_id: local-desktop
+  local_node_label: This Machine
+  body_node:
+    enabled: true
+    node_id: body-main
+    label: Physical Body
+    allow_connect_control: true
+  satellite:
+    enabled: true
+    invoke_timeout_seconds: 15
+    nodes: {}
+    default_allow_actions:
+    - screen.observe
+    - screen.screenshot
+    - input.mouse.click
+    - input.keyboard.type
+    - input.keyboard.hotkey
+    - file.send
+satellite:
+  transport_backend: python
+  max_pending_requests_per_node: 64
+  pending_ttl_seconds: 30.0
+  heartbeat_timeout_seconds: 45.0
+  frame_window_seconds: 2.0
+  max_frame_bytes_per_window: 4194304
+coding:
+  exec_backend: local
+  max_output_chars: 100000
+  max_parallel_tool_calls: 4
+  allow_local_fallback: false
+  ssh:
+    enabled: false
+    host: ''
+    user: ''
+    port: 22
+    identity_file: ''
+    strict_host_key_checking: true
+    remote_workspace: .
+runtime:
+  environment: dev
+  backend: python
+  rust_sidecar:
+    endpoint: ''
+    timeout_ms: 3000
+    auto_fallback_on_error: true
+    error_fallback_threshold: 3
+    rollout:
+      enabled: false
+      owner_only: false
+      channels: []
+feishu:
+  enabled: true
+  app_id: 
+  app_secret: 
+  allowed_ids: []
+  simulated_typing:
+    enabled: true
+    text: 正在思考中...
+    min_interval_seconds: 8
+    auto_recall_on_reply: true
+  media_analysis:
+    enabled: true
+    include_inbound_summary: true
+    analyze_images: true
+    transcribe_audio: true
+    analyze_video_keyframe: true
+    timeout_seconds: 12
+    audio_whisper_model: base
+telegram:
+  enabled: false
+  token: ''
+  allowed_ids: []
+  dm_policy: pairing
+discord:
+  enabled: false
+  token: ''
+  allowed_guild_ids: []
+  dm_policy: pairing
+whatsapp:
+  enabled: false
+  phone_number_id: ''       # Meta developer portal → Phone Number ID
+  access_token: ''          # System user permanent token (or env WHATSAPP_ACCESS_TOKEN)
+  verify_token: ''          # Webhook verification token (or env WHATSAPP_VERIFY_TOKEN)
+  webhook_secret: ''        # App secret for X-Hub-Signature-256 validation
+  api_version: 'v21.0'
+  dm_policy: pairing
+signal:
+  enabled: false
+  api_url: ''               # signal-cli-rest-api URL (or env SIGNAL_API_URL)
+  phone_number: ''          # Registered Signal number (or env SIGNAL_PHONE_NUMBER)
+  dm_policy: pairing
+teams:
+  enabled: false
+  app_id: ''                # Azure AD App ID (or env TEAMS_APP_ID)
+  app_secret: ''            # Azure AD App Secret (or env TEAMS_APP_SECRET)
+  dm_policy: pairing
+google_chat:
+  enabled: false
+  service_account_file: ''  # Path to GCP service account JSON
+  project_id: ''            # Google Cloud project ID
+  dm_policy: pairing
+web:
+  search:
+    brave_api_key: ''
+    perplexity_api_key: ''
+    perplexity_base_url: https://api.perplexity.ai
+    perplexity_model: sonar
+    primary_provider: brave
+    primary_only: false
+    report_file: data/reports/web_search_observations.jsonl
+    relevance_gate:
+      enabled: true
+      min_score: 0.25
+      allow_low_relevance_fallback: true
+    providers_order:
+    - brave
+    - duckduckgo
+    - wikipedia
+    - bing_rss
+    providers_enabled:
+      brave: true
+      perplexity: false
+      duckduckgo: true
+      bing_rss: true
+      wikipedia: true
+    scenario_routing:
+      enabled: true
+      auto_detect: true
+      profiles:
+        general:
+        - brave
+        - duckduckgo
+        - wikipedia
+        - bing_rss
+        news:
+        - brave
+        - duckduckgo
+        - bing_rss
+        - wikipedia
+        reference:
+        - wikipedia
+        - duckduckgo
+        - brave
+        - bing_rss
+        tech:
+        - duckduckgo
+        - brave
+        - wikipedia
+        - bing_rss
+memory:
+  context_backend:
+    enabled: false
+    mode: openviking
+    data_dir: data/openviking
+    config_file: ''
+    session_prefix: gazer
+    default_user: owner
+    commit_every_messages: 8
+  tool_result_persistence:
+    enabled: true
+    mode: allowlist
+    allow_tools:
+    - web_search
+    - web_fetch
+    - web_report
+    - read_file
+    - grep
+    - find_files
+    - list_dir
+    - email_read
+    - email_search
+    - vision_query
+    deny_tools:
+    - exec
+    - write_file
+    - edit_file
+    - node_invoke
+    - gui_task_execute
+    - git_commit
+    - git_push
+    - email_send
+    - hardware_control
+    - delegate_task
+    persist_on_error: false
+    min_result_chars: 16
+    max_result_chars: 1200
+api:
+  cors_origins:
+  - http://localhost:5173
+  - http://localhost:5175
+  - http://localhost:8080
+  - http://127.0.0.1:5173
+  - http://127.0.0.1:5175
+  - http://127.0.0.1:8080
+  cors_credentials: null
+  allow_loopback_without_token: true
+  max_ws_message_bytes: 262144
+  max_chat_message_chars: 8000
+  max_upload_bytes: 10485760
+  session_max_age_seconds: 86400
+  session_max_records: 200
+  cookie_secure: null
+  cookie_samesite: strict
+  allow_admin_bearer_token: true
+  export_allowed_dirs:
+  - .task
+  - .tmp_pytest
+  - exports
+  allow_audit_buffer_clear: false
+  local_bypass_environments:
+  - dev
+  - test
+  - local
+  mcp:
+    enabled: true
+    rate_limit_requests: 120
+    rate_limit_window_seconds: 60
+    allow_tools: true
+    allow_resources: true
+    allow_prompts: true
+    allowed_resource_prefixes: []
+    allowed_prompt_names: []
+    audit_retain: 500
+security:
+  tool_groups:
+    desktop:
+    - screen_observe
+    - screenshot
+    - send_file
+    - mouse_click
+    - keyboard_type
+    - keyboard_hotkey
+    runtime:
+    - delegate_task
+    - cron
+    coding:
+    - exec
+    - read_file
+    - write_file
+    - edit_file
+    - list_dir
+    - find_files
+    - git_status
+    - read_skill
+    - git_diff
+    - git_commit
+    - git_log
+    - git_push
+    - grep
+    - git_branch
+    devices:
+    - node_list
+    - node_describe
+    - node_invoke
+    - gui_task_execute
+    web:
+    - web_search
+    - web_fetch
+    browser:
+    - browser
+    system:
+    - get_time
+    - image_analyze
+    canvas:
+    - a2ui_apply
+    - canvas_snapshot
+    - canvas_reset
+    email:
+    - email_list
+    - email_read
+    - email_send
+    - email_search
+    hardware:
+    - hardware_control
+    - vision_query
+  owner_channel_ids:
+    feishu: ou_1f90dfc98260e960240a196435ce192e
+  dm_policy: pairing
+  readonly_channel_ids: {}
+  tool_max_tier: standard
+  tool_denylist: []
+  tool_allowlist: []
+  max_tool_calls_per_turn: 12
+  max_parallel_tool_calls: 4
+  parallel_tool_lane_limits:
+    io: 2
+    device: 1
+    network: 2
+    default: 2
+  tool_batching:
+    enabled: true
+    max_batch_size: 4
+    dedupe_enabled: false
+  tool_planner_v2:
+    enabled: true
+    dependency_keys:
+    - depends_on
+    - dependsOn
+    - after
+    - requires
+    - input_from
+    - from_call_id
+    - source_call_id
+    - parent_call_id
+    compact_results: true
+    max_result_chars: 2400
+    error_max_result_chars: 4000
+    head_chars: 900
+    tail_chars: 700
+  threat_scan:
+    enabled: false
+    provider: virustotal
+    api_key: ''
+    base_url: https://www.virustotal.com/api/v3
+    request_timeout_seconds: 8.0
+    max_files: 64
+    fail_mode: open
+  auto_approve_privileged: false
+  release_gate_enforcement: true
+  release_gate_owner_bypass: false
+  release_gate_auto_link_enabled: true
+  coding_benchmark_auto_link_on_run: false
+  coding_benchmark_scheduler:
+    enabled: false
+    interval_seconds: 1800
+    auto_link_release_gate: true
+    window: 20
+    payload:
+      name: scheduled_suite
+      cases: []
+  optimization_fail_streak_threshold: 2
+  tool_circuit_breaker_enabled: true
+  tool_circuit_breaker_failures: 3
+  tool_circuit_breaker_cooldown_seconds: 30
+  tool_budget_enabled: false
+  tool_budget_window_seconds: 60
+  tool_budget_max_calls: 120
+  tool_budget_max_weight: 120.0
+  tool_budget_max_calls_by_group: {}
+  tool_budget_weight_by_group: {}
+  tool_budget_weight_by_tool: {}
+  rate_limit_requests: 30
+  rate_limit_window: 60
+  tool_call_hooks:
+    enabled: true
+    loop_detection_enabled: true
+    loop_max_repeats: 3
+    loop_window_seconds: 90.0
+    session_max_events: 256
+scheduler:
+  cron_enabled: true
+  heartbeat_enabled: true
+  heartbeat_interval: 300
+hooks:
+  enabled: true
+  token: ''
+sandbox:
+  enabled: false
+  image: python:3.11-slim
+  workspace_mode: rw
+multi_agent:
+  allow_multi: false
+  max_workers: 5
+agents:
+  defaults:
+    model:
+      primary: gmn/gpt-5.2
+      fallbacks:
+      - dashscope/qwen3-vl-plus
+    models:
+      gmn/gpt-5.2:
+        alias: GPT 5.2
+      dashscope/qwen3-vl-plus:
+        alias: Qwen3 VL Plus
+      dashscope/qwen-max:
+        alias: Qwen Max
+      dashscope/qwen-turbo:
+        alias: Qwen Turbo
+    workspace: .
+    compaction:
+      mode: safeguard
+    planning:
+      mode: auto
+      auto:
+        min_message_chars: 220
+        min_history_messages: 8
+        min_line_breaks: 2
+        min_list_lines: 2
+    maxConcurrent: 4
+    subagents:
+      maxConcurrent: 8
+  list: []
+  bindings: []
+  orchestrator:
+    max_parallel_tasks: 3
+    max_parallel_per_agent: 2
+    max_pending_tasks: 64
+    resource_lock_timeout_seconds: 30.0
+    sleep_wake:
+      poll_interval_seconds: 1.0
+      max_sleep_seconds: 3600.0
+    sla:
+      timeout_seconds: 120.0
+      max_retries: 0
+      retry_backoff_seconds: 0.0
+      priority: normal
+  templates:
+    gmail_webhook_autoreply:
+      agent:
+        id: mailbot
+        name: Gmail Auto Reply
+        workspace: .
+        tool_policy:
+          allow_groups:
+          - email
+      binding:
+        agent_id: mailbot
+        channel: webhook
+        chat_id: event:gmail:main
+        sender_id: hook:gmail
+      notes:
+      - This template is a starting point; copy values into agents.list and agents.bindings.
+      - Use email_send with reply_to=message_id from webhook metadata for threaded
+        replies.
+plugins:
+  enabled: []
+  disabled: []
+  signature:
+    enforce: false
+    allow_unsigned: true
+    trusted_keys: {}
+skill_registry:
+  registry_url: ''
+skills:
+  registry_url: ''
+canvas:
+  enabled: true
+  max_panels: 20
+  max_content_size: 65536
+trainer:
+  enabled: true
+  auto_run_on_gate_fail: true
+  max_samples_per_job: 200
+  auto_publish_on_pass: false
+  online_policy_loop:
+    enabled: true
+    require_review: true
+    gate:
+      require_release_gate_open: true
+      min_eval_pass_rate: 0.55
+      min_trajectory_success_rate: 0.6
+      max_terminal_error_rate: 0.4
+  canary:
+    default_percent: 10
+    auto_rollout_on_publish: false
+    auto_rollback_on_gate_fail: true
+    auto_rollback_on_canary_fail: true
+  release_approval:
+    enabled: false
+    required_modes:
+    - canary
+    require_note: false
+  experiments:
+    enabled: true
+observability:
+  release_gate_health_thresholds:
+    warning_success_rate: 0.9
+    critical_success_rate: 0.75
+    warning_failures: 1
+    critical_failures: 3
+    warning_p95_latency_ms: 2500
+    critical_p95_latency_ms: 4000
+    warning_persona_consistency_score: 0.82
+    critical_persona_consistency_score: 0.7
+  cost_quality_slo_targets:
+    min_success_rate: 0.9
+    max_p95_latency_ms: 3000.0
+    max_avg_retries_per_run: 1.5
+    max_downgrade_trigger_rate: 0.2
+  efficiency_baseline_targets:
+    min_success_rate: 0.9
+    max_p95_latency_ms: 3000.0
+    max_avg_tokens_per_run: 6000.0
+    max_tool_error_rate: 0.2
+  alerts:
+    enabled: true
+    retain: 200
+email:
+  poll_interval: 120
+  folders:
+  - INBOX
+  enabled: false
+  imap_host: imap.gmail.com
+  imap_port: 993
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  username: ''
+  password: ''
+  max_body_length: 8000
+gmail_push:
+  credentials_file: '***'
+  token_file: '***'
+  enabled: false
+  topic: ''
+  history_store: data/gmail_history.json
+body:
+  type: none
+  port: auto
+  baudrate: 115200
+ui:
+  enabled: false
