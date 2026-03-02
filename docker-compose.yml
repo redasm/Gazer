@@ -1,0 +1,19 @@
+services:
+  gazer:
+    build:
+      context: .
+      args:
+        # Add optional extras: perception,browser
+        EXTRAS: ""
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./assets:/app/assets
+      - ./skills:/app/skills
+      - ./workflows:/app/workflows
+    env_file: .env
+    environment:
+      - ADMIN_API_HOST=0.0.0.0
+    restart: unless-stopped
