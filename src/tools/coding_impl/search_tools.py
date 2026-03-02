@@ -1,21 +1,13 @@
-"""Coding tools: search tools.
-
-Extracted from coding.py.
-"""
+"""Coding tools: search tools (list_dir / find_files / grep / read_skill)."""
 
 import logging
-import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from tools.base import ShellOperations, ToolSafetyTier
 
-from .helpers import (
-    CodingToolBase,
-    _create_nexum_tool,
-    _render_nexum_tool_result,
-    _to_workspace_relative_path,
-)
+from .helpers import CodingToolBase, _to_workspace_relative_path
+from .native_ops import native_find, native_grep, native_ls
 from .safety import _is_within_workspace
 
 logger = logging.getLogger("CodingTools")
@@ -60,52 +52,35 @@ class ListDirTool(CodingToolBase):
         target = (self._workspace / path).resolve()
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
-        if self._shell_ops is not None:
-            logger.info("ListDirTool shell_ops is ignored in Nexum mode.")
 
         if recursive:
-            # Nexum's ls tool is non-recursive; use find tool for recursive listing.
-            nexum_find = _create_nexum_tool("find", str(self._workspace))
-            if nexum_find is None:
-                return self._error("CODING_LIST_DIR_BACKEND_UNAVAILABLE", "Nexum find tool is unavailable.")
+            rel_path = _to_workspace_relative_path(self._workspace, target)
             try:
-                result_obj = await nexum_find.execute(
-                    "gazer_list_dir_recursive",
-                    {
-                        "pattern": "**/*",
-                        "path": _to_workspace_relative_path(self._workspace, target),
-                        "limit": 200,
-                    },
-                    None,
-                    None,
-                )
+                result = await native_find("**/*", self._workspace, search_dir=rel_path)
+            except PermissionError as exc:
+                return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
             except Exception as exc:
                 return self._error("CODING_LIST_DIR_FAILED", str(exc))
-            rendered = _render_nexum_tool_result(result_obj)
-            lines = [line for line in rendered.splitlines() if line.strip() and not line.strip().startswith("[")]
+            lines = [line for line in result.text.splitlines() if line.strip() and not line.strip().startswith("[")]
             truncated = " (truncated)" if len(lines) >= 200 else ""
-            return f"[{path}] {len(lines)} entries{truncated}\n{rendered}"
+            return f"[{path}] {len(lines)} entries{truncated}\n{result.text}"
 
-        nexum_ls = _create_nexum_tool("ls", str(self._workspace))
-        if nexum_ls is None:
-            return self._error("CODING_LIST_DIR_BACKEND_UNAVAILABLE", "Nexum ls tool is unavailable.")
         try:
-            result_obj = await nexum_ls.execute(
-                "gazer_list_dir",
-                {"path": _to_workspace_relative_path(self._workspace, target), "limit": 200},
-                None,
-                None,
-            )
+            result = await native_ls(path, self._workspace, max_depth=1)
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             message = str(exc)
             if "not a directory" in message.lower():
                 return self._error("CODING_DIRECTORY_NOT_FOUND", message)
             return self._error("CODING_LIST_DIR_FAILED", message)
 
-        rendered = _render_nexum_tool_result(result_obj)
-        lines = [line for line in rendered.splitlines() if line.strip() and not line.strip().startswith("[")]
+        if result.is_error:
+            return self._error("CODING_DIRECTORY_NOT_FOUND", result.text)
+
+        lines = [line for line in result.text.splitlines() if line.strip() and not line.strip().startswith("[")]
         truncated = " (truncated)" if len(lines) >= 200 else ""
-        return f"[{path}] {len(lines)} entries{truncated}\n{rendered}"
+        return f"[{path}] {len(lines)} entries{truncated}\n{result.text}"
 
 
 class FindFilesTool(CodingToolBase):
@@ -148,26 +123,18 @@ class FindFilesTool(CodingToolBase):
         base = (self._workspace / path).resolve()
         if not _is_within_workspace(base, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
-        if self._shell_ops is not None:
-            logger.info("FindFilesTool shell_ops is ignored in Nexum mode.")
 
-        nexum_find = _create_nexum_tool("find", str(self._workspace))
-        if nexum_find is None:
-            return self._error("CODING_FIND_BACKEND_UNAVAILABLE", "Nexum find tool is unavailable.")
         try:
-            result_obj = await nexum_find.execute(
-                "gazer_find_files",
-                {
-                    "pattern": pattern,
-                    "path": _to_workspace_relative_path(self._workspace, base),
-                    "limit": 200,
-                },
-                None,
-                None,
+            result = await native_find(
+                pattern, self._workspace,
+                search_dir=_to_workspace_relative_path(self._workspace, base),
             )
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             return self._error("CODING_FIND_FILES_FAILED", str(exc))
-        return _render_nexum_tool_result(result_obj)
+
+        return result.text
 
 
 class ReadSkillTool(CodingToolBase):
@@ -218,19 +185,7 @@ class ReadSkillTool(CodingToolBase):
 
 
 class GrepTool(CodingToolBase):
-    """Search file contents for a pattern (regex or literal).
-
-    Respects common ignore patterns (.git, node_modules, __pycache__).
-    Returns matching lines with file path, line number, and optional context.
-    """
-
-    _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", "dist", "build"}
-    _BINARY_EXTENSIONS = {
-        ".pyc", ".pyo", ".so", ".dll", ".exe", ".bin", ".o", ".a",
-        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp", ".webp",
-        ".zip", ".tar", ".gz", ".bz2", ".7z", ".rar",
-        ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".wasm",
-    }
+    """Search file contents for a pattern (regex or literal)."""
 
     def __init__(self, workspace: Path, *, shell_ops: Optional[ShellOperations] = None):
         self._workspace = workspace.resolve()
@@ -304,65 +259,27 @@ class GrepTool(CodingToolBase):
         target = (self._workspace / path).resolve()
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
-        if self._shell_ops is not None:
-            logger.info("GrepTool shell_ops is ignored in Nexum mode.")
 
-        nexum_grep = _create_nexum_tool("grep", str(self._workspace))
-        if nexum_grep is None:
-            return self._error("CODING_GREP_BACKEND_UNAVAILABLE", "Nexum grep tool is unavailable.")
-        safe_limit = min(max(int(limit or 100), 1), 500)
         safe_context = min(max(int(context or 0), 0), 10)
+
         try:
-            result_obj = await nexum_grep.execute(
-                "gazer_grep",
-                {
-                    "pattern": pattern,
-                    "path": _to_workspace_relative_path(self._workspace, target),
-                    "glob": glob,
-                    "ignoreCase": bool(ignore_case),
-                    "literal": bool(literal),
-                    "context": safe_context,
-                    "limit": safe_limit,
-                },
-                None,
-                None,
+            result = await native_grep(
+                pattern, self._workspace,
+                path=_to_workspace_relative_path(self._workspace, target),
+                include=glob,
+                context_lines=safe_context,
+                is_regex=not literal,
+                ignore_case=bool(ignore_case),
             )
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             message = str(exc)
             if "path not found" in message.lower():
                 return self._error("CODING_PATH_NOT_FOUND", message)
             return self._error("CODING_GREP_FAILED", message)
-        return _render_nexum_tool_result(result_obj)
 
-    def _search_file(
-        self, fpath: Path, rx: re.Pattern, ctx: int, max_matches: int, out: List[str]
-    ) -> None:
-        """Search a single file and append formatted matches to *out*."""
-        try:
-            lines = fpath.read_text(encoding="utf-8", errors="replace").splitlines()
-        except (OSError, UnicodeDecodeError):
-            return
+        if result.is_error:
+            return self._error("CODING_GREP_FAILED", result.text)
 
-        try:
-            rel = fpath.relative_to(self._workspace)
-        except ValueError:
-            rel = fpath
-
-        for i, line in enumerate(lines):
-            if len(out) >= max_matches:
-                return
-            if rx.search(line):
-                if ctx == 0:
-                    out.append(f"{rel}:{i + 1}: {line}")
-                else:
-                    start = max(0, i - ctx)
-                    end = min(len(lines), i + ctx + 1)
-                    block = []
-                    for j in range(start, end):
-                        marker = ">" if j == i else " "
-                        block.append(f"{rel}:{j + 1}:{marker}{lines[j]}")
-                    out.append("\n".join(block))
-                    if len(out) < max_matches:
-                        out.append("--")
-
-
+        return result.text

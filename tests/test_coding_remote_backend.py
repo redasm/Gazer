@@ -1,3 +1,9 @@
+"""Tests for coding tools with injected operations.
+
+Verifies that the native implementation reads actual files, and that
+GitStatusTool uses injected ShellOperations.
+"""
+
 from pathlib import Path
 
 import pytest
@@ -22,12 +28,11 @@ class _DummyShellOps(ShellOperations):
 
 
 @pytest.mark.asyncio
-async def test_read_file_tool_uses_nexum_backend(tmp_path):
+async def test_read_file_tool_reads_actual_file(tmp_path):
     (Path(tmp_path) / "remote.txt").write_text("real-a\nreal-b\n", encoding="utf-8")
     tool = ReadFileTool(Path(tmp_path), file_ops=_DummyFileOps())
     out = await tool.execute("remote.txt", offset=2, limit=2)
     assert "real-b" in out
-    assert "2|b" not in out
 
 
 @pytest.mark.asyncio

@@ -1,20 +1,54 @@
+"""Tests for native coding tool operations (fuzzy matching, parameter aliases)."""
+
 from pathlib import Path
 
 import pytest
 
-from tools import coding
 from tools.coding import EditFileTool
+from tools.coding_impl.native_ops import (
+    AmbiguousMatchError,
+    NoMatchError,
+    apply_edit,
+)
 
 
-def test_nexum_edit_diff_module_is_loadable() -> None:
-    module = coding._load_nexum_edit_diff_module()
-    assert module is not None
-    module_path = str(Path(module.__file__).resolve()).replace("\\", "/")
-    assert "/external/Nexum/" in module_path
+def test_apply_edit_exact_match() -> None:
+    content = "hello world\nfoo bar\n"
+    result = apply_edit(content, "foo bar", "baz qux")
+    assert result.match_type == "exact"
+    assert "baz qux" in result.new_content
+    assert "foo bar" not in result.new_content
+
+
+def test_apply_edit_fuzzy_whitespace_match() -> None:
+    content = "value = 1    +    2\n"
+    result = apply_edit(content, "value = 1 + 2", "value = 3")
+    assert result.match_type == "fuzzy"
+    assert "value = 3" in result.new_content
+
+
+def test_apply_edit_fuzzy_smart_quotes() -> None:
+    content = "say \u201chello\u201d\n"
+    result = apply_edit(content, 'say "hello"', 'say "world"')
+    assert result.match_type == "fuzzy"
+    assert 'say "world"' in result.new_content
+
+
+def test_apply_edit_ambiguous_raises() -> None:
+    content = "alpha\nalpha\n"
+    with pytest.raises(AmbiguousMatchError) as exc_info:
+        apply_edit(content, "alpha", "beta")
+    assert exc_info.value.count == 2
+
+
+def test_apply_edit_no_match_raises() -> None:
+    content = "hello world\n"
+    with pytest.raises(NoMatchError):
+        apply_edit(content, "does not exist", "replacement")
 
 
 @pytest.mark.asyncio
-async def test_edit_file_fuzzy_match_uses_nexum_rules(tmp_path: Path) -> None:
+async def test_edit_file_fuzzy_match(tmp_path: Path) -> None:
     target = tmp_path / "fuzzy.txt"
     target.write_text("value = 1    +    2\n", encoding="utf-8")
 

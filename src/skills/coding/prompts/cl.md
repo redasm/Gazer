@@ -54,5 +54,5 @@ Sections (in order):
 
 Attribution:
 
-- Internal: `Fixed foo ([#123](https://github.com/redasm/Nexum/issues/123))`
-- External: `Added bar ([#456](https://github.com/redasm/Nexum/pull/456) by [@user](https://github.com/user))`
+- Internal: `Fixed foo ([#123](https://github.com/redasm/Gazer/issues/123))`
+- External: `Added bar ([#456](https://github.com/redasm/Gazer/pull/456) by [@user](https://github.com/user))`

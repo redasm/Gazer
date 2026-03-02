@@ -96,10 +96,10 @@ Commit "test: add pytest suite for agent, tools, memory, security" @("tests")
 Write-Host "17. web"
 Commit "feat(web): add React admin console and pages" @("web")
 
-# 18. Submodule, docker, scripts, design
-Write-Host "18. submodule, docker, scripts"
-Commit "chore: add Nexum submodule, Docker, scripts and remaining assets" @(
-  "Dockerfile", "docker-compose.yml", "scripts", "design", "perception", "satellite", "skills", "workflows", "ui", "tools", "electronics", "hardware", "external/Nexum"
+# 18. Docker, scripts, design
+Write-Host "18. docker, scripts"
+Commit "chore: add Docker, scripts and remaining assets" @(
+  "Dockerfile", "docker-compose.yml", "scripts", "design", "perception", "satellite", "skills", "workflows", "ui", "tools", "electronics", "hardware"
 )
 
 Write-Host "Done. Push with: git push -u origin main"

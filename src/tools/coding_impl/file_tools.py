@@ -1,7 +1,4 @@
-"""Coding tools: file tools.
-
-Extracted from coding.py.
-"""
+"""Coding tools: file tools (read / write / edit)."""
 
 import logging
 from pathlib import Path
@@ -12,11 +9,15 @@ from tools.base import FileOperations, ShellOperations, ToolSafetyTier
 from .helpers import (
     MAX_READ_LINES,
     CodingToolBase,
-    _create_nexum_tool,
-    _load_nexum_edit_diff_module,
     _normalize_coding_params,
-    _render_nexum_tool_result,
     _to_workspace_relative_path,
+)
+from .native_ops import (
+    AmbiguousMatchError,
+    NoMatchError,
+    native_edit_file,
+    native_read_file,
+    native_write_file,
 )
 from .safety import _is_within_workspace
 
@@ -90,31 +91,26 @@ class ReadFileTool(CodingToolBase):
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
-        if self._file_ops is not None or self._shell_ops is not None:
-            logger.info("ReadFileTool file_ops/shell_ops are ignored in Nexum mode.")
-
-        nexum_tool = _create_nexum_tool("read", str(self._workspace))
-        if nexum_tool is None:
-            return self._error("CODING_READ_BACKEND_UNAVAILABLE", "Nexum read tool is unavailable.")
-
-        rel_path = _to_workspace_relative_path(self._workspace, target)
         safe_offset = max(1, int(offset or 1))
         safe_limit = min(max(1, int(limit or 500)), MAX_READ_LINES)
+
         try:
-            result_obj = await nexum_tool.execute(
-                "gazer_read_file",
-                {"path": rel_path, "offset": safe_offset, "limit": safe_limit},
-                None,
-                None,
+            result = await native_read_file(
+                resolved_path, self._workspace,
+                offset=safe_offset, limit=safe_limit,
             )
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             message = str(exc)
-            lowered = message.lower()
-            if "file not found" in lowered:
+            if "file not found" in message.lower():
                 return self._error("CODING_FILE_NOT_FOUND", message)
             return self._error("CODING_FILE_READ_FAILED", message)
 
-        return f"[{resolved_path}]\n{_render_nexum_tool_result(result_obj)}"
+        if result.is_error:
+            return self._error("CODING_FILE_NOT_FOUND", result.text)
+
+        return f"[{resolved_path}]\n{result.text}"
 
 
 class WriteFileTool(CodingToolBase):
@@ -165,21 +161,10 @@ class WriteFileTool(CodingToolBase):
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
-        if self._file_ops is not None:
-            logger.info("WriteFileTool file_ops is ignored in Nexum mode.")
-
-        nexum_tool = _create_nexum_tool("write", str(self._workspace))
-        if nexum_tool is None:
-            return self._error("CODING_WRITE_BACKEND_UNAVAILABLE", "Nexum write tool is unavailable.")
-
-        rel_path = _to_workspace_relative_path(self._workspace, target)
         try:
-            await nexum_tool.execute(
-                "gazer_write_file",
-                {"path": rel_path, "content": normalized_content},
-                None,
-                None,
-            )
+            await native_write_file(resolved_path, self._workspace, normalized_content)
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             return self._error("CODING_FILE_WRITE_FAILED", str(exc))
 
@@ -187,27 +172,6 @@ class WriteFileTool(CodingToolBase):
             1 if normalized_content and not normalized_content.endswith("\n") else 0
         )
         return f"Wrote {line_count} lines to {resolved_path}."
-
-
-def _fuzzy_find(content: str, old_text: str) -> Optional[tuple[int, int, str]]:
-    """Find a unique fuzzy match using Nexum edit-diff helpers."""
-    pi_edit_diff = _load_nexum_edit_diff_module()
-    if pi_edit_diff is None:
-        return None
-
-    match = pi_edit_diff.fuzzy_find_text(content, old_text)
-    if not bool(getattr(match, "found", False)):
-        return None
-
-    if bool(getattr(match, "used_fuzzy_match", False)):
-        fuzzy_old = pi_edit_diff.normalize_for_fuzzy_match(old_text)
-        occurrences = str(match.content_for_replacement).count(str(fuzzy_old))
-    else:
-        occurrences = content.count(old_text)
-
-    if occurrences != 1:
-        return None
-    return int(match.index), int(match.match_length), str(match.content_for_replacement)
 
 
 class EditFileTool(CodingToolBase):
@@ -278,47 +242,29 @@ class EditFileTool(CodingToolBase):
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
-        if self._file_ops is not None:
-            logger.info("EditFileTool file_ops is ignored in Nexum mode.")
-
         if not target.is_file():
             return self._error("CODING_FILE_NOT_FOUND", f"'{resolved_path}' does not exist.")
 
-        fuzzy_used = False
         try:
-            before = target.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            return self._error("CODING_FILE_READ_FAILED", f"Error reading file: {exc}")
-
-        fuzzy = _fuzzy_find(before, normalized_old)
-        if fuzzy is not None and before.count(normalized_old) == 0:
-            fuzzy_used = True
-
-        nexum_tool = _create_nexum_tool("edit", str(self._workspace))
-        if nexum_tool is None:
-            return self._error("CODING_EDIT_BACKEND_UNAVAILABLE", "Nexum edit tool is unavailable.")
-
-        rel_path = _to_workspace_relative_path(self._workspace, target)
-        try:
-            await nexum_tool.execute(
-                "gazer_edit_file",
-                {"path": rel_path, "oldText": normalized_old, "newText": normalized_new},
-                None,
-                None,
+            result = await native_edit_file(
+                resolved_path, self._workspace, normalized_old, normalized_new,
             )
+        except PermissionError as exc:
+            return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
             message = str(exc)
             lowered = message.lower()
             if "file not found" in lowered:
                 return self._error("CODING_FILE_NOT_FOUND", message)
-            if "occurrences" in lowered and "unique" in lowered:
-                return self._error("CODING_EDIT_AMBIGUOUS_OLD_TEXT", message)
-            if "could not find the exact text" in lowered:
-                return self._error("CODING_EDIT_OLD_TEXT_NOT_FOUND", message)
             return self._error("CODING_FILE_WRITE_FAILED", message)
 
-        if fuzzy_used:
-            return f"Edited {resolved_path}: replaced 1 occurrence (fuzzy match)."
-        return f"Edited {resolved_path}: replaced 1 occurrence."
+        if result.is_error:
+            text_lower = result.text.lower()
+            if "matched" in text_lower and "locations" in text_lower:
+                return self._error("CODING_EDIT_AMBIGUOUS_OLD_TEXT", result.text)
+            if "not found" in text_lower:
+                return self._error("CODING_EDIT_OLD_TEXT_NOT_FOUND", result.text)
+            return self._error("CODING_FILE_WRITE_FAILED", result.text)
 
-
+        fuzzy_note = " (fuzzy match)" if "fuzzy" in (result.text or "") else ""
+        return f"Edited {resolved_path}: replaced 1 occurrence{fuzzy_note}."

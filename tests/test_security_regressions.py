@@ -780,7 +780,7 @@ async def test_chat_connection_manager_isolates_sessions():
 
 
 @pytest.mark.asyncio
-async def test_exec_tool_uses_nexum_backend(tmp_path):
+async def test_exec_tool_uses_native_backend(tmp_path):
     class _Shell:
         def __init__(self):
             self.calls = []

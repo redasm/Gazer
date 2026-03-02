@@ -1,7 +1,7 @@
 """Coding tools implementation package.
 
 Re-exports all public tool classes and helpers for backward-compatible
-``from tools.coding import X`` usage via the façade in ``tools/coding.py``.
+``from tools.coding import X`` usage via the facade in ``tools/coding.py``.
 """
 
 from .exec_tool import ExecTool
@@ -18,13 +18,7 @@ from .helpers import (
     MAX_OUTPUT_CHARS,
     MAX_READ_LINES,
     CodingToolBase,
-    _create_nexum_tool,
-    _ensure_nexum_modules,
-    _load_nexum_coding_tool_module,
-    _load_nexum_edit_diff_module,
     _normalize_coding_params,
-    _nexum_packages_root,
-    _render_nexum_tool_result,
     _run_shell_command,
     _to_workspace_relative_path,
 )
@@ -51,15 +45,9 @@ __all__ = [
     "CodingToolBase",
     "check_dangerous_command",
     "_is_within_workspace",
-    "_create_nexum_tool",
-    "_render_nexum_tool_result",
     "_normalize_coding_params",
     "_to_workspace_relative_path",
     "_run_shell_command",
-    "_nexum_packages_root",
-    "_ensure_nexum_modules",
-    "_load_nexum_coding_tool_module",
-    "_load_nexum_edit_diff_module",
     "MAX_OUTPUT_CHARS",
     "MAX_READ_LINES",
 ]
