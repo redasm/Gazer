@@ -59,8 +59,6 @@ config/model_providers.local.json.bak-*
 config/settings.yaml.lock
 config/owner.json.bak
 
-doc/
-
 # IDEs
 .cursor/
 .vscode/
