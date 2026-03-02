@@ -1,0 +1,1113 @@
+"""Web tools: search and fetch via lightweight HTTP (no browser)."""
+
+import json
+import logging
+import os
+import re
+import time
+import xml.etree.ElementTree as ET
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote, quote_plus
+
+from tools.base import Tool, ToolSafetyTier
+from runtime.config_manager import config
+
+logger = logging.getLogger("WebTools")
+
+# Simple in-memory cache: {key: (timestamp, value)} bounded to MAX_CACHE_SIZE entries
+_cache: Dict[str, tuple] = {}
+CACHE_TTL = 900  # 15 minutes
+MAX_CACHE_SIZE = 500
+
+
+class WebToolBase(Tool):
+    @property
+    def provider(self) -> str:
+        return "web"
+
+    @staticmethod
+    def _error(code: str, message: str) -> str:
+        return f"Error [{code}]: {message}"
+
+
+def _cache_get(key: str) -> Optional[str]:
+    entry = _cache.get(key)
+    if entry and time.time() - entry[0] < CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: str, value: str) -> None:
+    # Evict oldest entries if cache is full
+    if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
+        oldest_key = min(_cache, key=lambda k: _cache[k][0])
+        del _cache[oldest_key]
+    _cache[key] = (time.time(), value)
+
+
+class WebSearchTool(WebToolBase):
+    """Search the web using Brave Search API or DuckDuckGo fallback."""
+
+    @property
+    def name(self) -> str:
+        return "web_search"
+
+    @property
+    def safety_tier(self) -> ToolSafetyTier:
+        return ToolSafetyTier.STANDARD
+
+    @property
+    def description(self) -> str:
+        return "Search the web for information. Returns titles, URLs, and snippets."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query."},
+                "count": {
+                    "type": "integer",
+                    "description": "Number of results (1-10). Defaults to 5.",
+                },
+                "scene": {
+                    "type": "string",
+                    "description": "Search scene: auto|general|news|reference|tech. Defaults to auto.",
+                },
+            },
+            "required": ["query"],
+        }
+
+    @staticmethod
+    def _normalize_scene(scene: str) -> str:
+        normalized = str(scene or "auto").strip().lower()
+        if normalized not in {"auto", "general", "news", "reference", "tech"}:
+            return "auto"
+        return normalized
+
+    @staticmethod
+    def _detect_scene_from_query(query: str) -> str:
+        text = str(query or "").lower()
+        news_words = {"today", "latest", "breaking", "news", "headline", "recent"}
+        reference_words = {"what is", "who is", "wiki", "wikipedia", "definition", "meaning"}
+        tech_words = {"python", "javascript", "error", "stack", "api", "docs", "github", "framework"}
+        if any(word in text for word in news_words):
+            return "news"
+        if any(word in text for word in tech_words):
+            return "tech"
+        if any(word in text for word in reference_words):
+            return "reference"
+        return "general"
+
+    @staticmethod
+    def _normalize_query(query: str) -> str:
+        text = str(query or "")
+        text = re.sub(r"[\\/|]+", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+
+    @staticmethod
+    def _query_tokens(query: str) -> tuple[List[str], List[str]]:
+        text = str(query or "").lower()
+        word_tokens = re.findall(r"[a-z0-9][a-z0-9._-]*", text)
+        cjk_tokens = re.findall(r"[\u4e00-\u9fff]{2,}", text)
+        raw_tokens: List[str] = []
+        for token in word_tokens + cjk_tokens:
+            t = token.strip()
+            if not t:
+                continue
+            if t not in raw_tokens:
+                raw_tokens.append(t)
+
+        generic_words = {
+            "best",
+            "top",
+            "latest",
+            "recent",
+            "new",
+            "high",
+            "rating",
+            "ratings",
+            "the",
+            "a",
+            "an",
+            "of",
+            "and",
+        }
+        strong_tokens = [
+            t
+            for t in raw_tokens
+            if t not in generic_words and not re.fullmatch(r"\d{1,4}", t)
+        ]
+        return raw_tokens, strong_tokens
+
+    @classmethod
+    def _relevance_score(cls, query: str, result_text: str) -> float:
+        entries = cls._parse_search_results(result_text, max_entries=6)
+        if not entries:
+            # Non-standard output (e.g., direct summary) cannot be scored safely.
+            return 1.0
+
+        query_tokens, strong_tokens = cls._query_tokens(query)
+        if not query_tokens:
+            return 1.0
+
+        combined_text = " ".join(
+            f"{item.get('title', '')} {item.get('url', '')} {item.get('snippet', '')}"
+            for item in entries
+        ).lower()
+
+        matched_tokens = {t for t in query_tokens if t in combined_text}
+        matched_strong = {t for t in strong_tokens if t in combined_text}
+
+        coverage = len(matched_tokens) / max(len(query_tokens), 1)
+        if strong_tokens:
+            strong_coverage = len(matched_strong) / max(len(strong_tokens), 1)
+            return min(max((0.6 * strong_coverage) + (0.4 * coverage), 0.0), 1.0)
+        return min(max(coverage, 0.0), 1.0)
+
+    @classmethod
+    def _is_result_relevant(cls, query: str, result_text: str, min_score: float = 0.25) -> bool:
+        return cls._relevance_score(query, result_text) >= float(min_score)
+
+    @staticmethod
+    def _normalize_primary_provider(raw_provider: Any) -> str:
+        provider = str(raw_provider or "").strip().lower()
+        allowed = {"brave", "perplexity", "duckduckgo", "wikipedia", "bing_rss"}
+        return provider if provider in allowed else ""
+
+    @staticmethod
+    def _normalize_relevance_gate(raw_gate: Any) -> Dict[str, Any]:
+        gate = raw_gate if isinstance(raw_gate, dict) else {}
+        enabled = bool(gate.get("enabled", True))
+        allow_low_relevance_fallback = bool(gate.get("allow_low_relevance_fallback", True))
+        try:
+            min_score = float(gate.get("min_score", 0.25))
+        except Exception:
+            min_score = 0.25
+        min_score = min(max(min_score, 0.0), 1.0)
+        return {
+            "enabled": enabled,
+            "min_score": min_score,
+            "allow_low_relevance_fallback": allow_low_relevance_fallback,
+        }
+
+    @staticmethod
+    def _record_search_observation(payload: Dict[str, Any]) -> None:
+        event = dict(payload or {})
+        event["event"] = "web_search_observation"
+        event["ts"] = int(time.time())
+        logger.info("web_search_observation %s", json.dumps(event, ensure_ascii=False))
+
+        report_file = str(
+            config.get("web.search.report_file", "data/reports/web_search_observations.jsonl") or ""
+        ).strip()
+        if not report_file:
+            return
+        try:
+            report_dir = os.path.dirname(report_file)
+            if report_dir:
+                os.makedirs(report_dir, exist_ok=True)
+            with open(report_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        except Exception as exc:
+            logger.debug("web_search observation report write failed: %s", exc)
+
+    async def _search_with_provider(
+        self,
+        *,
+        provider: str,
+        query: str,
+        count: int,
+        brave_key: str,
+        perplexity_cfg: Dict[str, str],
+    ) -> Optional[str]:
+        if provider == "brave":
+            if not brave_key:
+                return None
+            return await self._brave_search(query, count, brave_key)
+        if provider == "perplexity":
+            key = str(perplexity_cfg.get("api_key", "") or "").strip()
+            if not key:
+                return None
+            return await self._perplexity_search(
+                query=query,
+                count=count,
+                api_key=key,
+                base_url=str(perplexity_cfg.get("base_url", "") or "").strip(),
+                model=str(perplexity_cfg.get("model", "") or "").strip(),
+            )
+        if provider == "duckduckgo":
+            return await self._duckduckgo_search(query, count)
+        if provider == "bing_rss":
+            return await self._bing_rss_search(query, count)
+        if provider == "wikipedia":
+            return await self._wikipedia_search(query, count)
+        return None
+
+    async def execute(self, query: str, count: int = 5, scene: str = "auto", **_: Any) -> str:
+        started_at = time.time()
+        count = min(max(count, 1), 10)
+        normalized_query = self._normalize_query(query)
+
+        brave_key = str(config.get("web.search.brave_api_key", "") or "").strip()
+        if not brave_key:
+            brave_key = str(os.environ.get("BRAVE_API_KEY", "") or "").strip()
+        perplexity_cfg = {
+            "api_key": str(config.get("web.search.perplexity_api_key", "") or "").strip()
+            or str(os.environ.get("PERPLEXITY_API_KEY", "") or "").strip(),
+            "base_url": str(config.get("web.search.perplexity_base_url", "https://api.perplexity.ai") or "").strip(),
+            "model": str(config.get("web.search.perplexity_model", "sonar") or "").strip(),
+        }
+        primary_provider = self._normalize_primary_provider(
+            config.get("web.search.primary_provider", "brave")
+        )
+        primary_only = bool(config.get("web.search.primary_only", False))
+        relevance_gate = self._normalize_relevance_gate(config.get("web.search.relevance_gate", {}))
+        base_order = self._resolve_provider_order(
+            config.get("web.search.providers_order", []),
+            default_order=["brave", "duckduckgo", "wikipedia", "bing_rss"],
+        )
+        providers_order = list(base_order)
+        providers_enabled = config.get("web.search.providers_enabled", {})
+        if not isinstance(providers_enabled, dict):
+            providers_enabled = {}
+        route_cfg = config.get("web.search.scenario_routing", {}) or {}
+        if not isinstance(route_cfg, dict):
+            route_cfg = {}
+        scene_name = self._normalize_scene(scene)
+        if bool(route_cfg.get("enabled", True)):
+            if scene_name == "auto" and bool(route_cfg.get("auto_detect", True)):
+                scene_name = self._detect_scene_from_query(query)
+            profiles = route_cfg.get("profiles", {}) or {}
+            if isinstance(profiles, dict):
+                profile_order = profiles.get(scene_name, [])
+                providers_order = self._resolve_provider_order(profile_order, default_order=base_order)
+
+        if primary_provider:
+            providers_order = [primary_provider] + [p for p in providers_order if p != primary_provider]
+        if primary_only and providers_order:
+            providers_order = [providers_order[0]]
+        first_provider = providers_order[0] if providers_order else ""
+
+        cache_key = f"search:{normalized_query}:{count}:{scene_name}"
+        cached = _cache_get(cache_key)
+        if cached:
+            cached_count = len(self._parse_search_results(cached, max_entries=count))
+            self._record_search_observation(
+                {
+                    "query": normalized_query,
+                    "scene": scene_name,
+                    "provider_used": "cache",
+                    "providers_attempted": [],
+                    "fallback_used": False,
+                    "fallback_reason": "cache_hit",
+                    "relevance_score": 1.0,
+                    "result_count": cached_count,
+                    "duration_ms": int((time.time() - started_at) * 1000),
+                    "primary_provider": first_provider,
+                    "primary_only": primary_only,
+                    "cache_hit": True,
+                }
+            )
+            return cached
+
+        result = None
+        last_error: Optional[str] = None
+        low_relevance_candidate: Optional[str] = None
+        low_relevance_provider = ""
+        low_relevance_score = 0.0
+        selected_relevance_score = 0.0
+        provider_used = ""
+        providers_attempted: List[str] = []
+        fallback_reason = ""
+        used_low_relevance_fallback = False
+        for index, provider in enumerate(providers_order):
+            if not self._provider_enabled(provider, providers_enabled):
+                if index == 0 and not fallback_reason:
+                    fallback_reason = "primary_disabled"
+                continue
+            providers_attempted.append(provider)
+            candidate = await self._search_with_provider(
+                provider=provider,
+                query=normalized_query,
+                count=count,
+                brave_key=brave_key,
+                perplexity_cfg=perplexity_cfg,
+            )
+            if candidate is None:
+                if index == 0 and not fallback_reason:
+                    fallback_reason = "primary_unavailable"
+                continue
+
+            if self._is_empty_or_error_result(candidate):
+                if isinstance(candidate, str) and candidate.lower().startswith("error ["):
+                    last_error = candidate
+                if index == 0 and not fallback_reason:
+                    fallback_reason = "primary_error_or_empty"
+                continue
+            relevance_score = self._relevance_score(normalized_query, candidate)
+            if relevance_gate["enabled"] and relevance_score < relevance_gate["min_score"]:
+                logger.info(
+                    "web_search provider '%s' returned low-relevance results (score=%.3f, threshold=%.3f); trying next provider",
+                    provider,
+                    relevance_score,
+                    relevance_gate["min_score"],
+                )
+                if low_relevance_candidate is None:
+                    low_relevance_candidate = candidate
+                    low_relevance_provider = provider
+                    low_relevance_score = relevance_score
+                if index == 0 and not fallback_reason:
+                    fallback_reason = "primary_low_relevance"
+                continue
+            result = candidate
+            provider_used = provider
+            selected_relevance_score = relevance_score
+            if index > 0 and not fallback_reason:
+                fallback_reason = "primary_fallback"
+            break
+
+        if not result:
+            if low_relevance_candidate and relevance_gate["allow_low_relevance_fallback"]:
+                result = (
+                    low_relevance_candidate
+                    + "\n\n[Warning] Search results may be low relevance for this query. "
+                    "Try adding stronger keywords (domain/source/time window) and retry."
+                )
+                used_low_relevance_fallback = True
+                provider_used = low_relevance_provider or provider_used
+                selected_relevance_score = low_relevance_score
+                if not fallback_reason and first_provider:
+                    fallback_reason = "primary_low_relevance"
+            elif low_relevance_candidate:
+                result = (
+                    "Error [WEB_SEARCH_LOW_RELEVANCE]: Search providers returned low-relevance results. "
+                    "Please refine query with stronger keywords (domain/source/time window)."
+                )
+                provider_used = low_relevance_provider or provider_used
+                selected_relevance_score = low_relevance_score
+                if not fallback_reason and first_provider:
+                    fallback_reason = "primary_low_relevance"
+            else:
+                result = last_error or (
+                    "No results from fallback search providers. "
+                    "You can set BRAVE_API_KEY / PERPLEXITY_API_KEY for higher recall."
+                )
+                if not fallback_reason and first_provider:
+                    fallback_reason = "primary_no_result"
+
+        # Avoid caching low-relevance fallback output to reduce repeated stale noise.
+        if not used_low_relevance_fallback:
+            _cache_set(cache_key, result)
+
+        result_count = len(self._parse_search_results(result, max_entries=count))
+        fallback_used = bool(fallback_reason and fallback_reason != "none")
+        self._record_search_observation(
+            {
+                "query": normalized_query,
+                "scene": scene_name,
+                "provider_used": provider_used or "none",
+                "providers_attempted": providers_attempted,
+                "fallback_used": fallback_used,
+                "fallback_reason": fallback_reason or "none",
+                "relevance_score": round(float(selected_relevance_score), 4),
+                "result_count": result_count,
+                "duration_ms": int((time.time() - started_at) * 1000),
+                "primary_provider": first_provider,
+                "primary_only": primary_only,
+                "cache_hit": False,
+            }
+        )
+        return result
+
+    @staticmethod
+    def _resolve_provider_order(raw_order: Any, default_order: list[str]) -> list[str]:
+        if not isinstance(raw_order, list):
+            return list(default_order)
+        allowed = {"brave", "perplexity", "duckduckgo", "bing_rss", "wikipedia"}
+        cleaned: list[str] = []
+        for item in raw_order:
+            name = str(item or "").strip().lower()
+            if not name or name not in allowed or name in cleaned:
+                continue
+            cleaned.append(name)
+        for provider in default_order:
+            if provider not in cleaned:
+                cleaned.append(provider)
+        return cleaned
+
+    @staticmethod
+    def _provider_enabled(provider: str, enabled_map: Dict[str, Any]) -> bool:
+        if provider not in enabled_map:
+            return True
+        return bool(enabled_map.get(provider))
+
+    async def _brave_search(self, query: str, count: int, api_key: str) -> str:
+        try:
+            import httpx
+        except ImportError:
+            return self._error("WEB_DEPENDENCY_MISSING", "httpx is not installed. Run: pip install httpx")
+
+        url = "https://api.search.brave.com/res/v1/web/search"
+        headers = {"Accept": "application/json", "X-Subscription-Token": api_key}
+        params = {"q": query, "count": count}
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(url, headers=headers, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            return self._error("WEB_SEARCH_BRAVE_FAILED", f"Brave search failed: {exc}")
+
+        results = data.get("web", {}).get("results", [])
+        if not results:
+            return "No results found."
+
+        lines = []
+        for i, r in enumerate(results[:count], 1):
+            title = r.get("title", "")
+            link = r.get("url", "")
+            snippet = r.get("description", "")
+            lines.append(f"{i}. {title}\n   {link}\n   {snippet}")
+        return "\n\n".join(lines)
+
+    async def _perplexity_search(
+        self,
+        *,
+        query: str,
+        count: int,
+        api_key: str,
+        base_url: str,
+        model: str,
+    ) -> str:
+        try:
+            import httpx
+        except ImportError:
+            return self._error("WEB_DEPENDENCY_MISSING", "httpx is not installed. Run: pip install httpx")
+
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        payload = {
+            "model": model or "sonar",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a web search assistant. Return concise web search results. "
+                        "Each line should include title, URL, and snippet."
+                    ),
+                },
+                {"role": "user", "content": f"Query: {query}\nReturn top {count} results."},
+            ],
+            "temperature": 0.0,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            return self._error("WEB_SEARCH_PERPLEXITY_FAILED", f"Perplexity search failed: {exc}")
+
+        choices = data.get("choices", [])
+        if not choices:
+            return "No results found."
+        content = str((choices[0].get("message", {}) or {}).get("content", "") or "").strip()
+        citations = data.get("citations", [])
+        urls: List[str] = []
+        if isinstance(citations, list):
+            for item in citations:
+                url = str(item or "").strip()
+                if url and url not in urls:
+                    urls.append(url)
+                if len(urls) >= count:
+                    break
+        if not urls:
+            for match in re.findall(r"https?://[^\s)\]>]+", content):
+                url = str(match or "").strip().rstrip(".,;")
+                if url and url not in urls:
+                    urls.append(url)
+                if len(urls) >= count:
+                    break
+        if not content and not urls:
+            return "No results found."
+
+        snippet = re.sub(r"\s+", " ", content).strip()
+        if len(snippet) > 320:
+            snippet = snippet[:319].rstrip() + "…"
+        if not snippet:
+            snippet = "Perplexity search result."
+
+        lines: List[str] = []
+        if urls:
+            for idx, url in enumerate(urls[:count], 1):
+                lines.append(f"{idx}. Perplexity Result {idx}\n   {url}\n   {snippet}")
+            return "\n\n".join(lines)
+        return f"1. Perplexity Result\n   https://www.perplexity.ai\n   {snippet}"
+
+    @staticmethod
+    def _is_empty_or_error_result(result: Optional[str]) -> bool:
+        text = str(result or "").strip()
+        if not text:
+            return True
+        lowered = text.lower()
+        return (
+            lowered.startswith("error [")
+            or "no results from fallback search providers" in lowered
+            or lowered == "no results found."
+        )
+
+    @staticmethod
+    def _parse_search_results(result_text: str, max_entries: int = 8) -> List[Dict[str, str]]:
+        """Parse normalized search output into structured entries.
+
+        Expected per-entry format:
+          1. Title
+             https://url
+             snippet...
+        """
+        text = str(result_text or "").strip()
+        if not text or text.lower().startswith("error ["):
+            return []
+
+        entries: List[Dict[str, str]] = []
+        chunks = re.split(r"\n\s*\n+", text)
+        for chunk in chunks:
+            lines = [ln.strip() for ln in chunk.splitlines() if ln.strip()]
+            if not lines:
+                continue
+            m = re.match(r"^\d+\.\s+(.*)$", lines[0])
+            if not m:
+                continue
+            title = m.group(1).strip()
+            url = ""
+            snippet_parts: List[str] = []
+            for line in lines[1:]:
+                if not url and re.match(r"^https?://", line):
+                    url = line
+                else:
+                    snippet_parts.append(line)
+            if not url:
+                continue
+            entries.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "snippet": " ".join(snippet_parts).strip(),
+                }
+            )
+            if len(entries) >= max_entries:
+                break
+        return entries
+
+    async def _duckduckgo_search(self, query: str, count: int) -> str:
+        """Fallback search without API key.
+
+        Strategy:
+        1) DuckDuckGo HTML results page (better recall for normal web queries)
+        2) DuckDuckGo instant-answer API (useful for direct facts)
+        """
+        html_result = await self._duckduckgo_html_search(query, count)
+        if html_result:
+            return html_result
+        return await self._duckduckgo_instant_answer(query, count)
+
+    async def _duckduckgo_html_search(self, query: str, count: int) -> Optional[str]:
+        try:
+            import httpx
+        except ImportError:
+            return None
+
+        url = "https://duckduckgo.com/html/"
+        params = {"q": query}
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                html = resp.text
+        except Exception as exc:
+            logger.debug("DuckDuckGo HTML search failed: %s", exc)
+            return None
+
+        lines = []
+        try:
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(html, "html.parser")
+            cards = soup.select(".result")
+            for card in cards:
+                if len(lines) >= count:
+                    break
+                a = card.select_one("a.result__a")
+                if not a:
+                    continue
+                title = a.get_text(" ", strip=True)
+                href = a.get("href", "").strip()
+                snippet_el = card.select_one(".result__snippet")
+                snippet = snippet_el.get_text(" ", strip=True) if snippet_el else ""
+                if title and href:
+                    lines.append(f"{len(lines)+1}. {title}\n   {href}\n   {snippet}")
+        except Exception as exc:
+            logger.debug("DuckDuckGo HTML parse failed: %s", exc)
+            return None
+
+        if not lines:
+            return None
+        return "\n\n".join(lines)
+
+    async def _duckduckgo_instant_answer(self, query: str, count: int) -> str:
+        try:
+            import httpx
+        except ImportError:
+            return self._error("WEB_DEPENDENCY_MISSING", "httpx is not installed. Run: pip install httpx")
+
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "no_html": 1, "skip_disambig": 1}
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            return self._error("WEB_SEARCH_DDG_FAILED", f"DuckDuckGo search failed: {exc}")
+
+        lines = []
+        abstract = data.get("Abstract")
+        if abstract:
+            lines.append(f"Summary: {abstract}\nSource: {data.get('AbstractURL', '')}")
+
+        for topic in data.get("RelatedTopics", [])[:count]:
+            if isinstance(topic, dict) and "Text" in topic:
+                lines.append(f"- {topic['Text']}\n  {topic.get('FirstURL', '')}")
+
+        if not lines:
+            return "No results found."
+        return "\n\n".join(lines)
+
+    async def _bing_rss_search(self, query: str, count: int) -> Optional[str]:
+        try:
+            import httpx
+        except ImportError:
+            return None
+
+        url = f"https://www.bing.com/search?format=rss&q={quote_plus(query)}"
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                xml_text = resp.text
+            root = ET.fromstring(xml_text)
+        except Exception as exc:
+            logger.debug("Bing RSS search failed: %s", exc)
+            return None
+
+        lines = []
+        for item in root.findall(".//item"):
+            if len(lines) >= count:
+                break
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            desc = (item.findtext("description") or "").strip()
+            if title and link:
+                lines.append(f"{len(lines)+1}. {title}\n   {link}\n   {desc}")
+        if not lines:
+            return None
+        return "\n\n".join(lines)
+
+    async def _wikipedia_search(self, query: str, count: int) -> Optional[str]:
+        try:
+            import httpx
+        except ImportError:
+            return None
+
+        url = "https://en.wikipedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": min(max(count, 1), 10),
+            "format": "json",
+            "utf8": 1,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            logger.debug("Wikipedia search failed: %s", exc)
+            return None
+
+        lines = []
+        for item in (data.get("query", {}) or {}).get("search", [])[:count]:
+            title = str(item.get("title", "")).strip()
+            snippet = str(item.get("snippet", "")).replace("<span class=\"searchmatch\">", "").replace("</span>", "")
+            if not title:
+                continue
+            page_url = f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+            lines.append(f"{len(lines)+1}. {title}\n   {page_url}\n   {snippet}")
+        if not lines:
+            return None
+        return "\n\n".join(lines)
+
+
+class WebReportTool(WebToolBase):
+    """Generate a compact research report with explicit source citations."""
+
+    def __init__(
+        self,
+        *,
+        search_tool: Optional[WebSearchTool] = None,
+        fetch_tool: Optional["WebFetchTool"] = None,
+        memory_manager: Any = None,
+    ) -> None:
+        self._search_tool = search_tool or WebSearchTool()
+        self._fetch_tool = fetch_tool or WebFetchTool()
+        self._memory_manager = memory_manager
+
+    @property
+    def name(self) -> str:
+        return "web_report"
+
+    @property
+    def safety_tier(self) -> ToolSafetyTier:
+        return ToolSafetyTier.STANDARD
+
+    @property
+    def description(self) -> str:
+        return (
+            "Build a research report from web search results with source citations. "
+            "Workflow: search -> fetch -> summarize -> cite."
+        )
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Research topic or question."},
+                "scene": {
+                    "type": "string",
+                    "description": "Search scene: auto|general|news|reference|tech. Defaults to auto.",
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "Search result count (1-10). Defaults to 6.",
+                },
+                "max_sources": {
+                    "type": "integer",
+                    "description": "Max source pages to read (1-8). Defaults to 3.",
+                },
+                "style": {
+                    "type": "string",
+                    "description": "Report style: brief|standard|detailed. Defaults to standard.",
+                },
+            },
+            "required": ["query"],
+        }
+
+    @staticmethod
+    def _normalize_style(style: str) -> str:
+        s = str(style or "standard").strip().lower()
+        if s not in {"brief", "standard", "detailed"}:
+            return "standard"
+        return s
+
+    @classmethod
+    def _max_fetch_chars_by_style(cls, style: str) -> int:
+        if style == "brief":
+            return 5000
+        if style == "detailed":
+            return 12000
+        return 8000
+
+    @classmethod
+    def _max_sentences_by_style(cls, style: str) -> int:
+        if style == "brief":
+            return 2
+        if style == "detailed":
+            return 5
+        return 3
+
+    @staticmethod
+    def _summarize_plain_text(text: str, *, max_sentences: int, max_chars: int = 600) -> str:
+        cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not cleaned:
+            return ""
+        # Prefer sentence-level clipping, fallback to char clipping.
+        parts = [p.strip() for p in re.split(r"(?<=[。！？.!?])\s+", cleaned) if p.strip()]
+        if parts:
+            summary = " ".join(parts[:max_sentences]).strip()
+        else:
+            summary = cleaned
+        if len(summary) > max_chars:
+            summary = summary[: max_chars - 1].rstrip() + "…"
+        return summary
+
+    @staticmethod
+    def _build_exec_summary(query: str, findings: List[Dict[str, str]]) -> str:
+        highlights: List[str] = []
+        for item in findings[:3]:
+            text = str(item.get("summary", "") or "").strip()
+            if not text:
+                continue
+            highlights.append(text)
+        if not highlights:
+            return f"围绕“{query}”检索到可用来源，但正文信息较少。"
+        joined = " ".join(highlights)
+        if len(joined) > 420:
+            joined = joined[:419].rstrip() + "…"
+        return joined
+
+    async def _save_report_evidence(
+        self,
+        *,
+        query: str,
+        scene: str,
+        style: str,
+        findings: List[Dict[str, str]],
+        report: str,
+    ) -> None:
+        if self._memory_manager is None:
+            return
+        save_entry = getattr(self._memory_manager, "save_entry", None)
+        if not callable(save_entry):
+            return
+        try:
+            from soul.core import MemoryEntry
+        except Exception:
+            return
+        evidence = {
+            "kind": "web_report",
+            "query": query,
+            "scene": scene,
+            "style": style,
+            "source_count": len(findings),
+            "sources": [
+                {
+                    "index": int(item.get("index", 0) or 0),
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "summary": item.get("summary", ""),
+                }
+                for item in findings
+            ],
+        }
+        content = (
+            f"[WebReport] {query}\n"
+            f"{json.dumps(evidence, ensure_ascii=False)}\n\n"
+            f"{report[:3000]}"
+        )
+        await save_entry(
+            MemoryEntry(
+                sender="System",
+                content=content,
+                metadata=evidence,
+            )
+        )
+
+    async def execute(
+        self,
+        query: str,
+        scene: str = "auto",
+        count: int = 6,
+        max_sources: int = 3,
+        style: str = "standard",
+        **_: Any,
+    ) -> str:
+        query = str(query or "").strip()
+        if not query:
+            return self._error("WEB_REPORT_QUERY_REQUIRED", "query is required.")
+        count = min(max(int(count or 6), 1), 10)
+        max_sources = min(max(int(max_sources or 3), 1), 8)
+        style = self._normalize_style(style)
+
+        search_output = await self._search_tool.execute(query=query, count=count, scene=scene)
+        if str(search_output).strip().lower().startswith("error ["):
+            return str(search_output)
+
+        candidates = WebSearchTool._parse_search_results(search_output, max_entries=max(count, max_sources * 2))
+        if not candidates:
+            return self._error(
+                "WEB_REPORT_NO_SEARCH_RESULTS",
+                "No parseable search results found for report generation.",
+            )
+
+        findings: List[Dict[str, str]] = []
+        seen_urls: set[str] = set()
+        fetch_chars = self._max_fetch_chars_by_style(style)
+        max_sentences = self._max_sentences_by_style(style)
+
+        for item in candidates:
+            if len(findings) >= max_sources:
+                break
+            url = str(item.get("url", "") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+
+            fetched = await self._fetch_tool.execute(url=url, max_chars=fetch_chars)
+            if str(fetched).strip().lower().startswith("error ["):
+                continue
+            summary = self._summarize_plain_text(
+                str(fetched),
+                max_sentences=max_sentences,
+                max_chars=700 if style == "detailed" else 500,
+            )
+            if not summary:
+                continue
+            findings.append(
+                {
+                    "index": len(findings) + 1,
+                    "title": str(item.get("title", "") or "Untitled"),
+                    "url": url,
+                    "summary": summary,
+                }
+            )
+
+        if not findings:
+            return self._error(
+                "WEB_REPORT_FETCH_EMPTY",
+                "Search returned links, but none could be fetched into readable content.",
+            )
+
+        exec_summary = self._build_exec_summary(query, findings)
+        lines: List[str] = [f"# Research Report: {query}", "", "## Executive Summary", exec_summary, "", "## Findings"]
+        for item in findings:
+            idx = int(item.get("index", 0) or 0)
+            lines.append(f"{idx}. {item.get('summary', '')} [{idx}]")
+        lines.append("")
+        lines.append("## Sources")
+        for item in findings:
+            idx = int(item.get("index", 0) or 0)
+            lines.append(f"[{idx}] {item.get('title', '')} - {item.get('url', '')}")
+
+        report = "\n".join(lines).strip()
+        try:
+            await self._save_report_evidence(
+                query=query,
+                scene=str(scene or "auto"),
+                style=style,
+                findings=findings,
+                report=report,
+            )
+        except Exception as exc:
+            logger.warning("web_report memory save failed: %s", exc)
+        return report
+
+
+class WebFetchTool(WebToolBase):
+    """Fetch a URL and extract readable text content."""
+
+    @property
+    def name(self) -> str:
+        return "web_fetch"
+
+    @property
+    def safety_tier(self) -> ToolSafetyTier:
+        return ToolSafetyTier.STANDARD
+
+    @property
+    def description(self) -> str:
+        return "Fetch a URL and extract its main text content (HTML to readable text)."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL to fetch (http/https)."},
+                "max_chars": {
+                    "type": "integer",
+                    "description": "Max characters to return. Defaults to 50000.",
+                },
+            },
+            "required": ["url"],
+        }
+
+    @staticmethod
+    def _is_private_ip(hostname: str) -> bool:
+        """Check if hostname resolves to a private/loopback IP (SSRF prevention)."""
+        import ipaddress
+        import socket
+        try:
+            # Resolve hostname to IP
+            addr = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for family, _, _, _, sockaddr in addr:
+                ip = ipaddress.ip_address(sockaddr[0])
+                if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                    return True
+        except (socket.gaierror, ValueError):
+            return True  # If we can't resolve, block it for safety
+        return False
+
+    async def execute(self, url: str, max_chars: int = 50000, **_: Any) -> str:
+        if not url.startswith(("http://", "https://")):
+            return self._error("WEB_URL_INVALID", "URL must start with http:// or https://")
+
+        # SSRF protection: block private/internal IPs
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        if self._is_private_ip(hostname):
+            return self._error("WEB_URL_BLOCKED_PRIVATE", "Access to private/internal network addresses is blocked.")
+
+        cache_key = f"fetch:{url}"
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached[:max_chars]
+
+        try:
+            import httpx
+        except ImportError:
+            return self._error("WEB_DEPENDENCY_MISSING", "httpx is not installed. Run: pip install httpx")
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=30,
+                follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; Gazer/1.0)"},
+            ) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                html = resp.text
+        except Exception as exc:
+            return self._error("WEB_FETCH_FAILED", f"Error fetching URL: {exc}")
+
+        text = self._extract_text(html)
+        _cache_set(cache_key, text)
+        return text[:max_chars]
+
+    @staticmethod
+    def _extract_text(html: str) -> str:
+        """Extract readable text from HTML. Try trafilatura, fallback to basic strip."""
+        try:
+            import trafilatura
+            text = trafilatura.extract(html, include_links=True)
+            if text:
+                return text
+        except ImportError:
+            pass
+
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            for tag in soup(["script", "style", "nav", "header", "footer"]):
+                tag.decompose()
+            return soup.get_text(separator="\n", strip=True)
+        except ImportError:
+            pass
+
+        # Last resort: naive tag stripping
+        import re
+        text = re.sub(r"<[^>]+>", " ", html)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
