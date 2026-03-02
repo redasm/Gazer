@@ -1,0 +1,6 @@
+id: cron
+name: Cron Scheduler
+version: 1.0.0
+slot: tool
+entry: plugin:setup
+description: Manage scheduled cron jobs (list, add, remove, edit, run).
