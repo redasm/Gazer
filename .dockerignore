@@ -1,0 +1,48 @@
+# VCS
+.git
+.gitmodules
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+venv/
+.venv/
+env/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Data (mounted at runtime)
+data/
+logs/
+
+# Node (rebuilt in Docker)
+web/node_modules
+web/dist
+
+# Temp / IDE
+.tmp*
+.cursor/
+.vscode/
+.idea/
+.agent/
+
+# Docs & tasks (not needed in image)
+.task/
+docs/
+doc/
+design/
+electronics/
+hardware/
+tests/
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+HEARTBEAT.md
+SECURITY_*.md
+GazerLink.spec
+constraints.txt
