@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="32" fill="#6366f1"/>
+  <circle cx="70" cy="82" r="14" fill="#fff"/>
+  <circle cx="122" cy="82" r="14" fill="#fff"/>
+  <circle cx="70" cy="82" r="6" fill="#1e1b4b"/>
+  <circle cx="122" cy="82" r="6" fill="#1e1b4b"/>
+  <path d="M66 120 q30 24 60 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <text x="96" y="168" text-anchor="middle" font-family="system-ui,sans-serif" font-size="22" font-weight="700" fill="#fff">GAZER</text>
+</svg>
