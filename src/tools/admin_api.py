@@ -31,6 +31,8 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse, FileResponse, PlainTextResponse
+from fastapi import Request
+from runtime.app_context import AppContext, get_app_context, set_app_context
 from PIL import Image
 import yaml
 
@@ -93,7 +95,7 @@ if TYPE_CHECKING:
 
 # Re-export mutable globals as module-level names.
 # NOTE: Because these are reassigned by brain.py via _shared, code that reads
-# ``admin_api.CANVAS_STATE`` must go through ``_shared.CANVAS_STATE`` to see
+# ``admin_api.CANVAS_STATE`` must go through ``_shared.<name>`` to see
 # the injected value.  For the transition period we keep these aliases so
 # existing ``from tools.admin_api import X`` statements continue to resolve
 # at import time; runtime access should prefer ``_shared.<name>``.
@@ -258,7 +260,15 @@ async def lifespan(app: FastAPI):
     bench_task.cancel()
 
 
-app = FastAPI(title="Gazer Admin API", lifespan=lifespan)
+app = FastAPI(
+    title="Gazer Admin API",
+    description="Internal administration API for Gazer",
+    version="1.0.0",
+)
+
+def get_ctx(request: Request) -> AppContext:
+    """FastAPI dependency to retrieve the AppContext."""
+    return getattr(request.app.state, "ctx", None)
 
 # ---------------------------------------------------------------------------
 # Modular router registration (Phase 1: manually verified modules)
@@ -450,6 +460,13 @@ async def _canvas_on_change(canvas_state, extra=None):
 def run_admin_api(port: int = 8080, input_q=None, output_q=None):
     API_QUEUES["input"] = input_q
     API_QUEUES["output"] = output_q
+    
+    ctx = get_app_context()
+    if ctx is None:
+        ctx = AppContext()
+        set_app_context(ctx)
+    app.state.ctx = ctx
+
     logger.info(
         "CORS configured: origins=%s, credentials=%s",
         _cors_origins,

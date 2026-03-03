@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
+from runtime.app_context import get_app_context
 from runtime.config_manager import config
 
 if TYPE_CHECKING:
@@ -76,28 +77,36 @@ IPC_ROUTER_STATUS: Optional[Dict[str, Any]] = None
 # ---------------------------------------------------------------------------
 
 def get_usage_tracker():
-    return USAGE_TRACKER
+    ctx = get_app_context()
+    return ctx.usage_tracker if (ctx and ctx.usage_tracker is not None) else USAGE_TRACKER
 
 def get_llm_router():
-    return LLM_ROUTER
+    ctx = get_app_context()
+    return ctx.llm_router if (ctx and ctx.llm_router is not None) else LLM_ROUTER
 
 def get_trajectory_store():
-    return TRAJECTORY_STORE
+    ctx = get_app_context()
+    return ctx.trajectory_store if (ctx and ctx.trajectory_store is not None) else TRAJECTORY_STORE
 
 def get_prompt_cache_tracker():
-    return PROMPT_CACHE_TRACKER
+    ctx = get_app_context()
+    return ctx.prompt_cache_tracker if (ctx and ctx.prompt_cache_tracker is not None) else PROMPT_CACHE_TRACKER
 
 def get_tool_batching_tracker():
-    return TOOL_BATCHING_TRACKER
+    ctx = get_app_context()
+    return ctx.tool_batching_tracker if (ctx and ctx.tool_batching_tracker is not None) else TOOL_BATCHING_TRACKER
 
 def get_tool_registry():
-    return TOOL_REGISTRY
+    ctx = get_app_context()
+    return ctx.tool_registry if (ctx and ctx.tool_registry is not None) else TOOL_REGISTRY
 
 def get_orchestrator():
-    return ORCHESTRATOR
+    ctx = get_app_context()
+    return ctx.orchestrator if (ctx and ctx.orchestrator is not None) else ORCHESTRATOR
 
 def get_canvas_state():
-    return CANVAS_STATE
+    ctx = get_app_context()
+    return ctx.canvas_state if (ctx and ctx.canvas_state is not None) else CANVAS_STATE
 
 
 # Satellite

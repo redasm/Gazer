@@ -48,6 +48,8 @@ from devices.adapters.remote_satellite import RemoteSatelliteNode
 from devices.adapters.body_hardware import BodyHardwareNode
 import tools.admin.state as _admin_state
 
+from runtime.app_context import AppContext, set_app_context
+
 from perception.capture import CaptureManager
 from perception.sources.screen_local import LocalScreenSource
 from perception.sources.screen_remote import RemoteScreenSource
@@ -106,6 +108,9 @@ class GazerBrain:
 
     def __init__(self, ui_queue=None, ipc_input=None, ipc_output=None):
         ensure_openviking_ready(config)
+        self.app_context = AppContext()
+        set_app_context(self.app_context)
+        
         # Initialize MemoryManager (OpenViking backend handles its own embedding configuration)
         self.memory_manager = MemoryManager()
         self.audio = get_audio()
@@ -132,12 +137,19 @@ class GazerBrain:
         workspace_path = Path(os.getcwd())
         self._sync_soul_single_source(workspace_path)
         self.agent = GazerAgent(workspace_path, self.memory_manager)
+        
+        self.app_context.llm_router = self.agent.router
+        self.app_context.usage_tracker = self.agent.loop.usage
+        self.app_context.prompt_cache_tracker = self.agent.loop.prompt_cache
+        self.app_context.tool_batching_tracker = self.agent.loop.tool_batching_tracker
+        self.app_context.trajectory_store = self.agent.loop.trajectory_store
+        
         import tools.admin.state as _state
-        _state.LLM_ROUTER = self.agent.router
-        _state.USAGE_TRACKER = self.agent.loop.usage
-        _state.PROMPT_CACHE_TRACKER = self.agent.loop.prompt_cache
-        _state.TOOL_BATCHING_TRACKER = self.agent.loop.tool_batching_tracker
-        _state.TRAJECTORY_STORE = self.agent.loop.trajectory_store
+        _state.LLM_ROUTER = self.app_context.llm_router
+        _state.USAGE_TRACKER = self.app_context.usage_tracker
+        _state.PROMPT_CACHE_TRACKER = self.app_context.prompt_cache_tracker
+        _state.TOOL_BATCHING_TRACKER = self.app_context.tool_batching_tracker
+        _state.TRAJECTORY_STORE = self.app_context.trajectory_store
 
         # --- Lane-based Command Queue ---
         self.command_queue = CommandQueue()
@@ -171,7 +183,8 @@ class GazerBrain:
             ),
         )
         self._init_orchestrator()
-        _admin_state.ORCHESTRATOR = self.orchestrator
+        self.app_context.orchestrator = self.orchestrator
+        _admin_state.ORCHESTRATOR = self.app_context.orchestrator
 
         # --- Cron Scheduler ---
         self.cron_scheduler: Optional[CronScheduler] = None
@@ -439,15 +452,18 @@ class GazerBrain:
             max_content_size=config.get("canvas.max_content_size", 65536),
             on_change=_canvas_on_change,
         )
+        self.app_context.canvas_state = self.canvas_state
         import tools.admin.state as _state_canvas
-        _state_canvas.CANVAS_STATE = self.canvas_state
+        _state_canvas.CANVAS_STATE = self.app_context.canvas_state
         logger.info("Canvas/A2UI initialized.")
 
     def _inject_webhook_globals(self) -> None:
         """Inject MessageBus and hook token into admin_api webhook endpoints."""
+        self.app_context.hook_bus = self.agent.bus
+        self.app_context.hook_token = config.get("hooks.token", "") or None
         import tools.admin.state as _state_hook
-        _state_hook.HOOK_BUS = self.agent.bus
-        _state_hook.HOOK_TOKEN = config.get("hooks.token", "") or None
+        _state_hook.HOOK_BUS = self.app_context.hook_bus
+        _state_hook.HOOK_TOKEN = self.app_context.hook_token
 
     def _init_channels(self, ipc_input, ipc_output) -> None:
         """Create and bind all configured channels."""
@@ -730,8 +746,9 @@ class GazerBrain:
                 run_callback=self._run_cron_job,
             )
             self.cron_scheduler.load()
+            self.app_context.cron_scheduler = self.cron_scheduler
             import tools.admin.state as _state_cron
-            _state_cron.CRON_SCHEDULER = self.cron_scheduler
+            _state_cron.CRON_SCHEDULER = self.app_context.cron_scheduler
         elif cron_enabled:
             logger.info("Cron scheduler delegated to Admin API process (IPC mode).")
 
@@ -807,8 +824,9 @@ class GazerBrain:
             self.agent.loop.tools.set_allowlist(allowlist)
 
         # Inject registry into Admin API for policy explain/simulate endpoints
+        self.app_context.tool_registry = self.agent.loop.tools
         import tools.admin.state as _state_policy
-        _state_policy.TOOL_REGISTRY = self.agent.loop.tools
+        _state_policy.TOOL_REGISTRY = self.app_context.tool_registry
 
         logger.info(f"Registered {len(self.agent.loop.tools)} tools.")
 

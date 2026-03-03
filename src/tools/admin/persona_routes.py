@@ -688,3 +688,4 @@ async def get_latest_persona_eval_run(dataset_id: str):
     latest = manager.get_latest_run(dataset_id)
     if latest is None:
         raise HTTPException(status_code=404, detail="No persona eval run found for this dataset")
+    return {"status": "ok", "report": latest}

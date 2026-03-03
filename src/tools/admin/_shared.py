@@ -11,6 +11,7 @@ compatibility.  New code should import from the canonical locations:
 from __future__ import annotations
 
 from fastapi import HTTPException
+from runtime.resilience import classify_error_message
 import collections
 import contextvars
 import asyncio
@@ -3058,7 +3059,34 @@ def _build_resume_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "last_error": last_error,
     }
 
+def _unique_str_list(items: Any) -> list[str]:
+    if not isinstance(items, (list, tuple, set)):
+        return []
+    result = []
+    seen = set()
+    for x in items:
+        s = str(x).strip()
+        if s and s not in seen:
+            seen.add(s)
+            result.append(s)
+    return result
 
+def _normalize_router_strategy(strategy: Any, fallback: str = "priority") -> str:
+    s = str(strategy).strip().lower()
+    if s in {"priority", "cost", "speed", "quality", "load"}:
+        return s
+    return fallback
+
+def _apply_trainer_prompt_patch(base: str, rules: list[str], job_id: str) -> str:
+    if not rules:
+        return base
+    lines = [str(base).rstrip()]
+    if lines and not lines[0].endswith("\n"):
+        lines.append("")
+    lines.append(f"## <trainer_patch> (Applied from training job {job_id})")
+    for r in rules:
+        lines.append(f"- {r}")
+    return "\n".join(lines)
 
 def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
     output = (job.get("output") or {}) if isinstance(job, dict) else {}
@@ -3214,6 +3242,15 @@ def _score_training_job(job: Dict[str, Any]) -> Dict[str, Any]:
         "eval_count": eval_count,
     }
 
+def _classify_training_failure_label(error_code: str) -> str:
+    code = str(error_code or "").strip().lower()
+    if code in {"invalid_parameter", "invalid_arguments", "tool_invalid_params", "schema_validation_failed"}:
+        return "tool_parameter_error"
+    if code in {"tool_not_permitted", "forbidden", "unauthorized", "permission_denied", "tool_tier_blocked"}:
+        return "permission_error"
+    if code in {"timeout", "network_timeout", "service_unavailable", "dependency_error"}:
+        return "environment_error"
+    return "strategy_error"
 
 
 def _build_training_release_explanation(
@@ -3447,9 +3484,21 @@ def _evaluate_training_release_canary_guard(
         "should_rollback_on_canary": should_rollback_on_canary,
     }
 
+import time
+
 def _audit_mcp_response(status: str, code: Optional[int] = None, message: Optional[str] = None) -> None:
-    # A placeholder for future MCP audit tracing or stats; avoids NameError
-    pass
+    ctx = _mcp_request_ctx.get(None)
+    if not ctx:
+        return
+    entry = dict(ctx)
+    entry["status"] = status
+    started = entry.pop("started_at", time.perf_counter())
+    entry["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    if code is not None:
+        entry["error_code"] = code
+    if message is not None:
+        entry["error_message"] = message
+    _mcp_audit_buffer.append(entry)
 
 def _mcp_response_ok(request_id: Any, result: Dict[str, Any]) -> Dict[str, Any]:
     _audit_mcp_response(status="ok")
@@ -3958,4 +4007,24 @@ def get_owner_manager():
     """Lazy import from security.owner."""
     from security.owner import get_owner_manager as _impl
     return _impl()
+
+def _get_eval_benchmark_manager():
+    from eval.benchmark import EvalBenchmarkManager
+    return EvalBenchmarkManager.get_instance()
+
+def _assess_release_gate_workflow_health(*args, **kwargs):
+    from tools.admin.debug import _assess_release_gate_workflow_health as _impl
+    return _impl(*args, **kwargs)
+
+def _build_workflow_observability_metrics(*args, **kwargs):
+    from tools.admin.system import _build_workflow_observability_metrics as _impl
+    return _impl(*args, **kwargs)
+
+def _latest_persona_consistency_signal(*args, **kwargs):
+    from tools.admin.system import _latest_persona_consistency_signal as _impl
+    return _impl(*args, **kwargs)
+
+def _build_coding_quality_metrics(*args, **kwargs):
+    from tools.admin.system import _build_coding_quality_metrics as _impl
+    return _impl(*args, **kwargs)
 

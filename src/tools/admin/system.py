@@ -23,6 +23,13 @@ from tools.admin._shared import _append_policy_audit, get_provider_registry, get
 import tools.admin._shared as _shared
 from security.pairing import get_pairing_manager
 
+def _get_training_job_manager():
+    from eval.trainer import TrainingJobManager
+    return TrainingJobManager.get_instance()
+
+def _get_training_bridge_manager():
+    from eval.training_bridge import TrainingBridgeManager
+    return TrainingBridgeManager.get_instance()
 app = APIRouter()
 logger = logging.getLogger('system')
 
