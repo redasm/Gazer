@@ -339,62 +339,9 @@ app.add_middleware(
 
 
 # --- Global Exception Handlers ---
-# Provides consistent error responses and prevents stack trace leakage.
+from tools.admin.error_handlers import install_exception_handlers
+install_exception_handlers(app)
 
-
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions with consistent JSON response format."""
-    return Response(
-        content=json.dumps({
-            "error": True,
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-        }),
-        status_code=exc.status_code,
-        media_type="application/json",
-    )
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle request validation errors with detailed field information."""
-    errors = []
-    for error in exc.errors():
-        errors.append({
-            "loc": list(error.get("loc", [])),
-            "msg": error.get("msg", ""),
-            "type": error.get("type", ""),
-        })
-    return Response(
-        content=json.dumps({
-            "error": True,
-            "status_code": 422,
-            "detail": "Validation error",
-            "errors": errors,
-        }),
-        status_code=422,
-        media_type="application/json",
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Catch-all handler for unexpected exceptions.
-    
-    Logs the full traceback but returns a sanitized response to prevent
-    information leakage to clients.
-    """
-    logger.exception("Unhandled exception in API request: %s %s", request.method, request.url.path)
-    return Response(
-        content=json.dumps({
-            "error": True,
-            "status_code": 500,
-            "detail": "Internal server error",
-        }),
-        status_code=500,
-        media_type="application/json",
-    )
 
 
 # --- Memory Management API ---
@@ -440,77 +387,10 @@ _workflow_run_history = _shared._workflow_run_history
 
 
 
-class GazerLogHandler(logging.Handler):
-    """Custom log handler that stores logs in memory for API access.
-    
-    Captures structured metadata from log records when available
-    (e.g. request_id, model, tokens from LLM calls).
-    """
-    _META_KEYS = ("request_id", "model", "tokens")
+# --- Structured Log Handler ---
+from tools.admin.error_handlers import install_log_handler
+_gazer_handler = install_log_handler(_log_buffer, _llm_history)
 
-    def emit(self, record):
-        try:
-            entry: Dict[str, Any] = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-                "level": record.levelname,
-                "source": record.name,
-                "message": record.getMessage(),
-            }
-            # Capture structured metadata from extra fields
-            meta: Dict[str, Any] = {}
-            for key in self._META_KEYS:
-                val = getattr(record, key, None)
-                if val is not None:
-                    meta[key] = val
-            if meta:
-                entry["meta"] = meta
-            _log_buffer.append(entry)
-
-            # Track LLM calls separately for the debug history panel
-            if meta.get("request_id"):
-                _llm_history.append({
-                    "timestamp": entry["timestamp"],
-                    "request_id": meta.get("request_id"),
-                    "model": meta.get("model"),
-                    "tokens": meta.get("tokens"),
-                    "message": record.getMessage(),
-                    "level": record.levelname,
-                })
-        except Exception:
-            self.handleError(record)
-
-
-_STRATEGY_ROLLBACK_ALLOWED_KEYS = {
-    "personality.system_prompt",
-    "models.deployment_profiles",
-    "personality.mental_process",
-    "agents.list",
-    "personality.runtime.auto_correction",
-}
-_STRATEGY_ROLLBACK_ALLOWED_PREFIXES = {
-    "security.tool_",
-    "agents.list.",
-    "models.router.",
-    "personality.runtime.auto_correction.",
-}
-
-
-_DEFAULT_RELEASE_GATE_HEALTH_THRESHOLDS: Dict[str, Any] = {
-    "warning_success_rate": 0.90,
-    "critical_success_rate": 0.75,
-    "warning_failures": 1,
-    "critical_failures": 3,
-    "warning_p95_latency_ms": 2500,
-    "critical_p95_latency_ms": 4000,
-    "warning_persona_consistency_score": 0.82,
-    "critical_persona_consistency_score": 0.70,
-}
-
-
-# Add handler to root logger
-_gazer_handler = GazerLogHandler()
-_gazer_handler.setLevel(logging.DEBUG)
-logging.getLogger().addHandler(_gazer_handler)
 
 # --- Satellite API ---
 from perception.sources.screen_remote import RemoteScreenSource
