@@ -98,7 +98,7 @@ class _IpcLogHandler(logging.Handler):
                 entry["meta"] = meta
             self._queue.put({"type": "log_entry", "entry": entry})
         except Exception:
-            pass
+            self.handleError(record)
 
 
 class GazerBrain:

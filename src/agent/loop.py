@@ -367,7 +367,7 @@ class AgentLoop(
                 # Rate limiting check
                 rate_key = f"{msg.channel}:{msg.sender_id}"
                 if not self._rate_limiter.allow(rate_key):
-                    logger.warning(f"Rate limited: {rate_key}")
+                    logger.warning("Rate limited: %s", rate_key)
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
@@ -405,7 +405,7 @@ class AgentLoop(
                     )
                 except Exception as e:
                     reply_language = self._detect_user_language(msg.content)
-                    logger.error(f"Error processing message: {e}", exc_info=True)
+                    logger.error("Error processing message: %s", e, exc_info=True)
                     # Send error response
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
@@ -413,7 +413,7 @@ class AgentLoop(
                         content=self._msg(reply_language, "runtime_error", error=str(e)),
                     ))
             except Exception as e:
-                logger.error(f"Critical error in agent loop: {e}", exc_info=True)
+                logger.error("Critical error in agent loop: %s", e, exc_info=True)
                 await asyncio.sleep(1)
     
     def stop(self) -> None:
@@ -461,13 +461,13 @@ class AgentLoop(
     def reset_session(self, session_key: str) -> None:
         """Clear conversation history for a session (supports /new, /reset)."""
         self.session_store.delete_session(session_key)
-        logger.info(f"Session reset: {session_key}")
+        logger.info("Session reset: %s", session_key)
 
     async def _process_message(self, msg: InboundMessage) -> Optional[OutboundMessage]:
         """
         Process a single inbound message.
         """
-        logger.info(f"Processing message from {msg.channel}:{msg.sender_id}")
+        logger.info("Processing message from %s:%s", msg.channel, msg.sender_id)
         self._cancel_token = CancellationToken()
         turn_started = asyncio.get_running_loop().time()
         reply_language = self._detect_user_language(msg.content)
@@ -513,7 +513,7 @@ class AgentLoop(
         if msg.metadata.get("_reset_session"):
             self.reset_session(session_key)
             self._pending_confirmations.pop(session_key, None)
-            logger.info(f"Session reset via channel trigger: {session_key}")
+            logger.info("Session reset via channel trigger: %s", session_key)
 
         # --- Typing indicator: start ---
         await self.bus.publish_typing(TypingEvent(
@@ -1452,7 +1452,7 @@ class AgentLoop(
         )
         
         if pending_media:
-            logger.info(f"Sending response with media: {pending_media}")
+            logger.info("Sending response with media: %s", pending_media)
         return OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
