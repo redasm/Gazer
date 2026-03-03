@@ -6,7 +6,7 @@ unknown users are challenged with a code before they can interact.
 
 import asyncio
 import logging
-from typing import List
+from typing import List, Any, Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -20,7 +20,7 @@ from telegram.ext import (
 
 from agent.channel_command_registry import parse_channel_command
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media, cleanup_old_media
 from runtime.config_manager import config
 from security.pairing import pairing_manager
@@ -29,10 +29,19 @@ from soul.evolution import evolution
 logger = logging.getLogger("TelegramChannel")
 
 
+@ChannelRegistry.register("telegram")
 class TelegramChannel(ChannelAdapter):
     """Telegram bot channel using python-telegram-bot."""
 
     channel_name = "telegram"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        tg_token = config.get("telegram.token")
+        if config.get("telegram.enabled") and tg_token:
+            allowed_ids = config.get("telegram.allowed_ids", [])
+            return cls(tg_token, allowed_ids)
+        return None
 
     def __init__(self, token: str, allowed_ids: List[str]) -> None:
         super().__init__()

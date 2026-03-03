@@ -1172,24 +1172,63 @@ def _safe_task_path(rel_path: str) -> Path:
 
 def _run_verify_command(cmd: str, cwd: Path, timeout_seconds: int = 120) -> Dict[str, Any]:
     import subprocess
+    import re
+    
+    # 1. Block shell metacharacters (except simple hyphens/underscores/etc)
+    # The original implementation blocked shell metacharacters
+    blocked_metachars = [";", "&", "|", ">", "<", "`", "$(", "${"]
+    for char in blocked_metachars:
+        if char in cmd:
+            return {
+                "ok": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"Error: Command contains blocked shell metacharacters: {char}"
+            }
+            
+    # 2. Block certain executables like powershell, cmd, bash, sh based on tests
+    first_word = cmd.strip().split()[0].lower() if cmd.strip() else ""
+    blocked_execs = ["powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "zsh"]
+    if first_word in blocked_execs:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": f"Error: blocked verify executable: {first_word}"
+        }
+
     try:
+        # Avoid shell=True for security, the tests mock shell=False
+        args = cmd.split()
         res = subprocess.run(
-            cmd, shell=True, cwd=str(cwd),
+            args, shell=False, cwd=str(cwd),
             capture_output=True, text=True, timeout=timeout_seconds
         )
         return {
+            "ok": True,
             "exit_code": res.returncode,
-            "logs": res.stdout + "\n" + res.stderr
+            "returncode": res.returncode,
+            "logs": res.stdout + "\n" + res.stderr,
+            "stdout": res.stdout,
+            "stderr": res.stderr
         }
     except subprocess.TimeoutExpired as e:
         return {
+            "ok": False,
             "exit_code": 124,
-            "logs": f"Timeout after {timeout_seconds}s\n" + (e.stdout or "") + "\n" + (e.stderr or "")
+            "returncode": 124,
+            "logs": f"Timeout after {timeout_seconds}s\n" + (e.stdout or "") + "\n" + (e.stderr or ""),
+            "stdout": e.stdout or "",
+            "stderr": f"Timeout after {timeout_seconds}s\n" + (e.stderr or "")
         }
     except Exception as e:
         return {
+            "ok": False,
             "exit_code": 1,
-            "logs": str(e)
+            "returncode": 1,
+            "logs": str(e),
+            "stdout": "",
+            "stderr": str(e)
         }
 
 

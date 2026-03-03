@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _FakeToolRegistry:

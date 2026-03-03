@@ -6,6 +6,7 @@ from agent.loop_mixins.tool_policy import ToolPolicyMixin
 from agent.loop_mixins.llm_interaction import LLMInteractionMixin
 from agent.loop_mixins.planning import PlanningMixin
 from agent.loop_mixins.tool_result_utils import ToolResultUtilsMixin
+from agent.loop_mixins.process_message import ProcessMessageMixin
 
 __all__ = [
     "ChannelCommandsMixin",
@@ -14,4 +15,5 @@ __all__ = [
     "LLMInteractionMixin",
     "PlanningMixin",
     "ToolResultUtilsMixin",
+    "ProcessMessageMixin",
 ]

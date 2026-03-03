@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
+import httpx
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from agent.channel_command_registry import parse_channel_command
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 
 logger = logging.getLogger("SlackChannel")
 
@@ -26,13 +29,22 @@ logger = logging.getLogger("SlackChannel")
 _SLACK_MSG_LIMIT = 3_000
 
 
+@ChannelRegistry.register("slack")
 class SlackChannel(ChannelAdapter):
-    """Slack bot adapter (requires ``slack_bolt`` at runtime).
-
-    Uses Socket Mode for connectivity — no ingress webhook needed.
-    """
+    """Slack bot adapter (requires ``slack_bolt`` at runtime)."""
 
     channel_name = "slack"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        bot_token = str(config.get("slack.bot_token", "") or os.getenv("SLACK_BOT_TOKEN", "")).strip()
+        app_token = str(config.get("slack.app_token", "") or os.getenv("SLACK_APP_TOKEN", "")).strip()
+        if config.get("slack.enabled") and bot_token and app_token:
+            return cls(bot_token=bot_token, app_token=app_token)
+        elif config.get("slack.enabled"):
+            logger.warning("Slack channel enabled but bot_token/app_token missing.")
+        return None
 
     def __init__(
         self,

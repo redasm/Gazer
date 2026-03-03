@@ -7,7 +7,7 @@ sender is authorized under the configured ``dm_policy``.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Optional, Dict, Type, Callable
 
 from bus.events import InboundMessage, OutboundMessage, TypingEvent
 from bus.queue import MessageBus
@@ -39,6 +39,14 @@ class ChannelAdapter(ABC):
 
     def __init__(self) -> None:
         self.bus: Optional[MessageBus] = None
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        """
+        Factory method to create a channel instance from the central configuration.
+        Returns None if disabled or missing required credentials.
+        """
+        raise NotImplementedError("Each ChannelAdapter must implement from_config.")
 
     def bind(self, bus: MessageBus) -> None:
         """Bind this adapter to a MessageBus (subscribe outbound automatically)."""
@@ -174,3 +182,22 @@ class ChannelAdapter(ABC):
                 metadata=metadata or {},
             )
         )
+
+
+class ChannelRegistry:
+    """Registry for ChannelAdapter implementations."""
+
+    _registry: Dict[str, Type[ChannelAdapter]] = {}
+
+    @classmethod
+    def register(cls, name: str) -> Callable[[Type[ChannelAdapter]], Type[ChannelAdapter]]:
+        """Decorator to register a ChannelAdapter specific class against a channel name."""
+        def wrapper(channel_cls: Type[ChannelAdapter]) -> Type[ChannelAdapter]:
+            cls._registry[name] = channel_cls
+            return channel_cls
+        return wrapper
+
+    @classmethod
+    def get_all(cls) -> Dict[str, Type[ChannelAdapter]]:
+        """Returned all registered channels."""
+        return cls._registry.copy()

@@ -1,7 +1,7 @@
 import pytest
 
 from llm.router import list_router_strategy_templates, resolve_router_strategy_template
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _FakeConfig:

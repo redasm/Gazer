@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from memory.quality_eval import build_memory_quality_report
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def _write_jsonl(path: Path, rows) -> None:

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from agent.agents_md_lint import lint_agents_overlay
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def test_lint_agents_overlay_reports_conflicts_unknown_fields_and_invalid_tokens(tmp_path: Path):

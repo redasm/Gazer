@@ -362,7 +362,7 @@ def _build_workflow_observability_metrics(limit: int = 200) -> Dict[str, Any]:
     return workflow_metrics
 
 def _latest_persona_consistency_signal() -> Dict[str, Any]:
-    from tools.admin.debug import _get_persona_eval_manager
+    from tools.admin.persona_routes import _get_persona_eval_manager
     manager = _get_persona_eval_manager()
     datasets = manager.list_datasets(limit=20)
     latest_score = 0.0
@@ -389,7 +389,7 @@ def _latest_persona_consistency_signal() -> Dict[str, Any]:
     }
 
 def _build_persona_consistency_weekly_report(window_days: int = 7, source: str = "persona_eval") -> Dict[str, Any]:
-    from tools.admin.debug import _get_persona_runtime_manager, _get_persona_eval_manager
+    from tools.admin.persona_routes import _get_persona_runtime_manager, _get_persona_eval_manager
     window = max(1, min(int(window_days or 7), 30))
     now = time.time()
     window_seconds = float(window * 86400)
@@ -993,6 +993,7 @@ def _build_training_bridge_policy_scoreboard(
     return scoreboard
 
 def _build_alignment_baseline_panel(limit: int = 200, window_days: int = 7) -> Dict[str, Any]:
+    from tools.admin.observability import _build_tool_governance_slo
     tool_slo = _build_tool_governance_slo(limit=limit)
     workflow = _build_workflow_observability_metrics(limit=limit)
     persona = _build_persona_consistency_weekly_report(window_days=window_days, source="persona_eval")
@@ -1037,6 +1038,7 @@ def _build_alignment_baseline_panel(limit: int = 200, window_days: int = 7) -> D
 
 def _build_self_evolution_offline_report(case_limit: int = 5) -> Dict[str, Any]:
     safe_limit = max(1, min(int(case_limit), 20))
+    from eval.self_evolution_replay import build_default_replays, compare_planning_strategies
     replays = build_default_replays()[:safe_limit]
     report = compare_planning_strategies(replays, beam_width=3, horizon=2)
     report["generated_at"] = time.time()
@@ -1400,7 +1402,9 @@ async def get_usage_stats():
 @app.get("/health/tool-governance", dependencies=[Depends(verify_admin_token)])
 async def get_tool_governance_health(limit: int = 50):
     """Return runtime tool-governance snapshot (budget + recent rejections)."""
-    return {
+    from tools.admin._shared import _get_tool_governance_snapshot
+    response = {
         "status": "ok",
         "tool_governance": _get_tool_governance_snapshot(limit=limit),
     }
+    return response

@@ -28,7 +28,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 
 logger = logging.getLogger("WhatsAppChannel")
@@ -37,10 +37,28 @@ logger = logging.getLogger("WhatsAppChannel")
 _GRAPH_BASE = "https://graph.facebook.com"
 
 
+@ChannelRegistry.register("whatsapp")
 class WhatsAppChannel(ChannelAdapter):
     """WhatsApp Business Cloud API channel adapter."""
 
     channel_name = "whatsapp"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        phone_id = str(config.get("whatsapp.phone_number_id", "") or os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")).strip()
+        token = str(config.get("whatsapp.access_token", "") or os.getenv("WHATSAPP_ACCESS_TOKEN", "")).strip()
+        if config.get("whatsapp.enabled") and phone_id and token:
+            return cls(
+                phone_number_id=phone_id,
+                access_token=token,
+                verify_token=str(config.get("whatsapp.verify_token", "") or os.getenv("WHATSAPP_VERIFY_TOKEN", "")).strip(),
+                webhook_secret=str(config.get("whatsapp.webhook_secret", "") or os.getenv("WHATSAPP_WEBHOOK_SECRET", "")).strip(),
+                api_version=config.get("whatsapp.api_version", "v21.0"),
+            )
+        elif config.get("whatsapp.enabled"):
+            logger.warning("WhatsApp channel enabled but credentials are missing.")
+        return None
 
     def __init__(
         self,

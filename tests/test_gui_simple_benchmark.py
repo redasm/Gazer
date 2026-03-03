@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 @pytest.mark.asyncio

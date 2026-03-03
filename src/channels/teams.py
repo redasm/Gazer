@@ -19,9 +19,10 @@ import time
 from typing import Any, Dict, List, Optional
 
 import httpx
+from cachetools import TTLCache
 
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 
 logger = logging.getLogger("TeamsChannel")
@@ -30,10 +31,22 @@ _TOKEN_URL = "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/tok
 _API_BASE = "https://smba.trafficmanager.net/teams"
 
 
+@ChannelRegistry.register("teams")
 class TeamsChannel(ChannelAdapter):
     """Microsoft Teams channel adapter via Bot Connector API."""
 
     channel_name = "teams"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        app_id = str(config.get("teams.app_id", "") or os.getenv("TEAMS_APP_ID", "")).strip()
+        app_secret = str(config.get("teams.app_secret", "") or os.getenv("TEAMS_APP_SECRET", "")).strip()
+        if config.get("teams.enabled") and app_id and app_secret:
+            return cls(app_id=app_id, app_secret=app_secret)
+        elif config.get("teams.enabled"):
+            logger.warning("Teams channel enabled but app_id/app_secret missing.")
+        return None
 
     def __init__(self, app_id: str, app_secret: str) -> None:
         super().__init__()

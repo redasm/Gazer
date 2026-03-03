@@ -381,7 +381,6 @@ class ChannelCommandsMixin:
     def _handle_command_reset(self, args: List[str], msg: InboundMessage) -> str:
         del args
         self.reset_session(msg.session_key)
-        self._pending_confirmations.pop(msg.session_key, None)
         return "会话已重置。"
 
     def _handle_command_tools(self, args: List[str], msg: InboundMessage) -> str:

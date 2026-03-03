@@ -88,9 +88,16 @@ def _make_loop(monkeypatch, tmp_path, cfg_data: dict, *, owner_sender_ids: set[s
     def _is_owner(channel: str, sender_id: str) -> bool:
         return f"{channel}:{sender_id}" in owner_sender_ids
 
+    _owner_stub = lambda: SimpleNamespace(is_owner_sender=_is_owner)
     monkeypatch.setattr(
         "agent.loop.get_owner_manager",
-        lambda: SimpleNamespace(is_owner_sender=_is_owner),
+        _owner_stub,
+    )
+    # After extracting _execute_channel_command into the mixin, its module
+    # has its own reference to get_owner_manager that also needs patching.
+    monkeypatch.setattr(
+        "agent.loop_mixins.channel_commands.get_owner_manager",
+        _owner_stub,
     )
 
     provider = _Provider()

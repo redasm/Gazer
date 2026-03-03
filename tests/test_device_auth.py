@@ -1,4 +1,4 @@
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def test_validate_satellite_node_auth_success(monkeypatch) -> None:

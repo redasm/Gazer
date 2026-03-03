@@ -33,8 +33,9 @@ from lark_oapi.api.im.v1 import (
 )
 
 from agent.channel_command_registry import parse_channel_command
+from bus.queue import MessageBus
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 from runtime.config_manager import config
 from security.pairing import pairing_manager
@@ -92,10 +93,23 @@ def _parse_text_content(raw_content: str, message_type: str) -> str:
     return f"[{message_type}]"
 
 
+@ChannelRegistry.register("feishu")
 class FeishuChannel(ChannelAdapter):
     """Feishu bot channel using lark-oapi WebSocket mode."""
 
     channel_name = "feishu"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        app_id = str(config.get("feishu.app_id", "") or os.getenv("FEISHU_APP_ID", "")).strip()
+        app_secret = str(config.get("feishu.app_secret", "") or os.getenv("FEISHU_APP_SECRET", "")).strip()
+        if config.get("feishu.enabled") and app_id and app_secret:
+            allowed = config.get("feishu.allowed_ids", [])
+            return cls(app_id, app_secret, allowed)
+        elif config.get("feishu.enabled"):
+            logger.warning("Feishu channel enabled but credentials are missing.")
+        return None
 
     def __init__(
         self,

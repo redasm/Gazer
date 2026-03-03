@@ -5,7 +5,7 @@ import pytest
 
 from agent.orchestrator import AgentConfig, AgentOrchestrator
 from bus.command_queue import CommandQueue
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _DummyProvider:

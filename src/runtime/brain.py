@@ -453,141 +453,55 @@ class GazerBrain:
         """Create and bind all configured channels."""
         bus = self.agent.bus
 
-        # Telegram
-        tg_token = config.get("telegram.token")
-        allowed_ids = config.get("telegram.allowed_ids", [])
-        if config.get("telegram.enabled") and tg_token:
-            from channels.telegram import TelegramChannel
-            tg = TelegramChannel(tg_token, allowed_ids)
-            tg.bind(bus)
-            self.channels.append(tg)
+        from channels.base import ChannelRegistry
+        import importlib
+
+        # Force import of all channels so they register themselves
+        # Non-installed optional channels will be skipped gracefully
+        for mod_name in [
+            "channels.discord",
+            "channels.feishu",
+            "channels.google_chat",
+            "channels.signal_channel",
+            "channels.slack",
+            "channels.teams",
+            "channels.telegram",
+            "channels.web",
+            "channels.whatsapp",
+        ]:
+            try:
+                importlib.import_module(mod_name)
+            except ImportError as e:
+                logger.info("Skipping channel module %s (missing dependencies: %s)", mod_name, e)
+
+        for name, channel_cls in ChannelRegistry.get_all().items():
+            try:
+                channel = channel_cls.from_config(
+                    config,
+                    ipc_input=ipc_input,
+                    ipc_output=ipc_output,
+                    ui_queue=self.ui_queue,
+                )
+                if channel:
+                    channel.bind(bus)
+                    self.channels.append(channel)
+
+                    # Inject into admin API state for webhook routing
+                    if name == "whatsapp":
+                        import tools.admin.state as _state_wa
+                        _state_wa.WHATSAPP_CHANNEL = channel
+                    elif name == "teams":
+                        import tools.admin.state as _state_teams
+                        _state_teams.TEAMS_CHANNEL = channel
+                    elif name == "google_chat":
+                        import tools.admin.state as _state_gchat
+                        _state_gchat.GOOGLE_CHAT_CHANNEL = channel
+            except Exception as e:
+                logger.error("Failed to load channel %s: %s", name, e, exc_info=True)
 
         # Gmail Pub/Sub push manager (event-driven automation, no email chat channel)
         if config.get("gmail_push.enabled", False):
             self._init_gmail_push()
-
-        # Feishu / Lark
-        feishu_app_id = str(
-            config.get("feishu.app_id", "") or os.getenv("FEISHU_APP_ID", "")
-        ).strip()
-        feishu_app_secret = str(
-            config.get("feishu.app_secret", "") or os.getenv("FEISHU_APP_SECRET", "")
-        ).strip()
-        if config.get("feishu.enabled") and feishu_app_id and feishu_app_secret:
-            from channels.feishu import FeishuChannel
-            feishu_allowed = config.get("feishu.allowed_ids", [])
-            feishu = FeishuChannel(feishu_app_id, feishu_app_secret, feishu_allowed)
-            feishu.bind(bus)
-            self.channels.append(feishu)
-        elif config.get("feishu.enabled"):
-            logger.warning(
-                "Feishu channel enabled but credentials are missing. "
-                "Set feishu.app_id/feishu.app_secret in settings.yaml "
-                "or FEISHU_APP_ID/FEISHU_APP_SECRET in environment."
-            )
-
-        # Discord
-        discord_token = config.get("discord.token", "")
-        if config.get("discord.enabled") and discord_token:
-            from channels.discord import DiscordChannel
-
-            discord_allowed_guild_ids = config.get("discord.allowed_guild_ids", [])
-            discord = DiscordChannel(discord_token, discord_allowed_guild_ids)
-            discord.bind(bus)
-            self.channels.append(discord)
-
-        # WhatsApp (Cloud API)
-        wa_phone_id = str(
-            config.get("whatsapp.phone_number_id", "") or os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
-        ).strip()
-        wa_token = str(
-            config.get("whatsapp.access_token", "") or os.getenv("WHATSAPP_ACCESS_TOKEN", "")
-        ).strip()
-        if config.get("whatsapp.enabled") and wa_phone_id and wa_token:
-            from channels.whatsapp import WhatsAppChannel
-            wa = WhatsAppChannel(
-                phone_number_id=wa_phone_id,
-                access_token=wa_token,
-                verify_token=str(
-                    config.get("whatsapp.verify_token", "") or os.getenv("WHATSAPP_VERIFY_TOKEN", "")
-                ).strip(),
-                webhook_secret=str(
-                    config.get("whatsapp.webhook_secret", "") or os.getenv("WHATSAPP_WEBHOOK_SECRET", "")
-                ).strip(),
-                api_version=config.get("whatsapp.api_version", "v21.0"),
-            )
-            wa.bind(bus)
-            self.channels.append(wa)
-            # Inject into admin API for webhook routing
-            import tools.admin.state as _state_wa
-            _state_wa.WHATSAPP_CHANNEL = wa
-        elif config.get("whatsapp.enabled"):
-            logger.warning(
-                "WhatsApp channel enabled but credentials are missing. "
-                "Set whatsapp.phone_number_id/whatsapp.access_token in settings.yaml "
-                "or WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_ACCESS_TOKEN in environment."
-            )
-
-        # Signal (via signal-cli REST API)
-        signal_api = str(
-            config.get("signal.api_url", "") or os.getenv("SIGNAL_API_URL", "")
-        ).strip()
-        signal_phone = str(
-            config.get("signal.phone_number", "") or os.getenv("SIGNAL_PHONE_NUMBER", "")
-        ).strip()
-        if config.get("signal.enabled") and signal_api and signal_phone:
-            from channels.signal_channel import SignalChannel
-            sig = SignalChannel(api_url=signal_api, phone_number=signal_phone)
-            sig.bind(bus)
-            self.channels.append(sig)
-        elif config.get("signal.enabled"):
-            logger.warning(
-                "Signal channel enabled but api_url/phone_number missing."
-            )
-
-        # Microsoft Teams (Bot Framework)
-        teams_app_id = str(
-            config.get("teams.app_id", "") or os.getenv("TEAMS_APP_ID", "")
-        ).strip()
-        teams_app_secret = str(
-            config.get("teams.app_secret", "") or os.getenv("TEAMS_APP_SECRET", "")
-        ).strip()
-        if config.get("teams.enabled") and teams_app_id and teams_app_secret:
-            from channels.teams import TeamsChannel
-            teams = TeamsChannel(app_id=teams_app_id, app_secret=teams_app_secret)
-            teams.bind(bus)
-            self.channels.append(teams)
-            import tools.admin.state as _state_teams
-            _state_teams.TEAMS_CHANNEL = teams
-        elif config.get("teams.enabled"):
-            logger.warning(
-                "Teams channel enabled but app_id/app_secret missing."
-            )
-
-        # Google Chat
-        gchat_sa = str(
-            config.get("google_chat.service_account_file", "") or os.getenv("GOOGLE_CHAT_SA_FILE", "")
-        ).strip()
-        gchat_project = str(
-            config.get("google_chat.project_id", "") or os.getenv("GOOGLE_CHAT_PROJECT_ID", "")
-        ).strip()
-        if config.get("google_chat.enabled"):
-            from channels.google_chat import GoogleChatChannel
-            gchat = GoogleChatChannel(
-                service_account_file=gchat_sa,
-                project_id=gchat_project,
-            )
-            gchat.bind(bus)
-            self.channels.append(gchat)
-            import tools.admin.state as _state_gchat
-            _state_gchat.GOOGLE_CHAT_CHANNEL = gchat
-
-        # Web Chat (IPC queues from the desktop UI)
-        if ipc_input:
-            from channels.web import WebChannel
-            web = WebChannel(ipc_input, ipc_output, ui_queue=self.ui_queue)
-            web.bind(bus)
-            self.channels.append(web)
 
     def _init_gmail_push(self) -> None:
         """Set up Gmail Pub/Sub push manager and inject into admin API."""

@@ -12,7 +12,7 @@ from typing import Any, List, Optional
 
 from agent.channel_command_registry import parse_channel_command
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 
 logger = logging.getLogger("DiscordChannel")
 
@@ -21,10 +21,19 @@ _SELECT_ID_PREFIX = "gazer_sel::"
 _MODAL_ID_PREFIX = "gazer_modal::"
 
 
+@ChannelRegistry.register("discord")
 class DiscordChannel(ChannelAdapter):
     """Discord bot adapter (requires ``discord.py`` at runtime)."""
 
     channel_name = "discord"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        token = config.get("discord.token", "")
+        if config.get("discord.enabled") and token:
+            allowed = config.get("discord.allowed_guild_ids", [])
+            return cls(token, allowed)
+        return None
 
     def __init__(self, token: str, allowed_guild_ids: Optional[List[str]] = None) -> None:
         super().__init__()

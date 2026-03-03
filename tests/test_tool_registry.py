@@ -200,7 +200,6 @@ class TestToolRegistry:
             max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="user-1",
             channel="telegram",
-            confirmed=True,
         )
         assert "TOOL_NOT_PERMITTED" in result
 
@@ -236,7 +235,6 @@ class TestToolRegistry:
             {"payload": "x"},
             max_tier=ToolSafetyTier.STANDARD,
             policy=policy,
-            confirmed=True,
             sender_id="u1",
             channel="web",
         )
@@ -246,7 +244,6 @@ class TestToolRegistry:
         assert capture_tool.last_kwargs["payload"] == "x"
         assert capture_tool.last_kwargs["_access_max_tier"] == ToolSafetyTier.STANDARD
         assert capture_tool.last_kwargs["_access_policy"] is policy
-        assert capture_tool.last_kwargs["_access_confirmed"] is True
         assert capture_tool.last_kwargs["_access_sender_id"] == "u1"
         assert capture_tool.last_kwargs["_access_channel"] == "web"
 

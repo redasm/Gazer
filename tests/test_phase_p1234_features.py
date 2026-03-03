@@ -13,7 +13,7 @@ from eval.persona_consistency import PersonaConsistencyManager
 from eval.trainer import TrainingJobManager
 from plugins.loader import PluginLoader
 from security.pairing import pairing_manager
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _FakeConfig:

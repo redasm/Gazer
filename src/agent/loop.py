@@ -45,6 +45,7 @@ from agent.loop_mixins import (
     LLMInteractionMixin,
     PlanningMixin,
     ToolResultUtilsMixin,
+    ProcessMessageMixin,
 )
 
 from soul.models import ModelRegistry
@@ -62,7 +63,7 @@ from agent.constants import (
     DEFAULT_MAX_PARALLEL_TOOL_CALLS, DEFAULT_TOOL_BATCH_MAX_SIZE,
     DEFAULT_PARALLEL_TOOL_LANE_LIMITS, DEFAULT_RETRY_BUDGET_TOTAL,
     DEFAULT_TURN_TIMEOUT_SECONDS, _LANG_DEFAULT, _CJK_RE,
-    FAST_BRAIN_PATTERNS, CONFIRM_TOKENS, CANCEL_TOKENS,
+    FAST_BRAIN_PATTERNS,
     TRUSTED_LOCAL_COMMAND_CHANNELS, _TIER_MAP, _REPLAN_ERROR_HINTS,
 )
 
@@ -205,6 +206,7 @@ class AgentLoop(
     LLMInteractionMixin,
     PlanningMixin,
     ToolResultUtilsMixin,
+    ProcessMessageMixin,
 ):
     """
     The agent loop is the core processing engine.
@@ -313,8 +315,6 @@ class AgentLoop(
         self._running = False
         # Active cancellation token for the current request (if any)
         self._cancel_token: Optional[CancellationToken] = None
-        # session_key -> {"name": tool_name, "params": dict}
-        self._pending_confirmations: Dict[str, Dict[str, Any]] = {}
         # Per-turn prompt-cache scope (session/user/channel isolation)
         self._prompt_cache_scope: Dict[str, Any] = {}
         # Latest persona-driven tool-policy linkage snapshot (for observability/admin).
@@ -512,7 +512,6 @@ class AgentLoop(
         # Handle session reset trigger from channels
         if msg.metadata.get("_reset_session"):
             self.reset_session(session_key)
-            self._pending_confirmations.pop(session_key, None)
             logger.info("Session reset via channel trigger: %s", session_key)
 
         # --- Typing indicator: start ---
@@ -520,263 +519,18 @@ class AgentLoop(
             channel=msg.channel, chat_id=msg.chat_id, is_typing=True,
         ))
 
-        pending_confirmation = self._pending_confirmations.get(session_key)
-        if pending_confirmation:
-            pending_name = str(pending_confirmation.get("name") or "").strip()
-            pending_params = pending_confirmation.get("params")
-            if not pending_name or not isinstance(pending_params, dict):
-                self._pending_confirmations.pop(session_key, None)
-            else:
-                decision = self._parse_confirmation_decision(msg.content)
-                if decision is None:
-                    reminder = self._build_pending_confirmation_prompt(pending_name)
-                    await self.bus.publish_typing(
-                        TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-                    )
-                    self._update_history(session_key, "user", msg.content)
-                    self._update_history(session_key, "assistant", reminder)
-                    await self._emit_after_turn_hook(
-                        {
-                            "session_key": session_key,
-                            "channel": msg.channel,
-                            "chat_id": msg.chat_id,
-                            "sender_id": msg.sender_id,
-                            "status": "pending_confirmation",
-                            "memory_context_chars": 0,
-                            "recall_count": 0,
-                            "persist_ok": None,
-                        }
-                    )
-                    return OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
-                        content=reminder,
-                    )
-                self._pending_confirmations.pop(session_key, None)
-                if decision is False:
-                    cancelled = f"已取消 `{pending_name}` 操作。"
-                    await self.bus.publish_typing(
-                        TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-                    )
-                    self._update_history(session_key, "user", msg.content)
-                    self._update_history(session_key, "assistant", cancelled)
-                    await self._emit_after_turn_hook(
-                        {
-                            "session_key": session_key,
-                            "channel": msg.channel,
-                            "chat_id": msg.chat_id,
-                            "sender_id": msg.sender_id,
-                            "status": "cancelled_confirmation",
-                            "memory_context_chars": 0,
-                            "recall_count": 0,
-                            "persist_ok": None,
-                        }
-                    )
-                    return OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
-                        content=cancelled,
-                    )
-
-                tool_max_tier = self._resolve_tool_max_tier(msg)
-                if self._release_gate_limits_tier(sender_id=msg.sender_id, channel=msg.channel):
-                    tool_max_tier = ToolSafetyTier.SAFE
-                tool_policy = self._resolve_tool_policy()
-                retry_budget = self._build_retry_budget()
-                confirmed_result = await self._execute_single_tool_call(
-                    ToolCallRequest(
-                        id="confirmed_tool_call",
-                        name=pending_name,
-                        arguments=pending_params,
-                    ),
-                    max_tier=tool_max_tier,
-                    policy=tool_policy,
-                    retry_budget=retry_budget,
-                    sender_id=msg.sender_id,
-                    channel=msg.channel,
-                    session_key=session_key,
-                    confirmed=True,
-                )
-                pending_media = self._extract_media(confirmed_result)
-                confirmed_text = self._strip_media_markers(confirmed_result) or f"已执行 `{pending_name}`。"
-                await self.bus.publish_typing(
-                    TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-                )
-                self._update_history(session_key, "user", msg.content)
-                self._update_history(session_key, "assistant", confirmed_text)
-                await self._emit_after_turn_hook(
-                    {
-                        "session_key": session_key,
-                        "channel": msg.channel,
-                        "chat_id": msg.chat_id,
-                        "sender_id": msg.sender_id,
-                        "status": "confirmed_tool_call",
-                        "memory_context_chars": 0,
-                        "recall_count": 0,
-                        "persist_ok": None,
-                    }
-                )
-                return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=confirmed_text,
-                    media=pending_media,
-                )
-
         parsed_command = self.channel_command_registry.parse(msg.content)
         if parsed_command is not None:
-            command_name, command_args = parsed_command
-            command_reply = self._execute_channel_command(
-                command=command_name,
-                args=command_args,
-                msg=msg,
-            )
-            await self.bus.publish_typing(
-                TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-            )
-            self._update_history(session_key, "user", msg.content)
-            self._update_history(session_key, "assistant", command_reply)
-            await self._emit_after_turn_hook(
-                {
-                    "session_key": session_key,
-                    "channel": msg.channel,
-                    "chat_id": msg.chat_id,
-                    "sender_id": msg.sender_id,
-                    "status": "channel_command",
-                    "memory_context_chars": 0,
-                    "recall_count": 0,
-                    "persist_ok": None,
-                }
-            )
-            return OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-                content=command_reply,
-            )
+            return await self._handle_channel_command_impl(msg, session_key, parsed_command)
 
         if self._soul_turn_callback is not None:
-            try:
-                soul_result = self._soul_turn_callback(msg)
-                if asyncio.iscoroutine(soul_result):
-                    soul_result = await soul_result
-                final_content = str(soul_result or "").strip()
-                if not final_content:
-                    final_content = self._msg(reply_language, "iteration_limit_fallback")
-
-                persona_signal: Optional[Dict[str, Any]] = None
-                try:
-                    final_content, persona_signal = self._apply_persona_runtime_guard(
-                        content=final_content,
-                        reply_language=reply_language,
-                        run_id=trajectory_id,
-                        channel=msg.channel,
-                    )
-                except Exception as guard_exc:
-                    logger.warning("Persona runtime guard failed: %s", guard_exc)
-                if persona_signal is not None:
-                    self.trajectory_store.add_event(
-                        trajectory_id,
-                        stage="persona",
-                        action="runtime_guard",
-                        payload={
-                            "level": str(persona_signal.get("level", "")),
-                            "violation_count": int(persona_signal.get("violation_count", 0) or 0),
-                            "violations": list(persona_signal.get("violations", [])),
-                            "correction_applied": bool(persona_signal.get("correction_applied", False)),
-                            "correction_strategy": str(persona_signal.get("correction_strategy", "")),
-                            "drift_score": persona_signal.get("drift_score", 0.0),
-                        },
-                    )
-
-                self.trajectory_store.add_event(
-                    trajectory_id,
-                    stage="persona",
-                    action="soul_turn",
-                    payload={"callback_enabled": True},
-                )
-                self.trajectory_store.finalize(
-                    trajectory_id,
-                    status="soul_turn",
-                    final_content=final_content,
-                    usage=self.usage.summary(),
-                    metrics={
-                        "iterations": 1,
-                        "overflow_retries": 0,
-                        "retry_budget_remaining": 0,
-                        "tool_rounds": 0,
-                        "tool_calls_requested": 0,
-                        "tool_calls_executed": 0,
-                        "tool_deduped_calls": 0,
-                        "parallel_rounds": 0,
-                        "batch_groups": 0,
-                        "tokens_this_turn": 0,
-                        "turn_latency_ms": round((asyncio.get_running_loop().time() - turn_started) * 1000.0, 2),
-                    },
-                )
-                self._active_provider_override = None
-                self._active_model_override = None
-                self._tool_policy_model_provider = ""
-                self._tool_policy_model_name = ""
-                self._prompt_cache_scope = {}
-
-                await self.bus.publish_typing(
-                    TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-                )
-                self._update_history(session_key, "user", msg.content)
-                self._update_history(session_key, "assistant", final_content)
-                await self._emit_after_turn_hook(
-                    {
-                        "session_key": session_key,
-                        "channel": msg.channel,
-                        "chat_id": msg.chat_id,
-                        "sender_id": msg.sender_id,
-                        "run_id": trajectory_id,
-                        "status": "soul_turn",
-                        "memory_context_chars": 0,
-                        "recall_count": 0,
-                        "persist_ok": None,
-                        "tool_calls_executed": 0,
-                    }
-                )
-                return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=final_content,
-                )
-            except Exception as exc:
-                self.trajectory_store.finalize(
-                    trajectory_id,
-                    status="error",
-                    final_content=str(exc),
-                    usage=self.usage.summary(),
-                    metrics={
-                        "iterations": 0,
-                        "overflow_retries": 0,
-                        "retry_budget_remaining": 0,
-                        "tool_rounds": 0,
-                        "tool_calls_requested": 0,
-                        "tool_calls_executed": 0,
-                        "tool_deduped_calls": 0,
-                        "parallel_rounds": 0,
-                        "batch_groups": 0,
-                        "tokens_this_turn": 0,
-                        "turn_latency_ms": round((asyncio.get_running_loop().time() - turn_started) * 1000.0, 2),
-                    },
-                )
-                self._active_provider_override = None
-                self._active_model_override = None
-                self._tool_policy_model_provider = ""
-                self._tool_policy_model_name = ""
-                self._prompt_cache_scope = {}
-                await self.bus.publish_typing(
-                    TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
-                )
-                logger.error("Soul callback failed: %s", exc, exc_info=True)
-                return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=self._msg(reply_language, "runtime_error", error=str(exc)),
-                )
+            return await self._handle_soul_turn_impl(
+                msg=msg,
+                session_key=session_key,
+                reply_language=reply_language,
+                trajectory_id=trajectory_id,
+                turn_started=turn_started,
+            )
         
         # --- Fast brain shortcut for simple messages ---
         fast_response = await self._try_fast_brain(msg)
@@ -1005,7 +759,6 @@ class AgentLoop(
                     len(response.content or ""),
                 )
                 if response.has_tool_calls:
-                    confirmation_prompt: Optional[str] = None
                     # Add assistant message with tool calls
                     tool_call_dicts = [
                         {
@@ -1153,20 +906,6 @@ class AgentLoop(
                                     payload={"tool": tc.name, "hint": replan_hint[:240]},
                                 )
                                 messages.append({"role": "system", "content": replan_hint})
-                            if self._is_confirmation_required_result(result):
-                                try:
-                                    pending_params = self._normalize_tool_arguments(
-                                        getattr(tc, "arguments", {})
-                                    )
-                                except ValueError:
-                                    pending_params = {}
-                                self._pending_confirmations[session_key] = {
-                                    "name": tc.name,
-                                    "params": pending_params,
-                                }
-                                confirmation_prompt = self._build_pending_confirmation_prompt(tc.name)
-                                logger.info("Queued pending confirmation for tool: %s", tc.name)
-                                break
                             pending_media.extend(self._extract_media(result))
                             compacted = self._compact_tool_result_for_context(
                                 tool_name=tc.name,
@@ -1277,22 +1016,6 @@ class AgentLoop(
                             if extracted:
                                 logger.info("Extracted media from %s: %s", tool_call.name, extracted)
                             pending_media.extend(extracted)
-                            if self._is_confirmation_required_result(result):
-                                try:
-                                    pending_params = self._normalize_tool_arguments(
-                                        getattr(tool_call, "arguments", {})
-                                    )
-                                except ValueError:
-                                    pending_params = {}
-                                self._pending_confirmations[session_key] = {
-                                    "name": tool_call.name,
-                                    "params": pending_params,
-                                }
-                                confirmation_prompt = self._build_pending_confirmation_prompt(
-                                    tool_call.name
-                                )
-                                logger.info("Queued pending confirmation for tool: %s", tool_call.name)
-                                break
                             compacted = self._compact_tool_result_for_context(
                                 tool_name=tool_call.name,
                                 result=result,
@@ -1314,9 +1037,6 @@ class AgentLoop(
                                 messages.append({"role": "system", "content": replan_hint})
                         if final_content is not None:
                             break
-                    if confirmation_prompt:
-                        final_content = confirmation_prompt
-                        break
                 else:
                     # No tool calls — but check if LLM is faking an action
                     content = response.content or ""

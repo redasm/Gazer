@@ -19,6 +19,7 @@ from tools.admin._shared import _append_policy_audit
 import tools.admin._shared as _shared
 from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
+from runtime.resilience import classify_error_message
 
 app = APIRouter()
 

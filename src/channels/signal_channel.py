@@ -20,9 +20,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+from typing import Any, Optional
 
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 
 logger = logging.getLogger("SignalChannel")
@@ -30,10 +31,22 @@ logger = logging.getLogger("SignalChannel")
 _POLL_INTERVAL = 1.0  # seconds between receive polls
 
 
+@ChannelRegistry.register("signal")
 class SignalChannel(ChannelAdapter):
     """Signal messenger channel via signal-cli REST API."""
 
     channel_name = "signal"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        api = str(config.get("signal.api_url", "") or os.getenv("SIGNAL_API_URL", "")).strip()
+        phone = str(config.get("signal.phone_number", "") or os.getenv("SIGNAL_PHONE_NUMBER", "")).strip()
+        if config.get("signal.enabled") and api and phone:
+            return cls(api_url=api, phone_number=phone)
+        elif config.get("signal.enabled"):
+            logger.warning("Signal channel enabled but api_url/phone_number missing.")
+        return None
 
     def __init__(
         self,

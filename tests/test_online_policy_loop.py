@@ -8,7 +8,7 @@ from eval.benchmark import EvalBenchmarkManager
 from eval.online_policy_loop import OnlinePolicyLoopManager
 from eval.training_bridge import TrainingBridgeManager
 from eval.trainer import TrainingJobManager
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def _trajectory(run_id: str, *, ok: bool = True) -> Dict[str, Any]:

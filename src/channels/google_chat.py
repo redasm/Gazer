@@ -14,14 +14,15 @@ Configuration (config/settings.yaml)::
 
 from __future__ import annotations
 
+from typing import Any, Dict, List, Optional
+import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
 
 import httpx
 
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 
 logger = logging.getLogger("GoogleChatChannel")
@@ -29,10 +30,20 @@ logger = logging.getLogger("GoogleChatChannel")
 _CHAT_API_BASE = "https://chat.googleapis.com/v1"
 
 
+@ChannelRegistry.register("google_chat")
 class GoogleChatChannel(ChannelAdapter):
     """Google Chat channel adapter via Chat API."""
 
     channel_name = "google_chat"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        import os
+        sa = str(config.get("google_chat.service_account_file", "") or os.getenv("GOOGLE_CHAT_SA_FILE", "")).strip()
+        project = str(config.get("google_chat.project_id", "") or os.getenv("GOOGLE_CHAT_PROJECT_ID", "")).strip()
+        if config.get("google_chat.enabled"):
+            return cls(service_account_file=sa, project_id=project)
+        return None
 
     def __init__(
         self,

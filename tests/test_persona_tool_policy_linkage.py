@@ -9,7 +9,7 @@ import runtime.config_manager as config_manager
 from agent.loop import AgentLoop
 from bus.queue import MessageBus
 from llm.base import LLMResponse
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _FakeConfig:

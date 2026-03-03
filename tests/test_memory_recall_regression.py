@@ -8,7 +8,7 @@ from typing import Any, Dict
 import pytest
 
 from memory.recall_regression import build_memory_recall_regression_report
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

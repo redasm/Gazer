@@ -905,7 +905,6 @@ class ToolRegistry:
         *,
         max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
-        confirmed: bool = False,
         cancel_token: Optional[CancellationToken] = None,
         sender_id: str = "",
         channel: str = "",
@@ -919,7 +918,6 @@ class ToolRegistry:
             name: Tool name.
             params: Tool parameters.
             max_tier: If set, reject tools above this safety tier.
-            confirmed: If True, skip the confirmation check.
         
         Returns:
             Tool execution result as string.
@@ -1055,7 +1053,6 @@ class ToolRegistry:
                 effective_params = dict(effective_params)
                 effective_params.setdefault("_access_max_tier", max_tier)
                 effective_params.setdefault("_access_policy", policy)
-                effective_params.setdefault("_access_confirmed", bool(confirmed))
                 effective_params.setdefault("_access_sender_id", str(sender_id or ""))
                 effective_params.setdefault("_access_channel", str(channel or ""))
 

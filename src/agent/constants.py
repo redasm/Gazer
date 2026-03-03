@@ -20,7 +20,6 @@ __all__ = [
     "DEFAULT_PARALLEL_TOOL_LANE_LIMITS", "DEFAULT_RETRY_BUDGET_TOTAL",
     "DEFAULT_TURN_TIMEOUT_SECONDS",
     "_LANG_DEFAULT", "_CJK_RE",
-    "FAST_BRAIN_PATTERNS", "CONFIRM_TOKENS", "CANCEL_TOKENS",
     "TRUSTED_LOCAL_COMMAND_CHANNELS",
     "_TIER_MAP", "_REPLAN_ERROR_HINTS", "_LANG_MESSAGES",
 ]
@@ -53,14 +52,6 @@ FAST_BRAIN_PATTERNS = {
     "hi", "hello", "hey", "你好", "嗨", "在吗", "在不",
     "thanks", "thank you", "谢谢", "ok", "good", "好的",
     "bye", "再见", "晚安", "早安", "gn", "gm",
-}
-CONFIRM_TOKENS = {
-    "确认", "确定", "同意", "执行", "继续",
-    "confirm", "yes", "y", "ok", "okay",
-}
-CANCEL_TOKENS = {
-    "取消", "拒绝", "不用", "停止",
-    "cancel", "no", "n", "stop", "abort",
 }
 TRUSTED_LOCAL_COMMAND_CHANNELS = {"web", "gazer"}
 

@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from security.threat_scan import scan_directory
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 class _FakeConfig:

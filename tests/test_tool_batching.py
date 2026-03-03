@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import runtime.config_manager as config_manager
-import tools.admin.workflows as admin_api
+import tools.admin.api_facade as admin_api
 from agent.loop import AgentLoop
 from bus.queue import MessageBus
 from llm.base import LLMResponse, ToolCallRequest

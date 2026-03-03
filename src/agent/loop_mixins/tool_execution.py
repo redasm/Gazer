@@ -43,37 +43,6 @@ class ToolExecutionMixin:
             return parsed
         raise ValueError(f"Unsupported tool arguments type: {type(arguments).__name__}")
 
-    @staticmethod
-    def _is_confirmation_required_result(result: str) -> bool:
-        return str(result or "").startswith("[CONFIRMATION REQUIRED]")
-
-    @staticmethod
-    def _normalize_confirmation_text(content: str) -> str:
-        text = str(content or "").strip().lower()
-        return "".join(
-            char
-            for char in text
-            if char.isalnum() or "\u4e00" <= char <= "\u9fff"
-        )
-
-    @classmethod
-    def _parse_confirmation_decision(cls, content: str) -> Optional[bool]:
-        normalized = cls._normalize_confirmation_text(content)
-        if not normalized:
-            return None
-        if normalized in CONFIRM_TOKENS:
-            return True
-        if normalized in CANCEL_TOKENS:
-            return False
-        return None
-
-    @staticmethod
-    def _build_pending_confirmation_prompt(tool_name: str) -> str:
-        return (
-            f"操作 `{tool_name}` 需要确认。"
-            "回复“确认”/`confirm` 执行，回复“取消”/`cancel` 取消。"
-        )
-
     async def _execute_single_tool_call(
         self,
         tool_call: Any,
@@ -84,7 +53,6 @@ class ToolExecutionMixin:
         sender_id: str,
         channel: str,
         session_key: str = "",
-        confirmed: bool = False,
     ) -> str:
         """Execute one tool call with normalization, timeout, and fault isolation."""
         name = str(getattr(tool_call, "name", "") or "").strip()
@@ -144,7 +112,6 @@ class ToolExecutionMixin:
                         params,
                         max_tier=max_tier,
                         policy=policy,
-                        confirmed=confirmed,
                         cancel_token=self._cancel_token,
                         sender_id=sender_id,
                         channel=channel,

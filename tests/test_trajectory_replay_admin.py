@@ -1,4 +1,4 @@
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def test_trajectory_replay_admin_module_smoke():

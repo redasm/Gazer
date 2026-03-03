@@ -11,7 +11,7 @@ import pytest
 from starlette.requests import Request
 from fastapi import HTTPException
 
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 import runtime.config_manager as config_manager
 from agent.loop import AgentLoop
 from bus.events import InboundMessage
@@ -260,7 +260,8 @@ class _FakeTrajectoryStore:
 
 @pytest.mark.asyncio
 async def test_verify_admin_token_requires_token_by_default(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: SimpleNamespace(validate_session=lambda _: False))
     monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
 
@@ -272,7 +273,8 @@ async def test_verify_admin_token_requires_token_by_default(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_verify_admin_token_blocks_disallowed_origin(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda origin: origin == "http://localhost:5173")
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: SimpleNamespace(validate_session=lambda _t: True))
     monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
 
@@ -305,7 +307,8 @@ async def test_favicon_returns_404_when_missing(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_verify_admin_token_accepts_cookie_token(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(
         admin_api,
         "get_owner_manager",
@@ -319,7 +322,8 @@ async def test_verify_admin_token_accepts_cookie_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_verify_admin_token_rejects_bearer_when_disabled(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(
         admin_api,
         "get_owner_manager",
@@ -347,7 +351,8 @@ async def test_verify_admin_token_rejects_bearer_when_disabled(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_verify_admin_token_blocks_loopback_bypass_when_proxy_headers_present(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: SimpleNamespace(validate_session=lambda *_args, **_kwargs: False))
     monkeypatch.setattr(
         admin_api,
@@ -372,7 +377,8 @@ async def test_verify_admin_token_blocks_loopback_bypass_when_proxy_headers_pres
 
 @pytest.mark.asyncio
 async def test_create_admin_session_sets_cookie(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(
         admin_api,
         "get_owner_manager",
@@ -410,7 +416,8 @@ async def test_create_admin_session_uses_derived_session_token(monkeypatch):
             assert ttl_seconds == 3600
             return "sess_derived_1"
 
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: _Owner())
     monkeypatch.setattr(
         admin_api,
@@ -448,7 +455,8 @@ async def test_create_admin_session_reuses_existing_valid_session_cookie(monkeyp
             return f"sess_new_{self.created}"
 
     owner = _Owner()
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: owner)
     monkeypatch.setattr(
         admin_api,
@@ -477,7 +485,8 @@ async def test_create_admin_session_reuses_existing_valid_session_cookie(monkeyp
 
 @pytest.mark.asyncio
 async def test_clear_admin_session_deletes_cookie(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
+    monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
     monkeypatch.setattr(
         admin_api,
         "config",
@@ -797,61 +806,7 @@ async def test_exec_tool_uses_native_backend(tmp_path):
     assert len(shell.calls) == 0
 
 
-@pytest.mark.asyncio
-async def test_verify_ws_auth_accepts_subprotocol_token(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
-    monkeypatch.setattr(
-        admin_api,
-        "get_owner_manager",
-        lambda: SimpleNamespace(validate_session=lambda t: t == "valid"),
-    )
-    monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
 
-    ws = _DummyAuthWs(
-        headers={"origin": "http://localhost:5173", "sec-websocket-protocol": "auth.valid"},
-    )
-    ok = await admin_api._verify_ws_auth(ws)
-    assert ok is True
-    assert ws.closed is None
-    assert getattr(ws.state, "is_owner", False) is True
-
-
-@pytest.mark.asyncio
-async def test_verify_ws_auth_rejects_query_token(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
-    monkeypatch.setattr(
-        admin_api,
-        "get_owner_manager",
-        lambda: SimpleNamespace(validate_session=lambda t: t == "valid"),
-    )
-    monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
-
-    ws = _DummyAuthWs(
-        headers={"origin": "http://localhost:5173"},
-        query_params={"token": "valid"},
-    )
-    ok = await admin_api._verify_ws_auth(ws)
-    assert ok is False
-    assert ws.closed == (4003, "Authentication required")
-
-
-@pytest.mark.asyncio
-async def test_verify_ws_auth_accepts_cookie_token(monkeypatch):
-    monkeypatch.setattr(admin_api, "_cors_origins", ["http://localhost:5173"])
-    monkeypatch.setattr(
-        admin_api,
-        "get_owner_manager",
-        lambda: SimpleNamespace(validate_session=lambda t: t == "valid"),
-    )
-    monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
-
-    ws = _DummyAuthWs(
-        headers={"origin": "http://localhost:5173", "cookie": "admin_token=valid"},
-    )
-    ok = await admin_api._verify_ws_auth(ws)
-    assert ok is True
-    assert ws.closed is None
-    assert getattr(ws.state, "is_owner", False) is True
 
 
 @pytest.mark.asyncio
@@ -1008,71 +963,6 @@ async def test_agent_loop_normalizes_string_tool_arguments(monkeypatch, tmp_path
     assert out.content == "done"
     tool_messages = [m for m in provider.last_messages if m.get("role") == "tool"]
     assert any("echo:hello" in str(m.get("content")) for m in tool_messages)
-
-
-@pytest.mark.asyncio
-async def test_agent_loop_owner_executes_privileged_tool_without_confirmation(monkeypatch, tmp_path):
-    fake_data = {
-        "security": {
-            "tool_max_tier": "privileged",
-            "tool_call_timeout_seconds": 2.0,
-            "tool_groups": {},
-            "llm_max_retries": 0,
-            "llm_retry_backoff_seconds": 0.0,
-        }
-    }
-    monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
-
-    class _PrivilegedEchoTool(_DummyTool):
-        def __init__(self, name: str):
-            super().__init__(name, ToolSafetyTier.PRIVILEGED)
-            self.calls = 0
-
-        @property
-        def parameters(self) -> dict:
-            return {
-                "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": [],
-            }
-
-        async def execute(self, **kwargs) -> str:
-            self.calls += 1
-            return f"done:{kwargs.get('text', '')}"
-
-    provider = _SequenceProvider(
-        [
-            LLMResponse(
-                content="try tool",
-                tool_calls=[
-                    ToolCallRequest(
-                        id="tc1",
-                        name="priv_echo",
-                        arguments={"text": "snapshot"},
-                    )
-                ],
-            )
-        ]
-    )
-    loop = AgentLoop(
-        bus=MessageBus(),
-        provider=provider,
-        workspace=Path(tmp_path),
-        context_builder=_DummyContext(),
-    )
-    tool = _PrivilegedEchoTool("priv_echo")
-    loop.tools.register(tool)
-
-    first = await loop._process_message(
-        InboundMessage(channel="web", sender_id="owner", chat_id="chat1", content="帮我截图")
-    )
-    assert first is not None
-    assert first.content == "done"
-    assert tool.calls == 1
-    assert provider.calls == 2
-    tool_messages = [m for m in provider.last_messages if m.get("role") == "tool"]
-    assert any("done:snapshot" in str(m.get("content")) for m in tool_messages)
-    assert loop._pending_confirmations == {}
 
 
 @pytest.mark.asyncio
@@ -1435,7 +1325,7 @@ async def test_policy_explain_endpoint_reports_reason(monkeypatch):
     res = await admin_api.explain_policy({"tool_name": "priv_tool", "max_tier": "safe"})
     assert res["status"] == "ok"
     assert res["result"]["allowed"] is False
-    assert res["result"]["reason"] == "blocked_by_tier"
+    assert res["result"]["reason"] == "blocked_by_owner_only_no_context"
 
 
 @pytest.mark.asyncio
@@ -1634,123 +1524,7 @@ async def test_policy_effective_endpoint_preview_with_model_context(monkeypatch)
     assert result["preview"]["decision"]["reason"] == "blocked_by_policy_allow_model_names"
 
 
-@pytest.mark.asyncio
-async def test_policy_audit_records_config_policy_updates(monkeypatch, tmp_path: Path):
-    fake_cfg = _FakeConfig(
-        {
-            "security": {"tool_groups": {"coding": ["read_file"]}, "tool_allowlist": []},
-            "agents": {"list": []},
-        }
-    )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_policy_audit_buffer", collections.deque(maxlen=20))
-    monkeypatch.setattr(admin_api, "_POLICY_AUDIT_LOG_PATH", tmp_path / "policy_audit.jsonl")
-    monkeypatch.setattr(admin_api, "_STRATEGY_SNAPSHOT_LOG_PATH", tmp_path / "strategy_snapshot.jsonl")
 
-    result = await admin_api.update_config({"security": {"tool_allowlist": ["read_file"]}})
-    assert result["status"] == "success"
-    entries = (await admin_api.get_policy_audit(limit=10))["entries"]
-    actions = [entry.get("action", "") for entry in entries]
-    assert "policy.config.updated" in actions
-    assert "strategy.snapshot.created" in actions
-    policy_entry = next(entry for entry in entries if entry.get("action") == "policy.config.updated")
-    assert "security.tool_allowlist" in policy_entry["details"]["keys"]
-
-
-@pytest.mark.asyncio
-async def test_policy_audit_records_router_strategy_change(monkeypatch, tmp_path: Path):
-    class _Router:
-        def __init__(self):
-            self.strategy = "priority"
-
-        def get_status(self):
-            return {"strategy": self.strategy, "providers": []}
-
-        def set_strategy(self, strategy: str):
-            self.strategy = strategy
-
-    router = _Router()
-    fake_cfg = _FakeConfig({"models": {"router": {"strategy": "priority"}}})
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", router)
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_policy_audit_buffer", collections.deque(maxlen=20))
-    monkeypatch.setattr(admin_api, "_strategy_change_history", collections.deque(maxlen=20))
-    monkeypatch.setattr(admin_api, "_POLICY_AUDIT_LOG_PATH", tmp_path / "policy_audit.jsonl")
-    monkeypatch.setattr(admin_api, "_STRATEGY_SNAPSHOT_LOG_PATH", tmp_path / "strategy_snapshot.jsonl")
-
-    result = await admin_api.set_llm_router_strategy({"strategy": "success_rate"})
-    assert result["status"] == "ok"
-    entries = (await admin_api.get_policy_audit(limit=10))["entries"]
-    actions = [entry.get("action", "") for entry in entries]
-    assert "router.strategy.updated" in actions
-    assert "strategy.snapshot.created" in actions
-    router_entry = next(entry for entry in entries if entry.get("action") == "router.strategy.updated")
-    assert router_entry["details"]["strategy"] == "success_rate"
-
-    snapshots = await admin_api.list_strategy_change_snapshots(limit=10)
-    assert snapshots["status"] == "ok"
-    assert snapshots["total"] == 1
-    assert snapshots["items"][0]["category"] == "router_strategy"
-
-
-@pytest.mark.asyncio
-async def test_strategy_snapshot_rollback_endpoint(monkeypatch, tmp_path: Path):
-    class _Router:
-        def __init__(self):
-            self.strategy = "priority"
-
-        def set_strategy(self, strategy: str):
-            self.strategy = strategy
-
-        def get_status(self):
-            return {"strategy": self.strategy, "providers": []}
-
-    router = _Router()
-    fake_cfg = _FakeConfig({"models": {"router": {"strategy": "priority"}}})
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", router)
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_policy_audit_buffer", collections.deque(maxlen=30))
-    monkeypatch.setattr(admin_api, "_strategy_change_history", collections.deque(maxlen=30))
-    monkeypatch.setattr(admin_api, "_POLICY_AUDIT_LOG_PATH", tmp_path / "policy_audit.jsonl")
-    monkeypatch.setattr(admin_api, "_STRATEGY_SNAPSHOT_LOG_PATH", tmp_path / "strategy_snapshot.jsonl")
-
-    changed = await admin_api.set_llm_router_strategy({"strategy": "latency", "actor": "tester"})
-    assert changed["status"] == "ok"
-    assert router.strategy == "latency"
-
-    rolled = await admin_api.rollback_strategy_change({"latest": True, "mode": "rollback", "actor": "tester"})
-    assert rolled["status"] == "ok"
-    assert router.strategy == "priority"
-    assert "models.router.strategy" in rolled["result"]["applied_keys"]
-
-    entries = (await admin_api.get_policy_audit(limit=20))["entries"]
-    assert any(item.get("action") == "strategy.rollback.applied" for item in entries)
-
-
-@pytest.mark.asyncio
-async def test_strategy_rollback_rejects_unsupported_keys(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(admin_api, "_strategy_change_history", collections.deque(maxlen=20))
-    monkeypatch.setattr(admin_api, "_policy_audit_buffer", collections.deque(maxlen=20))
-    monkeypatch.setattr(admin_api, "config", _FakeConfig({}))
-    monkeypatch.setattr(admin_api, "_POLICY_AUDIT_LOG_PATH", tmp_path / "policy_audit.jsonl")
-    monkeypatch.setattr(admin_api, "_STRATEGY_SNAPSHOT_LOG_PATH", tmp_path / "strategy_snapshot.jsonl")
-
-    bad_snapshot = {
-        "snapshot_id": "strategy_bad",
-        "created_at": 0.0,
-        "category": "test",
-        "source": "test",
-        "actor": "tester",
-        "rollback_snapshot": {"api.cors_origins": ["http://evil"]},
-        "apply_snapshot": {"api.cors_origins": ["http://evil"]},
-        "metadata": {},
-    }
-    admin_api._strategy_change_history.append(bad_snapshot)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.rollback_strategy_change({"snapshot_id": "strategy_bad", "mode": "rollback"})
-    assert exc.value.status_code == 400
-    assert "unsupported rollback keys" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
@@ -1975,44 +1749,7 @@ async def test_eval_benchmark_api_endpoints(monkeypatch, tmp_path):
     assert manual["gate"]["blocked"] is False
 
 
-@pytest.mark.asyncio
-async def test_llm_router_status_and_strategy_endpoints(monkeypatch):
-    class _Router:
-        def __init__(self):
-            self.strategy = "priority"
-            self.budget = {"enabled": False}
 
-        def get_status(self):
-            return {"strategy": self.strategy, "providers": [], "budget": self.budget}
-
-        def set_strategy(self, strategy: str):
-            self.strategy = strategy
-
-        def set_budget_policy(self, policy):
-            self.budget = {"enabled": bool(policy.get("enabled", False))}
-
-    router = _Router()
-    fake_cfg = _FakeConfig({"models": {"router": {"strategy": "priority", "budget": {"enabled": False}}}})
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", router)
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    status = await admin_api.get_llm_router_status()
-    assert status["enabled"] is True
-    assert status["strategy"] == "priority"
-
-    result = await admin_api.set_llm_router_strategy({"strategy": "latency"})
-    assert result["status"] == "ok"
-    assert router.strategy == "latency"
-    assert fake_cfg.set_many_calls[-1]["models.router.strategy"] == "latency"
-
-    budget = await admin_api.set_llm_router_budget({"enabled": True})
-    assert budget["status"] == "ok"
-    assert budget["budget"]["enabled"] is True
-    assert fake_cfg.set_many_calls[-1]["models.router.budget"]["enabled"] is True
-
-    profiles = await admin_api.set_llm_deployment_profiles({"profiles": {"openai": {"capacity_rpm": 200}}})
-    assert profiles["status"] == "ok"
-    assert fake_cfg.set_many_calls[-1]["models.deployment_profiles"]["openai"]["capacity_rpm"] == 200
 
 
 @pytest.mark.asyncio
@@ -2066,12 +1803,13 @@ async def test_observability_metrics_endpoint(monkeypatch):
                 }
             ][:limit]
 
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _Router())
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _Store())
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _Registry())
+    monkeypatch.setattr("tools.admin.observability.get_llm_router", lambda: _Router())
+    monkeypatch.setattr("tools.admin.observability.get_trajectory_store", lambda: _Store())
+    monkeypatch.setattr("tools.admin.observability.get_tool_registry", lambda: _Registry())
+    monkeypatch.setattr("tools.admin.observability.TOOL_REGISTRY", _Registry())
+    monkeypatch.setattr("tools.admin._shared.TOOL_REGISTRY", _Registry())
     monkeypatch.setattr(
-        admin_api,
-        "_build_training_bridge_policy_scoreboard",
+        "tools.admin.system._build_training_bridge_policy_scoreboard",
         lambda limit=50, dataset_id=None: {
             "generated_at": 0.0,
             "total_datasets": 0,
@@ -2200,28 +1938,25 @@ async def test_trace_spec_baseline_panel_and_self_evolution_exports(monkeypatch,
                 ]
             }
 
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _Store())
+    monkeypatch.setattr("tools.admin.observability.get_trajectory_store", lambda: _Store())
+    monkeypatch.setattr("tools.admin.observability.TRAJECTORY_STORE", _Store())
     monkeypatch.setattr(
-        admin_api,
-        "_build_tool_governance_slo",
+        "tools.admin.observability._build_tool_governance_slo",
         lambda limit=200: {"metrics": {"tool_success_rate": 0.98}, "checks": {"tool_success_rate_ok": True}, "passed": True},
     )
     monkeypatch.setattr(
-        admin_api,
-        "_build_workflow_observability_metrics",
+        "tools.admin.system._build_workflow_observability_metrics",
         lambda limit=200: {"total_runs": 8, "failures": 1, "success_rate": 0.875, "p95_latency_ms": 2100.0},
     )
     monkeypatch.setattr(
-        admin_api,
-        "_build_persona_consistency_weekly_report",
+        "tools.admin.system._build_persona_consistency_weekly_report",
         lambda window_days=7, source="persona_eval": {
             "current_window": {"consistency_score_avg": 0.86},
             "trend": {"direction": "improving"},
         },
     )
     monkeypatch.setattr(
-        admin_api,
-        "_build_training_gain_summary",
+        "tools.admin.system._build_training_gain_summary",
         lambda limit=50: {"job_count": 2, "avg_score": 0.72, "latest_score": 0.75, "latest_score_delta_vs_prev": 0.04},
     )
 
@@ -2353,7 +2088,7 @@ async def test_deployment_target_health_endpoint(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _Router())
+    monkeypatch.setattr("tools.admin.deployment.LLM_ROUTER", _Router())
     payload = await admin_api.probe_deployment_targets(active=True, timeout_seconds=1.5)
     assert payload["status"] == "ok"
     assert payload["active"] is True

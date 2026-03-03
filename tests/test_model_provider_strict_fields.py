@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 
-from tools.admin import workflows as admin_api
+from tools.admin import api_facade as admin_api
 
 
 def test_validate_provider_entry_accepts_strict_api_mode_and_reasoning_param() -> None:

@@ -74,7 +74,6 @@ class FlowRunTool(Tool):
         action = kwargs.get("action", "list")
         access_max_tier = kwargs.get("_access_max_tier")
         access_policy = kwargs.get("_access_policy")
-        access_confirmed = bool(kwargs.get("_access_confirmed", False))
 
         try:
             if action == "list":
@@ -98,7 +97,6 @@ class FlowRunTool(Tool):
                     args,
                     max_tier=access_max_tier,
                     policy=access_policy,
-                    confirmed=access_confirmed,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)
 
@@ -110,7 +108,6 @@ class FlowRunTool(Tool):
                     token,
                     max_tier=access_max_tier,
                     policy=access_policy,
-                    confirmed=access_confirmed,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)
 
@@ -122,7 +119,6 @@ class FlowRunTool(Tool):
                     flow_name,
                     max_tier=access_max_tier,
                     policy=access_policy,
-                    confirmed=access_confirmed,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)
 

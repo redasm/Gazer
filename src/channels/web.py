@@ -3,26 +3,33 @@
 import asyncio
 import logging
 from queue import Queue, Empty
-from typing import Optional
+from typing import Optional, Any
 
 from bus.events import OutboundMessage, TypingEvent
-from channels.base import ChannelAdapter
+from channels.base import ChannelAdapter, ChannelRegistry
 
 logger = logging.getLogger("WebChannel")
 
 POLL_INTERVAL = 0.05  # 50ms
 
 
+@ChannelRegistry.register("web")
 class WebChannel(ChannelAdapter):
     """
     Web Chat channel that wraps the existing IPC queues.
-
-    All inbound messages are published to the MessageBus (not sent to
-    the agent directly). Outbound responses are forwarded back to the
-    IPC output queue.
+    ...
     """
 
     channel_name = "web"
+
+    @classmethod
+    def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
+        ipc_input = kwargs.get("ipc_input")
+        ipc_output = kwargs.get("ipc_output")
+        ui_queue = kwargs.get("ui_queue")
+        if ipc_input:
+            return cls(ipc_input, ipc_output, ui_queue=ui_queue)
+        return None
 
     def _is_sender_authorized(self, sender_id: str) -> bool:
         """Web console is the deployer's local interface -- always authorized."""
