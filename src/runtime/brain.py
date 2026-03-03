@@ -46,7 +46,7 @@ from devices.registry import DeviceRegistry
 from devices.adapters.local_desktop import LocalDesktopNode
 from devices.adapters.remote_satellite import RemoteSatelliteNode
 from devices.adapters.body_hardware import BodyHardwareNode
-import tools.admin._shared as _admin_shared
+import tools.admin.state as _admin_state
 
 from perception.capture import CaptureManager
 from perception.sources.screen_local import LocalScreenSource
@@ -132,12 +132,12 @@ class GazerBrain:
         workspace_path = Path(os.getcwd())
         self._sync_soul_single_source(workspace_path)
         self.agent = GazerAgent(workspace_path, self.memory_manager)
-        import tools.admin._shared as _shared
-        _shared.LLM_ROUTER = self.agent.router
-        _shared.USAGE_TRACKER = self.agent.loop.usage
-        _shared.PROMPT_CACHE_TRACKER = self.agent.loop.prompt_cache
-        _shared.TOOL_BATCHING_TRACKER = self.agent.loop.tool_batching_tracker
-        _shared.TRAJECTORY_STORE = self.agent.loop.trajectory_store
+        import tools.admin.state as _state
+        _state.LLM_ROUTER = self.agent.router
+        _state.USAGE_TRACKER = self.agent.loop.usage
+        _state.PROMPT_CACHE_TRACKER = self.agent.loop.prompt_cache
+        _state.TOOL_BATCHING_TRACKER = self.agent.loop.tool_batching_tracker
+        _state.TRAJECTORY_STORE = self.agent.loop.trajectory_store
 
         # --- Lane-based Command Queue ---
         self.command_queue = CommandQueue()
@@ -171,7 +171,7 @@ class GazerBrain:
             ),
         )
         self._init_orchestrator()
-        _admin_shared.ORCHESTRATOR = self.orchestrator
+        _admin_state.ORCHESTRATOR = self.orchestrator
 
         # --- Cron Scheduler ---
         self.cron_scheduler: Optional[CronScheduler] = None
@@ -439,15 +439,15 @@ class GazerBrain:
             max_content_size=config.get("canvas.max_content_size", 65536),
             on_change=_canvas_on_change,
         )
-        import tools.admin._shared as _shared_canvas
-        _shared_canvas.CANVAS_STATE = self.canvas_state
+        import tools.admin.state as _state_canvas
+        _state_canvas.CANVAS_STATE = self.canvas_state
         logger.info("Canvas/A2UI initialized.")
 
     def _inject_webhook_globals(self) -> None:
         """Inject MessageBus and hook token into admin_api webhook endpoints."""
-        import tools.admin._shared as _shared_hook
-        _shared_hook.HOOK_BUS = self.agent.bus
-        _shared_hook.HOOK_TOKEN = config.get("hooks.token", "") or None
+        import tools.admin.state as _state_hook
+        _state_hook.HOOK_BUS = self.agent.bus
+        _state_hook.HOOK_TOKEN = config.get("hooks.token", "") or None
 
     def _init_channels(self, ipc_input, ipc_output) -> None:
         """Create and bind all configured channels."""
@@ -519,8 +519,8 @@ class GazerBrain:
             wa.bind(bus)
             self.channels.append(wa)
             # Inject into admin API for webhook routing
-            import tools.admin._shared as _shared_wa
-            _shared_wa.WHATSAPP_CHANNEL = wa
+            import tools.admin.state as _state_wa
+            _state_wa.WHATSAPP_CHANNEL = wa
         elif config.get("whatsapp.enabled"):
             logger.warning(
                 "WhatsApp channel enabled but credentials are missing. "
@@ -557,8 +557,8 @@ class GazerBrain:
             teams = TeamsChannel(app_id=teams_app_id, app_secret=teams_app_secret)
             teams.bind(bus)
             self.channels.append(teams)
-            import tools.admin._shared as _shared_teams
-            _shared_teams.TEAMS_CHANNEL = teams
+            import tools.admin.state as _state_teams
+            _state_teams.TEAMS_CHANNEL = teams
         elif config.get("teams.enabled"):
             logger.warning(
                 "Teams channel enabled but app_id/app_secret missing."
@@ -579,8 +579,8 @@ class GazerBrain:
             )
             gchat.bind(bus)
             self.channels.append(gchat)
-            import tools.admin._shared as _shared_gchat
-            _shared_gchat.GOOGLE_CHAT_CHANNEL = gchat
+            import tools.admin.state as _state_gchat
+            _state_gchat.GOOGLE_CHAT_CHANNEL = gchat
 
         # Web Chat (IPC queues from the desktop UI)
         if ipc_input:
@@ -671,8 +671,8 @@ class GazerBrain:
             history_store=config.get("gmail_push.history_store", "data/gmail_history.json"),
             on_new_messages=_on_gmail_messages,
         )
-        import tools.admin._shared as _shared_gmail
-        _shared_gmail.GMAIL_PUSH_MANAGER = self._gmail_push_manager
+        import tools.admin.state as _state_gmail
+        _state_gmail.GMAIL_PUSH_MANAGER = self._gmail_push_manager
         logger.info("Gmail Pub/Sub push manager configured.")
 
     # ------------------------------------------------------------------
@@ -816,8 +816,8 @@ class GazerBrain:
                 run_callback=self._run_cron_job,
             )
             self.cron_scheduler.load()
-            import tools.admin._shared as _shared_cron
-            _shared_cron.CRON_SCHEDULER = self.cron_scheduler
+            import tools.admin.state as _state_cron
+            _state_cron.CRON_SCHEDULER = self.cron_scheduler
         elif cron_enabled:
             logger.info("Cron scheduler delegated to Admin API process (IPC mode).")
 
@@ -893,8 +893,8 @@ class GazerBrain:
             self.agent.loop.tools.set_allowlist(allowlist)
 
         # Inject registry into Admin API for policy explain/simulate endpoints
-        import tools.admin._shared as _shared_policy
-        _shared_policy.TOOL_REGISTRY = self.agent.loop.tools
+        import tools.admin.state as _state_policy
+        _state_policy.TOOL_REGISTRY = self.agent.loop.tools
 
         logger.info(f"Registered {len(self.agent.loop.tools)} tools.")
 

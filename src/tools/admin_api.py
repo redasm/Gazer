@@ -80,6 +80,7 @@ logger = logging.getLogger("GazerAdminAPI")
 # brain.py injects into _shared; we re-export here for backward compat.
 # ---------------------------------------------------------------------------
 import tools.admin._shared as _shared  # noqa: E402
+import tools.admin.state as _state  # noqa: E402  -- mutations go here
 
 API_QUEUES = _shared.API_QUEUES
 
@@ -148,9 +149,9 @@ async def _broadcast_output_worker():
                 )
                 # Intercept usage snapshots from the Brain process
                 if isinstance(msg, dict) and msg.get("type") == "usage_update":
-                    _shared.IPC_USAGE_SNAPSHOT = msg.get("usage")
+                    _state.IPC_USAGE_SNAPSHOT = msg.get("usage")
                     if msg.get("router_status") is not None:
-                        _shared.IPC_ROUTER_STATUS = msg["router_status"]
+                        _state.IPC_ROUTER_STATUS = msg["router_status"]
                 # Intercept log entries forwarded from the Brain process
                 elif isinstance(msg, dict) and msg.get("type") == "log_entry":
                     entry = msg.get("entry", {})
@@ -219,15 +220,15 @@ async def _run_cron_job_via_ipc(job: Any) -> Optional[str]:
 
 def _ensure_local_cron_scheduler() -> None:
     """Initialize CronScheduler in API process when not injected by brain."""
-    if _shared.CRON_SCHEDULER is not None:
+    if _state.CRON_SCHEDULER is not None:
         return
     if not bool(config.get("scheduler.cron_enabled", True)):
         return
     try:
         from scheduler.cron import CronScheduler
-        _shared.CRON_SCHEDULER = CronScheduler(run_callback=_run_cron_job_via_ipc)
-        _shared.CRON_SCHEDULER.load()
-        _shared._LOCAL_CRON_SCHEDULER_ACTIVE = True
+        _state.CRON_SCHEDULER = CronScheduler(run_callback=_run_cron_job_via_ipc)
+        _state.CRON_SCHEDULER.load()
+        _state._LOCAL_CRON_SCHEDULER_ACTIVE = True
         
         # Also update local aliases for backwards compatibility
         global CRON_SCHEDULER, _LOCAL_CRON_SCHEDULER_ACTIVE

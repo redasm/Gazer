@@ -1,13 +1,11 @@
 """Shared state and utilities for Admin API routers.
 
-All module-level globals that ``brain.py`` injects at startup live here.
-Router sub-modules import from this file instead of ``admin_api.py``
-to avoid circular dependencies and make the injection explicit.
+This module re-exports symbols from focused sub-modules for backward
+compatibility.  New code should import from the canonical locations:
 
-Convention:
-    * UPPER_CASE names are *injected at runtime* by ``brain.py`` (or the
-      ``admin_api.lifespan``).  They start as ``None`` and are set once.
-    * ``_lowercase`` helpers are thin wrappers used across multiple routers.
+    * ``tools.admin.state``  — runtime globals, getters, buffers, path constants
+    * ``tools.admin.utils``  — JSONL, config redaction, path validation helpers
+    * ``runtime.task_store``  — ``TaskExecutionStore`` class
 """
 
 from __future__ import annotations
@@ -34,263 +32,104 @@ import shutil
 import tempfile
 from collections import defaultdict
 
-
 from runtime.config_manager import config, is_sensitive_config_path
 
 if TYPE_CHECKING:
     from tools.canvas import CanvasState
     from scheduler.cron import CronScheduler
 
-logger = logging.getLogger("GazerAdminAPI")
+# ---------------------------------------------------------------------------
+# Re-export from tools.admin.state (runtime globals, getters, buffers, paths)
+# ---------------------------------------------------------------------------
+from tools.admin.state import (  # noqa: F401
+    logger,
+    # Runtime globals
+    API_QUEUES,
+    CANVAS_STATE,
+    GMAIL_PUSH_MANAGER,
+    CRON_SCHEDULER,
+    _LOCAL_CRON_SCHEDULER_ACTIVE,
+    TOOL_REGISTRY,
+    LLM_ROUTER,
+    ORCHESTRATOR,
+    PROMPT_CACHE_TRACKER,
+    TOOL_BATCHING_TRACKER,
+    TRAJECTORY_STORE,
+    EVAL_BENCHMARK_MANAGER,
+    TRAINING_JOB_MANAGER,
+    TRAINING_BRIDGE_MANAGER,
+    ONLINE_POLICY_LOOP_MANAGER,
+    PERSONA_EVAL_MANAGER,
+    PERSONA_RUNTIME_MANAGER,
+    HOOK_BUS,
+    HOOK_TOKEN,
+    WHATSAPP_CHANNEL,
+    TEAMS_CHANNEL,
+    GOOGLE_CHAT_CHANNEL,
+    USAGE_TRACKER,
+    IPC_USAGE_SNAPSHOT,
+    IPC_ROUTER_STATUS,
+    # Accessor functions
+    get_usage_tracker,
+    get_llm_router,
+    get_trajectory_store,
+    get_prompt_cache_tracker,
+    get_tool_batching_tracker,
+    get_tool_registry,
+    get_orchestrator,
+    get_canvas_state,
+    # Satellite
+    SATELLITE_SOURCES,
+    SATELLITE_SESSION_MANAGER,
+    # Path constants
+    _PROJECT_ROOT,
+    _FAVICON_ICO_PATH,
+    _WORKFLOW_GRAPH_DIR,
+    _POLICY_AUDIT_LOG_PATH,
+    _STRATEGY_SNAPSHOT_LOG_PATH,
+    _WEB_ONBOARDING_GUIDE_PATH,
+    _MEMORY_TURN_HEALTH_LOG_PATH,
+    _TOOL_PERSIST_LOG_PATH,
+    _EXPORT_DEFAULT_DIR,
+    _EXPORT_DEFAULT_ALLOWED_DIRS,
+    _PROTECTED_EXPORT_TARGETS,
+    _ATOMIC_OBJECT_UPDATE_PATHS,
+    # Buffers
+    _log_buffer,
+    _policy_audit_buffer,
+    _strategy_change_history,
+    _llm_history,
+    _workflow_run_history,
+    _alert_buffer,
+    _coding_quality_history,
+    _coding_benchmark_history,
+    _coding_benchmark_scheduler_state,
+    _gui_simple_benchmark_history,
+    _mcp_rate_counts,
+    _mcp_audit_buffer,
+)
 
 # ---------------------------------------------------------------------------
-# Runtime globals -- injected by brain.py at startup
+# Re-export from tools.admin.utils (helpers)
 # ---------------------------------------------------------------------------
-
-# IPC queues: input_q (UI/Web -> Brain), output_q (Brain -> UI/Web)
-API_QUEUES: Dict[str, Any] = {"input": None, "output": None}
-
-CANVAS_STATE: Optional["CanvasState"] = None
-GMAIL_PUSH_MANAGER: Optional[Any] = None
-CRON_SCHEDULER: Optional["CronScheduler"] = None
-_LOCAL_CRON_SCHEDULER_ACTIVE: bool = False
-TOOL_REGISTRY: Optional[Any] = None
-LLM_ROUTER: Optional[Any] = None
-ORCHESTRATOR: Optional[Any] = None
-PROMPT_CACHE_TRACKER: Optional[Any] = None
-TOOL_BATCHING_TRACKER: Optional[Any] = None
-TRAJECTORY_STORE: Optional[Any] = None
-
-# Eval / training managers (lazy-init)
-EVAL_BENCHMARK_MANAGER: Optional[Any] = None
-TRAINING_JOB_MANAGER: Optional[Any] = None
-TRAINING_BRIDGE_MANAGER: Optional[Any] = None
-ONLINE_POLICY_LOOP_MANAGER: Optional[Any] = None
-PERSONA_EVAL_MANAGER: Optional[Any] = None
-PERSONA_RUNTIME_MANAGER: Optional[Any] = None
-
-# Webhook / hooks
-HOOK_BUS: Optional[Any] = None
-HOOK_TOKEN: Optional[str] = None
-
-# Channel instances (injected by brain.py)
-WHATSAPP_CHANNEL: Optional[Any] = None
-TEAMS_CHANNEL: Optional[Any] = None
-GOOGLE_CHAT_CHANNEL: Optional[Any] = None
-
-# Usage / tracking
-USAGE_TRACKER: Optional[Any] = None
-IPC_USAGE_SNAPSHOT: Optional[Dict[str, Any]] = None
-IPC_ROUTER_STATUS: Optional[Dict[str, Any]] = None
-
+from tools.admin.utils import (  # noqa: F401
+    _append_jsonl_record,
+    _read_jsonl_tail,
+    _dedupe_dict_rows,
+    _is_sensitive_config_keypath,
+    _redact_config,
+    _filter_masked_sensitive,
+    _flatten_config,
+    _resolve_export_output_path,
+    _is_subpath,
+    _MISSING,
+    _TOOL_ERROR_PATTERN,
+)
 
 # ---------------------------------------------------------------------------
-# Accessor functions for runtime-injected globals
+# Re-export from runtime.task_store
 # ---------------------------------------------------------------------------
-# Using `from _shared import X` captures the value at import time. If X is
-# None when the importing module is loaded and brain.py injects it later,
-# the local binding never updates.  These getters always return the *current*
-# module-level value.
-# ---------------------------------------------------------------------------
-
-def get_usage_tracker():
-    return USAGE_TRACKER
-
-def get_llm_router():
-    return LLM_ROUTER
-
-def get_trajectory_store():
-    return TRAJECTORY_STORE
-
-def get_prompt_cache_tracker():
-    return PROMPT_CACHE_TRACKER
-
-def get_tool_batching_tracker():
-    return TOOL_BATCHING_TRACKER
-
-def get_tool_registry():
-    return TOOL_REGISTRY
-
-def get_orchestrator():
-    return ORCHESTRATOR
-
-def get_canvas_state():
-    return CANVAS_STATE
-
-# Satellite
-from devices.satellite_session import create_satellite_session_manager
-SATELLITE_SOURCES: Dict[str, Any] = {}
-SATELLITE_SESSION_MANAGER = create_satellite_session_manager(config)
-
-# ---------------------------------------------------------------------------
-# Path constants
-# ---------------------------------------------------------------------------
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/tools/admin -> project root
-_FAVICON_ICO_PATH = _PROJECT_ROOT / "web" / "public" / "favicon.ico"
-_WORKFLOW_GRAPH_DIR = _PROJECT_ROOT / "workflows" / "graphs"
-_POLICY_AUDIT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "policy_audit.jsonl"
-_STRATEGY_SNAPSHOT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "strategy_snapshot.jsonl"
-_WEB_ONBOARDING_GUIDE_PATH = _PROJECT_ROOT / "assets" / "WEB_ONBOARDING_GUIDE.md"
-_MEMORY_TURN_HEALTH_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "memory_turn_health.jsonl"
-_TOOL_PERSIST_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "tool_result_persistence.jsonl"
-_EXPORT_DEFAULT_DIR = "data/reports"
-_EXPORT_DEFAULT_ALLOWED_DIRS = ["data/reports", ".tmp_pytest", "exports"]
-_PROTECTED_EXPORT_TARGETS = {
-    (_PROJECT_ROOT / "config" / "settings.yaml").resolve(),
-    (_PROJECT_ROOT / "config" / "owner.json").resolve(),
-}
-
-# ---------------------------------------------------------------------------
-# In-memory log / audit buffers (shared across routers)
-# ---------------------------------------------------------------------------
-_log_buffer: collections.deque = collections.deque(maxlen=500)
-_policy_audit_buffer: collections.deque = collections.deque(maxlen=300)
-_strategy_change_history: collections.deque = collections.deque(maxlen=300)
-_llm_history: collections.deque = collections.deque(maxlen=200)
-_workflow_run_history: collections.deque = collections.deque(maxlen=300)
-_alert_buffer: collections.deque = collections.deque(maxlen=500)
-
-# Coding / benchmark history
-_coding_quality_history: collections.deque = collections.deque(maxlen=400)
-
-class TaskExecutionStore:
-    """Persistent task-run store with lightweight checkpoint state machine."""
-
-    def __init__(self, base_dir: Optional[Path] = None) -> None:
-        self._base = base_dir or (Path.home() / ".gazer" / "task_runs")
-        self._base.mkdir(parents=True, exist_ok=True)
-        self._path = self._base / "task_runs.jsonl"
-
-    def _read_all(self) -> List[Dict[str, Any]]:
-        import json
-        if not self._path.is_file():
-            return []
-        out: List[Dict[str, Any]] = []
-        try:
-            for line in self._path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                rec = json.loads(line)
-                if isinstance(rec, dict):
-                    out.append(rec)
-        except Exception:
-            return []
-        return out
-
-    def _write_all(self, items: List[Dict[str, Any]]) -> None:
-        import json
-        with open(self._path, "w", encoding="utf-8") as fh:
-            for item in items:
-                fh.write(json.dumps(item, ensure_ascii=False) + "\n")
-
-    def create(
-        self,
-        *,
-        kind: str,
-        run_id: str,
-        session_id: str,
-        payload: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        import time
-        import uuid
-        task_id = f"task_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
-        now = time.time()
-        rec = {
-            "task_id": task_id,
-            "kind": str(kind),
-            "run_id": str(run_id),
-            "session_id": str(session_id),
-            "status": "queued",
-            "created_at": now,
-            "updated_at": now,
-            "payload": payload or {},
-            "checkpoints": [],
-            "output": {},
-        }
-        items = self._read_all()
-        items.append(rec)
-        self._write_all(items)
-        return rec
-
-    def update_status(
-        self,
-        task_id: str,
-        *,
-        status: str,
-        output: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        import time
-        items = self._read_all()
-        updated: Optional[Dict[str, Any]] = None
-        for item in items:
-            if str(item.get("task_id", "")) != str(task_id):
-                continue
-            item["status"] = str(status)
-            item["updated_at"] = time.time()
-            if output is not None:
-                item["output"] = output
-            updated = item
-            break
-        if updated is None:
-            return None
-        self._write_all(items)
-        return updated
-
-    def add_checkpoint(
-        self,
-        task_id: str,
-        *,
-        stage: str,
-        status: str,
-        note: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        import time
-        items = self._read_all()
-        updated: Optional[Dict[str, Any]] = None
-        for item in items:
-            if str(item.get("task_id", "")) != str(task_id):
-                continue
-            checkpoints = list(item.get("checkpoints", []) or [])
-            checkpoints.append(
-                {
-                    "ts": time.time(),
-                    "stage": str(stage),
-                    "status": str(status),
-                    "note": str(note),
-                    "metadata": metadata or {},
-                }
-            )
-            item["checkpoints"] = checkpoints
-            item["updated_at"] = time.time()
-            updated = item
-            break
-        if updated is None:
-            return None
-        self._write_all(items)
-        return updated
-
-    def get(self, task_id: str) -> Optional[Dict[str, Any]]:
-        for item in reversed(self._read_all()):
-            if str(item.get("task_id", "")) == str(task_id):
-                return item
-        return None
-
-    def list(self, *, limit: int = 50, status: Optional[str] = None, kind: Optional[str] = None) -> List[Dict[str, Any]]:
-        items = list(reversed(self._read_all()))
-        out: List[Dict[str, Any]] = []
-        status_filter = str(status or "").strip().lower()
-        kind_filter = str(kind or "").strip().lower()
-        for item in items:
-            if status_filter and str(item.get("status", "")).strip().lower() != status_filter:
-                continue
-            if kind_filter and str(item.get("kind", "")).strip().lower() != kind_filter:
-                continue
-            out.append(item)
-            if len(out) >= limit:
-                break
-        return out
-
+from runtime.task_store import TaskExecutionStore  # noqa: F401
 
 TASK_RUN_STORE = TaskExecutionStore()
 
@@ -298,224 +137,11 @@ def _record_coding_quality_event(event: Dict[str, Any]):
     import time
     event["ts"] = time.time()
     _coding_quality_history.append(event)
-_coding_benchmark_history: collections.deque = collections.deque(maxlen=200)
-_coding_benchmark_scheduler_state: Dict[str, Any] = {"last_run_ts": 0.0, "last_result": None}
-_gui_simple_benchmark_history: collections.deque = collections.deque(maxlen=200)
-_TOOL_ERROR_PATTERN = re.compile(r"^Error\s+\[([A-Z0-9_]+)\]:\s*(.*)$", re.IGNORECASE)
 
-# MCP rate-limit state
-_mcp_rate_counts: Dict[str, list] = {}
-_mcp_audit_buffer: collections.deque = collections.deque(maxlen=500)
-
-# ---------------------------------------------------------------------------
-# JSONL helpers (used by multiple routers)
-# ---------------------------------------------------------------------------
-
-def _append_jsonl_record(path: Path, payload: Dict[str, Any]) -> None:
-    """Append a single JSON record to a JSONL file (creates parent dirs)."""
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        logger.debug("Failed to append JSONL record: %s", path, exc_info=True)
+# MCP rate-limit events
+_mcp_rate_events = collections.defaultdict(collections.deque)
 
 
-def _read_jsonl_tail(path: Path, limit: int = 500) -> List[Dict[str, Any]]:
-    """Read the last *limit* records from a JSONL file."""
-    safe_limit = max(1, min(int(limit), 5000))
-    if not path.is_file():
-        return []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-safe_limit:]
-    except Exception:
-        return []
-    out: List[Dict[str, Any]] = []
-    for line in lines:
-        row = line.strip()
-        if not row:
-            continue
-        try:
-            obj = json.loads(row)
-        except Exception:
-            continue
-        if isinstance(obj, dict):
-            out.append(obj)
-    return out
-
-
-def _dedupe_dict_rows(
-    rows: List[Dict[str, Any]], *, id_keys: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
-    """De-duplicate a list of dicts by *id_keys* (or full JSON equality)."""
-    seen: set = set()
-    out: List[Dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        if id_keys:
-            key_parts = [str(row.get(k, "")) for k in id_keys]
-            marker = "|".join(key_parts)
-        else:
-            marker = json.dumps(row, ensure_ascii=False, sort_keys=True)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        out.append(row)
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Config helpers (used by config_routes and others)
-# ---------------------------------------------------------------------------
-
-def _is_sensitive_config_keypath(path: str) -> bool:
-    """Best-effort sensitive path check aligned with ConfigManager."""
-    try:
-        return bool(is_sensitive_config_path(path))
-    except Exception:
-        return False
-
-
-def _redact_config(data: Any, path: str = "", _depth: int = 0) -> Any:
-    """Deep-copy config data with sensitive values replaced by ``'***'``."""
-    if _depth > 20:
-        return "..."
-    if path and _is_sensitive_config_keypath(path):
-        return "***" if data else ""
-    if isinstance(data, dict):
-        return {
-            k: _redact_config(v, f"{path}.{k}" if path else str(k), _depth + 1)
-            for k, v in data.items()
-        }
-    if isinstance(data, list):
-        return [_redact_config(item, path, _depth + 1) for item in data]
-    return data
-
-
-def _filter_masked_sensitive(
-    data: Any,
-    original: Optional[Any] = None,
-    path: str = "",
-    _depth: int = 0,
-) -> Any:
-    """Replace masked sensitive values (``'***'``) with original values."""
-    if _depth > 20:
-        return data
-    if isinstance(data, dict):
-        result = {}
-        orig_dict = original if isinstance(original, dict) else {}
-        for k, v in data.items():
-            orig_v = orig_dict.get(k)
-            current_path = f"{path}.{k}" if path else str(k)
-            if _is_sensitive_config_keypath(current_path) and v == "***":
-                if orig_v is not None:
-                    result[k] = orig_v
-                continue
-            if isinstance(v, dict):
-                result[k] = _filter_masked_sensitive(v, orig_v, current_path, _depth + 1)
-            elif isinstance(v, list):
-                result[k] = _filter_masked_sensitive(v, orig_v, current_path, _depth + 1)
-            else:
-                result[k] = v
-        return result
-    if isinstance(data, list):
-        out_list: List[Any] = []
-        orig_list = original if isinstance(original, list) else []
-        for idx, item in enumerate(data):
-            orig_item = orig_list[idx] if idx < len(orig_list) else None
-            out_list.append(_filter_masked_sensitive(item, orig_item, path, _depth + 1))
-        return out_list
-    return data
-
-
-def _flatten_config(data: Any, prefix: str = "") -> Dict[str, Any]:
-    """Flatten nested config dict to dot-path keys."""
-    out: Dict[str, Any] = {}
-    if isinstance(data, dict):
-        for k, v in data.items():
-            key = f"{prefix}.{k}" if prefix else k
-            if isinstance(v, dict):
-                out.update(_flatten_config(v, key))
-            else:
-                out[key] = v
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Export path resolver (used by observability / training exports)
-# ---------------------------------------------------------------------------
-
-def _resolve_export_output_path(
-    *,
-    output_raw: str,
-    default_filename: str,
-) -> Path:
-    """Resolve and validate an export output path.
-
-    Ensures the path is under an allowed export directory.
-    """
-    import tempfile
-    from fastapi import HTTPException
-
-    default_path = (_PROJECT_ROOT / _EXPORT_DEFAULT_DIR / default_filename).resolve()
-    if not output_raw:
-        default_path.parent.mkdir(parents=True, exist_ok=True)
-        return default_path
-
-    requested = Path(output_raw).expanduser()
-    resolved = (requested if requested.is_absolute() else (_PROJECT_ROOT / requested)).resolve()
-
-    allowed_raw = config.get("api.export_allowed_dirs", _EXPORT_DEFAULT_ALLOWED_DIRS)
-    allowed_items = allowed_raw if isinstance(allowed_raw, list) else _EXPORT_DEFAULT_ALLOWED_DIRS
-    allowed_roots: List[Path] = []
-    for entry in allowed_items:
-        text = str(entry or "").strip()
-        if not text:
-            continue
-        root = Path(text).expanduser()
-        root = (root if root.is_absolute() else (_PROJECT_ROOT / root)).resolve()
-        allowed_roots.append(root)
-    default_root = (_PROJECT_ROOT / _EXPORT_DEFAULT_DIR).resolve()
-    if default_root not in allowed_roots:
-        allowed_roots.append(default_root)
-    try:
-        temp_root = Path(tempfile.gettempdir()).resolve()
-        allowed_roots.append(temp_root)
-    except Exception:
-        pass
-    if not allowed_roots:
-        allowed_roots = [(_PROJECT_ROOT / _EXPORT_DEFAULT_DIR).resolve()]
-
-    allowed = any(resolved == root or root in resolved.parents for root in allowed_roots)
-    if not allowed:
-        allowed_desc = [str(item) for item in allowed_roots]
-        raise HTTPException(
-            status_code=400,
-            detail=f"output_path must be under allowed export dirs: {allowed_desc}",
-        )
-    if resolved in _PROTECTED_EXPORT_TARGETS:
-        raise HTTPException(status_code=400, detail="output_path points to protected config file")
-
-    resolved.parent.mkdir(parents=True, exist_ok=True)
-    return resolved
-
-
-# ---------------------------------------------------------------------------
-# Misc shared helpers
-# ---------------------------------------------------------------------------
-
-def _is_subpath(base: Path, target: Path) -> bool:
-    """Return True if *target* resolves under *base*."""
-    try:
-        base_resolved = base.resolve(strict=False)
-        target_resolved = target.resolve(strict=False)
-        return target_resolved == base_resolved or target_resolved.is_relative_to(base_resolved)
-    except (OSError, ValueError):
-        return False
-
-
-_MISSING = object()
 
 
 # ---------------------------------------------------------------------------
@@ -3909,10 +3535,8 @@ def _resolve_online_policy_offpolicy_config(payload: Optional[Dict[str, Any]] = 
 # Auto-recovered definitions (from admin_api_legacy.py)
 # ---------------------------------------------------------------------------
 
-_ATOMIC_OBJECT_UPDATE_PATHS: Tuple[str, ...] = (
-    # This map is edited as raw JSON in web UI and must support key deletion.
-    "security.owner_channel_ids",
-)
+
+
 _MAX_WS_MESSAGE_BYTES = int(config.get("api.max_ws_message_bytes", 256 * 1024))
 _MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
 _mcp_request_ctx: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar(
