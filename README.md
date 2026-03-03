@@ -74,7 +74,7 @@ python -m venv .venv
 # macOS/Linux
 # source .venv/bin/activate
 
-pip install -r requirements.txt -c constraints.txt
+pip install -e .
 ```
 
 可选安装额外依赖组：

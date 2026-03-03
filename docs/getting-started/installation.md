@@ -27,7 +27,7 @@ source .venv/bin/activate
 ## 3. 安装后端依赖
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 pip install -e ".[dev,perception,ui,browser]"
 ```
 

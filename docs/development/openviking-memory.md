@@ -5,7 +5,7 @@
 ## 1. 依赖安装
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 确认 `openviking` 可导入：
