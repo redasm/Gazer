@@ -17,7 +17,7 @@ class LLMCognitiveStep(CognitiveStep):
         # Callers should resolve credentials via ModelRegistry before construction.
         self.api_key = api_key or "EMPTY"
         self.client = AsyncOpenAI(
-            api_key=api_key,
+            api_key=self.api_key,
             base_url=base_url,
             default_headers=default_headers,
         )

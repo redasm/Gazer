@@ -646,8 +646,8 @@ DEFAULT_CONFIG = {
             "max_batch_size": 4,
             "dedupe_enabled": False,
         },
-        # Tool planner v2: dependency-aware scheduling + tool-result compaction.
-        "tool_planner_v2": {
+        # Tool planner: dependency-aware scheduling + tool-result compaction.
+        "tool_planner": {
             "enabled": True,
             "dependency_keys": [
                 "depends_on",

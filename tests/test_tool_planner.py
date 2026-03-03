@@ -1,10 +1,10 @@
 from llm.base import ToolCallRequest
 from tools.batching import ToolBatchPlanner
-from tools.planner_v2 import ToolPlannerV2
+from tools.planner import ToolPlanner
 
 
-def test_planner_v2_builds_dependency_levels_and_batches():
-    planner = ToolPlannerV2(enabled=True, compact_results=False)
+def test_planner_builds_dependency_levels_and_batches():
+    planner = ToolPlanner(enabled=True, compact_results=False)
     batch_planner = ToolBatchPlanner(enabled=True, max_batch_size=4, dedupe_enabled=True)
     calls = [
         ToolCallRequest(id="1", name="fetch_a", arguments={"q": "a"}),
@@ -30,8 +30,8 @@ def test_planner_v2_builds_dependency_levels_and_batches():
     assert plan.batch_plan.deduped_calls == 0
 
 
-def test_planner_v2_marks_cycle_and_falls_back_to_remaining_order():
-    planner = ToolPlannerV2(enabled=True, compact_results=False)
+def test_planner_marks_cycle_and_falls_back_to_remaining_order():
+    planner = ToolPlanner(enabled=True, compact_results=False)
     batch_planner = ToolBatchPlanner(enabled=True, max_batch_size=4, dedupe_enabled=False)
     calls = [
         ToolCallRequest(id="1", name="a", arguments={"depends_on": "2"}),
@@ -50,8 +50,8 @@ def test_planner_v2_marks_cycle_and_falls_back_to_remaining_order():
     assert [[tc.id for tc in batch] for batch in plan.batch_plan.batches] == [["1", "2"]]
 
 
-def test_planner_v2_compacts_large_results():
-    planner = ToolPlannerV2(
+def test_planner_compacts_large_results():
+    planner = ToolPlanner(
         enabled=True,
         compact_results=True,
         max_result_chars=120,
@@ -61,5 +61,5 @@ def test_planner_v2_compacts_large_results():
     )
     content = "x" * 260
     compacted = planner.compact_tool_result(tool_name="web_fetch", result=content)
-    assert "[planner_v2_compacted tool=web_fetch" in compacted
+    assert "[planner_compacted tool=web_fetch" in compacted
     assert len(compacted) < len(content)

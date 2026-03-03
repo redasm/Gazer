@@ -10,7 +10,7 @@ from agent.constants import *  # noqa: F403
 from tools.base import ToolSafetyTier, CancellationToken
 from tools.registry import ToolPolicy
 from tools.batching import ToolBatchPlan
-from tools.planner_v2 import ToolPlannerV2Plan
+from tools.planner import ToolPlannerPlan
 from runtime.resilience import RetryBudget, classify_error_message
 import asyncio
 import json
@@ -251,8 +251,8 @@ class ToolExecutionMixin:
             max_parallel_calls=max_parallel_calls,
         )
 
-    def _plan_tool_calls_v2(self, tool_calls: List[Any], max_parallel_calls: int) -> ToolPlannerV2Plan:
-        return self.tool_planner_v2.plan(
+    def _plan_tool_calls(self, tool_calls: List[Any], max_parallel_calls: int) -> ToolPlannerPlan:
+        return self.tool_planner.plan(
             tool_calls,
             lane_resolver=self._classify_tool_parallel_lane,
             max_parallel_calls=max_parallel_calls,
@@ -260,7 +260,7 @@ class ToolExecutionMixin:
         )
 
     def _compact_tool_result_for_context(self, *, tool_name: str, result: Any) -> str:
-        return self.tool_planner_v2.compact_tool_result(tool_name=tool_name, result=result)
+        return self.tool_planner.compact_tool_result(tool_name=tool_name, result=result)
 
     async def _execute_tool_calls_with_batching(
         self,

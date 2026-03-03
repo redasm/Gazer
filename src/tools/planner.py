@@ -1,4 +1,4 @@
-"""Tool planner v2: dependency-aware scheduling + tool-result compaction."""
+"""Tool planner: dependency-aware scheduling + tool-result compaction."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ _DEFAULT_DEPENDENCY_KEYS = {
 
 
 @dataclass
-class ToolPlannerV2Plan:
-    """Execution plan returned by planner v2."""
+class ToolPlannerPlan:
+    """Execution plan returned by tool planner."""
 
     batch_plan: ToolBatchPlan = field(default_factory=ToolBatchPlan)
     dependency_levels: List[List[str]] = field(default_factory=list)
@@ -32,7 +32,7 @@ class ToolPlannerV2Plan:
     cycle_detected: bool = False
 
 
-class ToolPlannerV2:
+class ToolPlanner:
     """Dependency-aware tool-call planner with result compaction helpers."""
 
     def __init__(
@@ -105,8 +105,8 @@ class ToolPlannerV2:
         return deps
 
     @staticmethod
-    def _build_empty_plan() -> ToolPlannerV2Plan:
-        return ToolPlannerV2Plan(batch_plan=ToolBatchPlan())
+    def _build_empty_plan() -> ToolPlannerPlan:
+        return ToolPlannerPlan(batch_plan=ToolBatchPlan())
 
     def plan(
         self,
@@ -115,7 +115,7 @@ class ToolPlannerV2:
         lane_resolver: Callable[[str], str],
         max_parallel_calls: int,
         batch_planner: ToolBatchPlanner,
-    ) -> ToolPlannerV2Plan:
+    ) -> ToolPlannerPlan:
         calls = list(tool_calls or [])
         if not calls:
             return self._build_empty_plan()
@@ -126,7 +126,7 @@ class ToolPlannerV2:
                 lane_resolver=lane_resolver,
                 max_parallel_calls=max_parallel_calls,
             )
-            return ToolPlannerV2Plan(batch_plan=base)
+            return ToolPlannerPlan(batch_plan=base)
 
         call_by_id: Dict[str, Any] = {}
         ordered_ids: List[str] = []
@@ -208,7 +208,7 @@ class ToolPlannerV2:
             unique_calls=unique_calls,
             deduped_calls=deduped_calls,
         )
-        return ToolPlannerV2Plan(
+        return ToolPlannerPlan(
             batch_plan=batch_plan,
             dependency_levels=levels,
             dependency_edges=dependency_edges,
@@ -245,7 +245,7 @@ class ToolPlannerV2:
 
         omitted = len(text) - head - tail
         marker = (
-            f"[planner_v2_compacted tool={str(tool_name or 'unknown')} "
+            f"[planner_compacted tool={str(tool_name or 'unknown')} "
             f"omitted_chars={omitted}]"
         )
         return f"{text[:head]}\n\n{marker}\n\n{text[-tail:]}"

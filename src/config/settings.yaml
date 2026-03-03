@@ -482,7 +482,7 @@ security:
     enabled: true
     max_batch_size: 4
     dedupe_enabled: false
-  tool_planner_v2:
+  tool_planner:
     enabled: true
     dependency_keys:
     - depends_on

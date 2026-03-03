@@ -130,12 +130,12 @@ class TestConfigManager:
         assert cm.get("security.tool_batching.enabled") is True
         assert cm.get("security.tool_batching.max_batch_size") == 4
         assert cm.get("security.tool_batching.dedupe_enabled") is False
-        assert cm.get("security.tool_planner_v2.enabled") is True
-        assert cm.get("security.tool_planner_v2.compact_results") is True
-        assert cm.get("security.tool_planner_v2.max_result_chars") == 2400
-        assert cm.get("security.tool_planner_v2.error_max_result_chars") == 4000
-        assert cm.get("security.tool_planner_v2.head_chars") == 900
-        assert cm.get("security.tool_planner_v2.tail_chars") == 700
+        assert cm.get("security.tool_planner.enabled") is True
+        assert cm.get("security.tool_planner.compact_results") is True
+        assert cm.get("security.tool_planner.max_result_chars") == 2400
+        assert cm.get("security.tool_planner.error_max_result_chars") == 4000
+        assert cm.get("security.tool_planner.head_chars") == 900
+        assert cm.get("security.tool_planner.tail_chars") == 700
         assert cm.get("security.threat_scan.enabled") is False
         assert cm.get("security.threat_scan.provider") == "virustotal"
         assert cm.get("security.threat_scan.fail_mode") == "open"

@@ -96,7 +96,7 @@ def test_tool_batch_planner_dedupes_and_batches():
     assert plan.batch_groups == 1
 
 
-def test_loop_planner_v2_respects_dependencies(monkeypatch, tmp_path):
+def test_loop_planner_respects_dependencies(monkeypatch, tmp_path):
     loop = _build_loop(
         monkeypatch,
         tmp_path,
@@ -105,7 +105,7 @@ def test_loop_planner_v2_respects_dependencies(monkeypatch, tmp_path):
                 "tool_groups": {},
                 "parallel_tool_lane_limits": {"io": 2, "device": 1, "network": 2, "default": 2},
                 "tool_batching": {"enabled": True, "max_batch_size": 2, "dedupe_enabled": True},
-                "tool_planner_v2": {"enabled": True},
+                "tool_planner": {"enabled": True},
             }
         },
     )
@@ -115,7 +115,7 @@ def test_loop_planner_v2_respects_dependencies(monkeypatch, tmp_path):
         ToolCallRequest(id="3", name="echo_tool", arguments={"q": "c"}),
     ]
 
-    plan = loop._plan_tool_calls_v2(calls, max_parallel_calls=4)
+    plan = loop._plan_tool_calls(calls, max_parallel_calls=4)
     assert plan.used_dependency_scheduler is True
     assert plan.dependency_levels == [["1", "3"], ["2"]]
     assert [[tc.id for tc in batch] for batch in plan.batch_plan.batches] == [["1", "3"], ["2"]]
@@ -129,7 +129,7 @@ def test_loop_compacts_tool_result_for_context(monkeypatch, tmp_path):
             "security": {
                 "tool_groups": {},
                 "tool_batching": {"enabled": True, "max_batch_size": 2, "dedupe_enabled": True},
-                "tool_planner_v2": {
+                "tool_planner": {
                     "enabled": True,
                     "compact_results": True,
                     "max_result_chars": 120,
@@ -144,7 +144,7 @@ def test_loop_compacts_tool_result_for_context(monkeypatch, tmp_path):
         tool_name="echo_tool",
         result=("z" * 260),
     )
-    assert "[planner_v2_compacted tool=echo_tool" in compacted
+    assert "[planner_compacted tool=echo_tool" in compacted
 
 
 @pytest.mark.asyncio

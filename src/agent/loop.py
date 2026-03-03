@@ -28,7 +28,7 @@ from agent.tool_call_hooks import ToolCallHookManager
 from agent.context import ContextBuilder
 from tools.base import CancellationToken, ToolSafetyTier
 from tools.batching import ToolBatchPlan, ToolBatchPlanner, ToolBatchingTracker
-from tools.planner_v2 import ToolPlannerV2, ToolPlannerV2Plan
+from tools.planner import ToolPlanner, ToolPlannerPlan
 from tools.media_marker import MEDIA_MARKER
 from tools.registry import ToolRegistry, ToolPolicy, normalize_tool_policy
 from agent.session_store import SessionStore
@@ -291,19 +291,19 @@ class AgentLoop(
             ),
             dedupe_enabled=bool(tool_batch_cfg.get("dedupe_enabled", False)),
         )
-        planner_v2_cfg = _cfg.get("security.tool_planner_v2", {}) or {}
-        if not isinstance(planner_v2_cfg, dict):
-            planner_v2_cfg = {}
-        self.tool_planner_v2 = ToolPlannerV2(
-            enabled=bool(planner_v2_cfg.get("enabled", True)),
-            dependency_keys=planner_v2_cfg.get("dependency_keys"),
-            compact_results=bool(planner_v2_cfg.get("compact_results", True)),
-            max_result_chars=int(planner_v2_cfg.get("max_result_chars", 2400) or 2400),
+        planner_cfg = _cfg.get("security.tool_planner", {}) or {}
+        if not isinstance(planner_cfg, dict):
+            planner_cfg = {}
+        self.tool_planner = ToolPlanner(
+            enabled=bool(planner_cfg.get("enabled", True)),
+            dependency_keys=planner_cfg.get("dependency_keys"),
+            compact_results=bool(planner_cfg.get("compact_results", True)),
+            max_result_chars=int(planner_cfg.get("max_result_chars", 2400) or 2400),
             error_max_result_chars=int(
-                planner_v2_cfg.get("error_max_result_chars", 4000) or 4000
+                planner_cfg.get("error_max_result_chars", 4000) or 4000
             ),
-            head_chars=int(planner_v2_cfg.get("head_chars", 900) or 900),
-            tail_chars=int(planner_v2_cfg.get("tail_chars", 700) or 700),
+            head_chars=int(planner_cfg.get("head_chars", 900) or 900),
+            tail_chars=int(planner_cfg.get("tail_chars", 700) or 700),
         )
         self.tool_batching_tracker = ToolBatchingTracker()
         self.channel_command_registry = ChannelCommandRegistry()
@@ -1022,25 +1022,25 @@ class AgentLoop(
                     # Execute tools (parallel when multiple independent calls)
                     tool_calls = response.tool_calls
                     requested_calls = len(tool_calls)
-                    planner_v2_plan: Optional[ToolPlannerV2Plan] = None
+                    planner_plan: Optional[ToolPlannerPlan] = None
                     batch_plan: Optional[ToolBatchPlan] = None
                     effective_calls = requested_calls
                     if requested_calls > 1:
-                        planner_v2_plan = self._plan_tool_calls_v2(
+                        planner_plan = self._plan_tool_calls(
                             tool_calls,
                             max_parallel_calls=max_parallel_tool_calls,
                         )
-                        batch_plan = planner_v2_plan.batch_plan
+                        batch_plan = planner_plan.batch_plan
                         effective_calls = max(0, int(batch_plan.unique_calls))
-                        if planner_v2_plan.used_dependency_scheduler:
+                        if planner_plan.used_dependency_scheduler:
                             self.trajectory_store.add_event(
                                 trajectory_id,
                                 stage="plan",
-                                action="tool_planner_v2",
+                                action="tool_planner",
                                 payload={
-                                    "dependency_edges": int(planner_v2_plan.dependency_edges),
-                                    "dependency_levels": int(len(planner_v2_plan.dependency_levels)),
-                                    "cycle_detected": bool(planner_v2_plan.cycle_detected),
+                                    "dependency_edges": int(planner_plan.dependency_edges),
+                                    "dependency_levels": int(len(planner_plan.dependency_levels)),
+                                    "cycle_detected": bool(planner_plan.cycle_detected),
                                 },
                             )
                     remaining_calls = max(0, max_tool_calls_per_turn - tool_calls_executed)
