@@ -7,6 +7,7 @@ authentication dependencies used by other routers.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict
 from urllib.parse import urlparse
 from http.cookies import SimpleCookie
@@ -39,7 +40,6 @@ def _get_cors_config():
     Returns:
         (origins, allow_credentials)
     """
-    import os
     raw = config.get("api.cors_origins", None)
     if raw is not None:
         if isinstance(raw, str):
@@ -141,8 +141,7 @@ def _is_allowed_origin(origin: str) -> bool:
     return False
 
 
-# noinspection PyUnusedLocal
-import os  # noqa: E402
+
 
 
 def _is_dev_environment() -> bool:

@@ -318,43 +318,8 @@ def _resolve_favicon_file() -> tuple[Optional[Path], Optional[str]]:
 
 
 # --- CORS Configuration ---
-# Read allowed origins from config, with safe defaults for development.
-# In production, explicitly set `api.cors_origins` in config/settings.yaml.
-# When `api.cors_credentials` is False (default for non-localhost), credentials are disabled.
-
-_DEFAULT_CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:8080",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8080",
-]
-
-
-def _get_cors_config() -> tuple:
-    """Get CORS configuration from settings.
-    
-    Returns:
-        (origins, allow_credentials)
-    """
-    origins = config.get("api.cors_origins", _DEFAULT_CORS_ORIGINS)
-    if isinstance(origins, str):
-        origins = [o.strip() for o in origins.split(",") if o.strip()]
-    elif not isinstance(origins, list):
-        origins = _DEFAULT_CORS_ORIGINS
-    
-    # Only allow credentials for localhost origins by default
-    # This prevents CSRF attacks when the API is exposed externally
-    allow_credentials = config.get("api.cors_credentials", None)
-    if allow_credentials is None:
-        # Auto-detect: only allow credentials if all origins are localhost
-        localhost_patterns = ("localhost", "127.0.0.1", "::1")
-        allow_credentials = all(
-            any(lp in origin.lower() for lp in localhost_patterns)
-            for origin in origins
-        )
-    
-    return origins, bool(allow_credentials)
-
+# Canonical implementation lives in tools.admin.auth; import to avoid DRY violation.
+from tools.admin.auth import _get_cors_config
 
 _cors_origins, _cors_credentials = _get_cors_config()
 

@@ -1,6 +1,7 @@
 """Agent loop: the core processing engine."""
 
 import asyncio
+import collections
 import hashlib
 import json
 import logging
@@ -85,7 +86,7 @@ class UsageTracker:
         # Daily buckets: {"YYYY-MM-DD": {input, output, cache, requests, cost}}
         self._daily: Dict[str, Dict[str, Any]] = {}
         # Latency tracking
-        self._latencies: list = []
+        self._latencies: collections.deque = collections.deque(maxlen=1000)
         # Today's date for fast comparison
         self._today: str = time.strftime("%Y-%m-%d")
         # Today-only counters
@@ -137,7 +138,7 @@ class UsageTracker:
         if model:
             m = self._by_model.setdefault(model, {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
-                "requests": 0, "cost_usd": 0.0, "latencies": [],
+                "requests": 0, "cost_usd": 0.0, "latencies": collections.deque(maxlen=1000),
             })
             m["prompt_tokens"] += prompt
             m["completion_tokens"] += completion
