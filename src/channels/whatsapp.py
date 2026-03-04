@@ -57,7 +57,7 @@ class WhatsAppChannel(ChannelAdapter):
                 api_version=config.get("whatsapp.api_version", "v21.0"),
             )
         elif config.get("whatsapp.enabled"):
-            logger.warning("WhatsApp channel enabled but credentials are missing.")
+            logger.error("WhatsApp channel enabled but credentials are missing.")
         return None
 
     def __init__(

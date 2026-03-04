@@ -108,7 +108,12 @@ class FeishuChannel(ChannelAdapter):
             allowed = config.get("feishu.allowed_ids", [])
             return cls(app_id, app_secret, allowed)
         elif config.get("feishu.enabled"):
-            logger.warning("Feishu channel enabled but credentials are missing.")
+            missing = [k for k, v in [("app_id", app_id), ("app_secret", app_secret)] if not v]
+            logger.error(
+                "Feishu channel enabled but credentials missing: %s. "
+                "Set them in settings.yaml or .env (FEISHU_APP_ID / FEISHU_APP_SECRET).",
+                ", ".join(missing),
+            )
         return None
 
     def __init__(

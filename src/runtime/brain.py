@@ -515,6 +515,15 @@ class GazerBrain:
             except Exception as e:
                 logger.error("Failed to load channel %s: %s", name, e, exc_info=True)
 
+        # -- Channel init summary --
+        activated_names = [ch.channel_name for ch in self.channels]
+        all_registered = list(ChannelRegistry.get_all().keys())
+        skipped_names = [n for n in all_registered if n not in activated_names]
+        if activated_names:
+            logger.info("Channels activated: %s", ", ".join(activated_names))
+        if skipped_names:
+            logger.warning("Channels registered but not activated (disabled or missing credentials): %s", ", ".join(skipped_names))
+
         # Gmail Pub/Sub push manager (event-driven automation, no email chat channel)
         if config.get("gmail_push.enabled", False):
             self._init_gmail_push()

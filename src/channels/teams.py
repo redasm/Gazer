@@ -45,7 +45,7 @@ class TeamsChannel(ChannelAdapter):
         if config.get("teams.enabled") and app_id and app_secret:
             return cls(app_id=app_id, app_secret=app_secret)
         elif config.get("teams.enabled"):
-            logger.warning("Teams channel enabled but app_id/app_secret missing.")
+            logger.error("Teams channel enabled but app_id/app_secret missing.")
         return None
 
     def __init__(self, app_id: str, app_secret: str) -> None:

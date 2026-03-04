@@ -43,7 +43,7 @@ class SlackChannel(ChannelAdapter):
         if config.get("slack.enabled") and bot_token and app_token:
             return cls(bot_token=bot_token, app_token=app_token)
         elif config.get("slack.enabled"):
-            logger.warning("Slack channel enabled but bot_token/app_token missing.")
+            logger.error("Slack channel enabled but bot_token/app_token missing.")
         return None
 
     def __init__(

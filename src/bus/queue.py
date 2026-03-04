@@ -50,6 +50,14 @@ class MessageBus:
         timestamps.append(now)
         self._rate_log[session_key] = timestamps
 
+        # Periodically prune stale sessions to prevent unbounded memory growth
+        if len(self._rate_log) > 200:
+            cutoff = now - _RATE_LIMIT_WINDOW
+            self._rate_log = {
+                k: v for k, v in self._rate_log.items()
+                if v and v[-1] > cutoff
+            }
+
         await self.inbound.put(msg)
     
     async def consume_inbound(self) -> InboundMessage:

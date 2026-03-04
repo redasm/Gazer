@@ -45,7 +45,7 @@ class SignalChannel(ChannelAdapter):
         if config.get("signal.enabled") and api and phone:
             return cls(api_url=api, phone_number=phone)
         elif config.get("signal.enabled"):
-            logger.warning("Signal channel enabled but api_url/phone_number missing.")
+            logger.error("Signal channel enabled but api_url/phone_number missing.")
         return None
 
     def __init__(
