@@ -157,3 +157,9 @@ _gui_simple_benchmark_history: collections.deque = collections.deque(maxlen=200)
 # MCP rate-limit state
 _mcp_rate_counts: Dict[str, list] = {}
 _mcp_audit_buffer: collections.deque = collections.deque(maxlen=500)
+
+import contextvars
+_mcp_request_ctx: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars.ContextVar(
+    "mcp_request_ctx",
+    default=None,
+)

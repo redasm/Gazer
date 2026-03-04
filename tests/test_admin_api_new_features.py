@@ -10,7 +10,45 @@ from eval.training_bridge import TrainingBridgeManager
 from eval.trainer import TrainingJobManager
 from soul.persona_runtime import PersonaRuntimeManager
 from tools.admin import api_facade as admin_api
+import tools.admin.state as _admin_state
+import tools.admin.coding_helpers as _coding_helpers
+import tools.admin.training_helpers as _training_helpers
+import tools.admin.strategy_helpers as _strategy_helpers
+import tools.admin.observability as _observability
+import tools.admin.observability_helpers as _observability_helpers
+import tools.admin.debug as _debug
+import tools.admin.state as _state
+import tools.admin.workflow_helpers as _workflow_helpers
 
+
+
+def _patch_config(mp, cfg):
+    mp.setattr(admin_api, "config", cfg)
+    mp.setattr(_training_helpers, "config", cfg)
+    mp.setattr(_strategy_helpers, "config", cfg)
+    mp.setattr(_coding_helpers, "config", cfg)
+    mp.setattr(_workflow_helpers, "config", cfg)
+
+def _patch_history(mp, history):
+    mp.setattr(admin_api, "_workflow_run_history", history)
+    mp.setattr(_admin_state, "_workflow_run_history", history)
+
+
+def _patch_store(mp, store):
+    mp.setattr(admin_api, "TRAJECTORY_STORE", store)
+    mp.setattr(_admin_state, "TRAJECTORY_STORE", store)
+    if hasattr(_training_helpers, "TRAJECTORY_STORE"):
+        mp.setattr(_training_helpers, "TRAJECTORY_STORE", store)
+    if hasattr(_coding_helpers, "TRAJECTORY_STORE"):
+        mp.setattr(_coding_helpers, "TRAJECTORY_STORE", store)
+    if hasattr(_workflow_helpers, "TRAJECTORY_STORE"):
+        mp.setattr(_workflow_helpers, "TRAJECTORY_STORE", store)
+    if hasattr(_observability, "TRAJECTORY_STORE"):
+        mp.setattr(_observability, "TRAJECTORY_STORE", store)
+    if hasattr(_observability_helpers, "TRAJECTORY_STORE"):
+        mp.setattr(_observability_helpers, "TRAJECTORY_STORE", store)
+    if hasattr(_debug, "TRAJECTORY_STORE"):
+        mp.setattr(_debug, "TRAJECTORY_STORE", store)
 
 class _FakeConfig:
     def __init__(self, data):
@@ -198,11 +236,10 @@ async def test_mcp_initialize_tools_list_and_call(monkeypatch):
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
     monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager())
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
     monkeypatch.setattr(admin_api, "_get_training_job_manager", lambda: _FakeTrainingManager())
-    monkeypatch.setattr(admin_api, "config", _FakeConfig({"personality": {"name": "Gazer"}}))
-    monkeypatch.setattr(
-        admin_api,
-        "_workflow_run_history",
+    _patch_config(monkeypatch, _FakeConfig({"personality": {"name": "Gazer"}}))
+    _patch_history(monkeypatch,
         collections.deque(
             [
                 {
@@ -393,9 +430,7 @@ async def test_mcp_initialize_tools_list_and_call(monkeypatch):
 @pytest.mark.asyncio
 async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
-    monkeypatch.setattr(
-        admin_api,
-        "config",
+    _patch_config(monkeypatch,
         _FakeConfig(
             {
                 "api": {
@@ -421,9 +456,7 @@ async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
     assert blocked_tools["error"]["code"] == -32010
 
     # Relax rate limit to validate resource allowlist behavior in the same test.
-    monkeypatch.setattr(
-        admin_api,
-        "config",
+    _patch_config(monkeypatch,
         _FakeConfig(
             {
                 "api": {
@@ -459,9 +492,7 @@ async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
     assert prompt_names == ["safety_review"]
 
     # Re-enable strict rate limit and verify limit code.
-    monkeypatch.setattr(
-        admin_api,
-        "config",
+    _patch_config(monkeypatch,
         _FakeConfig(
             {
                 "api": {
@@ -490,9 +521,7 @@ async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
 @pytest.mark.asyncio
 async def test_mcp_audit_and_policy_simulate(monkeypatch):
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
-    monkeypatch.setattr(
-        admin_api,
-        "config",
+    _patch_config(monkeypatch,
         _FakeConfig(
             {
                 "api": {
@@ -554,9 +583,8 @@ async def test_mcp_audit_and_policy_simulate(monkeypatch):
 @pytest.mark.asyncio
 async def test_release_gate_health_uses_configurable_thresholds(monkeypatch):
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
-    monkeypatch.setattr(
-        admin_api,
-        "config",
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
+    _patch_config(monkeypatch,
         _FakeConfig(
             {
                 "observability": {
@@ -572,9 +600,7 @@ async def test_release_gate_health_uses_configurable_thresholds(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(
-        admin_api,
-        "_workflow_run_history",
+    _patch_history(monkeypatch,
         collections.deque(
             [
                 {
@@ -627,7 +653,7 @@ async def test_publish_and_rollback_training_release(monkeypatch, tmp_path: Path
             "security": {"tool_denylist": [], "tool_max_tier": "standard"},
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     dry = await admin_api.publish_training_job(created["job_id"], {"dry_run": True, "actor": "tester"})
     assert dry["status"] == "ok"
@@ -668,6 +694,7 @@ async def test_publish_training_canary_release_gate_health_auto_rollback(monkeyp
             return {"blocked": False, "reason": "quality_gate_passed", "source": "eval:ds_canary"}
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
     monkeypatch.setattr(
         admin_api,
         "_assess_release_gate_workflow_health",
@@ -683,7 +710,7 @@ async def test_publish_training_canary_release_gate_health_auto_rollback(monkeyp
             "security": {"tool_denylist": [], "tool_max_tier": "standard"},
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     pub = await admin_api.publish_training_job(
         created["job_id"],
@@ -736,6 +763,7 @@ async def test_training_release_explanation_endpoint(monkeypatch, tmp_path: Path
             return {"blocked": False, "reason": "quality_gate_passed", "source": "eval:ds_explain"}
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
     monkeypatch.setattr(
         admin_api,
         "_assess_release_gate_workflow_health",
@@ -751,7 +779,7 @@ async def test_training_release_explanation_endpoint(monkeypatch, tmp_path: Path
             "security": {"tool_denylist": [], "tool_max_tier": "standard"},
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     pub = await admin_api.publish_training_job(
         created["job_id"],
@@ -794,6 +822,7 @@ async def test_publish_training_release_pending_approval_auto_canary_then_approv
             return {"blocked": False, "reason": "quality_gate_passed", "source": "eval:ds_pending_approval"}
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
     monkeypatch.setattr(
         admin_api,
         "_assess_release_gate_workflow_health",
@@ -818,7 +847,7 @@ async def test_publish_training_release_pending_approval_auto_canary_then_approv
             },
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     pending = await admin_api.publish_training_job(created["job_id"], {"dry_run": False, "actor": "tester"})
     assert pending["status"] == "ok"
@@ -858,6 +887,7 @@ async def test_approve_training_release_canary_auto_rollback_on_gate(monkeypatch
             return {"blocked": False, "reason": "quality_gate_passed", "source": "eval:ds_approve_rollback"}
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _GateEvalManager())
     monkeypatch.setattr(
         admin_api,
         "_assess_release_gate_workflow_health",
@@ -882,7 +912,7 @@ async def test_approve_training_release_canary_auto_rollback_on_gate(monkeypatch
             },
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     pending = await admin_api.publish_training_job(created["job_id"], {"dry_run": False, "actor": "tester"})
     assert pending["release"]["status"] == "pending_approval"
@@ -982,8 +1012,8 @@ async def test_training_bridge_export_compare_and_adapt(monkeypatch, tmp_path: P
     monkeypatch.setattr(admin_api, "_get_training_bridge_manager", lambda: bridge_manager)
     monkeypatch.setattr(admin_api, "_get_training_job_manager", lambda: training_manager)
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalForBridge())
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore({"traj_a": traj_a, "traj_b": traj_b}))
-
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalForBridge())
+    _patch_store(monkeypatch, _FakeTrajectoryStore({"traj_a": traj_a, "traj_b": traj_b}))
     first = await admin_api.create_training_bridge_export(
         {"dataset_id": "ds_bridge", "run_ids": ["traj_a"], "source": "test"}
     )
@@ -1174,7 +1204,7 @@ async def test_observability_failure_attribution_taxonomy(monkeypatch):
                 ]
             }
 
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _Store())
+    _patch_store(monkeypatch, _Store())
     monkeypatch.setattr(admin_api, "LLM_ROUTER", None)
     monkeypatch.setattr(
         admin_api,
@@ -1232,7 +1262,7 @@ def test_prepare_training_inputs_quality_stratified(monkeypatch):
         def get_trajectory(self, run_id):
             return trajectories.get(run_id)
 
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore())
+    _patch_store(monkeypatch, _FakeTrajectoryStore())
     report = {
         "results": [
             {"run_id": "r_pass", "passed": True, "composite_score": 0.95},
@@ -1263,7 +1293,7 @@ async def test_persona_eval_auto_generate_and_runs(monkeypatch, tmp_path: Path):
     runtime_manager = PersonaRuntimeManager(base_dir=tmp_path / "persona_runtime")
     monkeypatch.setattr(admin_api, "_get_persona_eval_manager", lambda: manager)
     monkeypatch.setattr(admin_api, "_get_persona_runtime_manager", lambda: runtime_manager)
-    monkeypatch.setattr(admin_api, "config", _FakeConfig({"personality": {"system_prompt": "You are Gazer."}}))
+    _patch_config(monkeypatch, _FakeConfig({"personality": {"system_prompt": "You are Gazer."}}))
 
     built = await admin_api.build_persona_eval_dataset({"name": "auto_case"})
     dataset_id = built["dataset"]["id"]
@@ -1304,7 +1334,7 @@ async def test_persona_runtime_versions_signals_and_rollback(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(admin_api, "_get_persona_runtime_manager", lambda: runtime_manager)
     monkeypatch.setattr(admin_api, "_get_persona_eval_manager", lambda: persona_manager)
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     yaml_text = """
 initial_state: IDLE
@@ -1417,7 +1447,7 @@ async def test_persona_runtime_ab_correction_policy(monkeypatch, tmp_path: Path)
     )
     monkeypatch.setattr(admin_api, "_get_persona_runtime_manager", lambda: runtime_manager)
     monkeypatch.setattr(admin_api, "_get_persona_eval_manager", lambda: persona_manager)
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
+    _patch_config(monkeypatch, fake_cfg)
 
     simulated = await admin_api.simulate_persona_runtime_correction(
         {"content": "I am just a generic AI. sure, done", "language": "en", "strategy": "rewrite", "ab_key": "u1"}
@@ -1742,10 +1772,11 @@ async def test_send_trajectory_resume_enqueues_chat_message(monkeypatch):
 
     fake_q = _FakeInputQueue()
     fake_task_store = _FakeTaskRunStore()
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeStore())
+    _patch_store(monkeypatch, _FakeStore())
     monkeypatch.setattr(admin_api, "API_QUEUES", {"input": fake_q, "output": None})
+    monkeypatch.setattr(_admin_state, "API_QUEUES", {"input": fake_q, "output": None})
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
-
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     res = await admin_api.send_trajectory_resume("traj_a", {"session_id": "web-main"})
     assert res["status"] == "enqueued"
     assert res["task_id"] == "task_1"
@@ -1770,10 +1801,11 @@ async def test_replay_execute_creates_task_and_enqueues(monkeypatch):
 
     fake_q = _FakeInputQueue()
     fake_task_store = _FakeTaskRunStore()
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeStore())
+    _patch_store(monkeypatch, _FakeStore())
     monkeypatch.setattr(admin_api, "API_QUEUES", {"input": fake_q, "output": None})
+    monkeypatch.setattr(_admin_state, "API_QUEUES", {"input": fake_q, "output": None})
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
-
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     res = await admin_api.replay_execute_trajectory(
         "traj_a",
         {"session_id": "web-main", "compare_run_id": "traj_b"},
@@ -1790,8 +1822,9 @@ async def test_task_run_endpoints_and_coding_loop(monkeypatch):
     fake_q = _FakeInputQueue()
     task = fake_task_store.create(kind="resume_send", run_id="traj_a", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "API_QUEUES", {"input": fake_q, "output": None})
-
+    monkeypatch.setattr(_admin_state, "API_QUEUES", {"input": fake_q, "output": None})
     listed = await admin_api.list_task_runs(limit=20, status=None, kind=None)
     assert listed["status"] == "ok"
     assert listed["total"] >= 1
@@ -1811,7 +1844,11 @@ async def test_task_run_coding_loop_deterministic_success(monkeypatch, tmp_path:
     fake_task_store = _FakeTaskRunStore()
     task = fake_task_store.create(kind="resume_send", run_id="traj_a", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -1839,9 +1876,13 @@ async def test_task_run_coding_loop_deterministic_failure_rolls_back(monkeypatch
     fake_task_store = _FakeTaskRunStore()
     task = fake_task_store.create(kind="resume_send", run_id="traj_a", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        admin_api,
+        _coding_helpers,
         "_run_verify_command",
         lambda command, cwd, timeout_seconds: {"command": command, "ok": False, "returncode": 1},
     )
@@ -1901,7 +1942,11 @@ async def test_task_run_coding_loop_deterministic_supports_advanced_operations(m
     fake_task_store = _FakeTaskRunStore()
     task = fake_task_store.create(kind="resume_send", run_id="traj_ops", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -1932,7 +1977,11 @@ async def test_task_run_coding_loop_deterministic_atomic_apply(monkeypatch, tmp_
     fake_task_store = _FakeTaskRunStore()
     task = fake_task_store.create(kind="resume_send", run_id="traj_atomic", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -1962,15 +2011,18 @@ async def test_task_run_coding_loop_records_recovery_count(monkeypatch, tmp_path
     fake_task_store = _FakeTaskRunStore()
     task = fake_task_store.create(kind="resume_send", run_id="traj_retry", session_id="web-main")
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
-
+    monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
     calls = {"n": 0}
 
     def _flaky_verify(command, cwd, timeout_seconds):
         calls["n"] += 1
         return {"command": command, "ok": calls["n"] >= 2, "returncode": 0 if calls["n"] >= 2 else 1}
 
-    monkeypatch.setattr(admin_api._shared, "_run_verify_command", _flaky_verify)
+    monkeypatch.setattr(_coding_helpers, "_run_verify_command", _flaky_verify)
     admin_api._coding_quality_history.clear()
 
     target = tmp_path / "retry.txt"
@@ -2028,7 +2080,7 @@ async def test_coding_benchmark_run_and_history_and_leaderboard(monkeypatch):
 
 
 def test_maybe_run_scheduled_coding_benchmark_disabled(monkeypatch):
-    monkeypatch.setattr(admin_api, "config", _FakeConfig({"security": {"coding_benchmark_scheduler": {"enabled": False}}}))
+    _patch_config(monkeypatch, _FakeConfig({"security": {"coding_benchmark_scheduler": {"enabled": False}}}))
     res = admin_api._maybe_run_scheduled_coding_benchmark()
     assert res["ran"] is False
     assert res["reason"] == "disabled"
@@ -2050,8 +2102,8 @@ def test_maybe_run_scheduled_coding_benchmark_due_and_interval(monkeypatch):
             }
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_run_coding_benchmark_suite", lambda payload: {"name": payload.get("name"), "score": 1.0})
+    _patch_config(monkeypatch, fake_cfg)
+    monkeypatch.setattr(_coding_helpers, "_run_coding_benchmark_suite", lambda payload: {"name": payload.get("name"), "score": 1.0})
     admin_api._coding_benchmark_scheduler_state["last_run_ts"] = 0.0
 
     ran = admin_api._maybe_run_scheduled_coding_benchmark()
@@ -2077,8 +2129,8 @@ async def test_coding_benchmark_scheduler_endpoints(monkeypatch):
             }
         }
     )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_maybe_run_scheduled_coding_benchmark", lambda force=False: {"ran": bool(force), "summary": {"name": "sched_suite"}})
+    _patch_config(monkeypatch, fake_cfg)
+    monkeypatch.setattr(_debug, "_maybe_run_scheduled_coding_benchmark", lambda force=False: {"ran": bool(force), "summary": {"name": "sched_suite"}})
 
     status = await admin_api.get_coding_benchmark_scheduler_status()
     assert status["status"] == "ok"
@@ -2185,6 +2237,7 @@ async def test_auto_link_coding_benchmark_release_gate_endpoint(monkeypatch):
             return None
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalForCodingBench())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalForCodingBench())
     admin_api._coding_benchmark_history.clear()
     admin_api._coding_benchmark_history.append({"name": "s1", "score": 0.3, "success_cases": 1, "total_cases": 10})
 
@@ -2222,6 +2275,7 @@ async def test_run_coding_benchmark_with_auto_link(monkeypatch):
             return None
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalForRun())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalForRun())
     admin_api._coding_benchmark_history.clear()
 
     run = await admin_api.run_coding_benchmark(
@@ -2252,10 +2306,11 @@ async def test_auto_resume_trajectory_sets_auto_mode(monkeypatch):
 
     fake_q = _FakeInputQueue()
     fake_task_store = _FakeTaskRunStore()
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeStore())
+    _patch_store(monkeypatch, _FakeStore())
     monkeypatch.setattr(admin_api, "API_QUEUES", {"input": fake_q, "output": None})
+    monkeypatch.setattr(_admin_state, "API_QUEUES", {"input": fake_q, "output": None})
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", fake_task_store)
-
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", fake_task_store)
     res = await admin_api.auto_resume_trajectory("traj_a", {"session_id": "web-main"})
     assert res["status"] == "enqueued"
     assert res["mode"] == "auto"
@@ -2266,7 +2321,9 @@ async def test_auto_resume_trajectory_sets_auto_mode(monkeypatch):
 @pytest.mark.asyncio
 async def test_task_run_coding_loop_not_found(monkeypatch):
     monkeypatch.setattr(admin_api, "TASK_RUN_STORE", _FakeTaskRunStore())
+    monkeypatch.setattr(_coding_helpers, "TASK_RUN_STORE", _FakeTaskRunStore())
     monkeypatch.setattr(admin_api, "API_QUEUES", {"input": _FakeInputQueue(), "output": None})
+    monkeypatch.setattr(_admin_state, "API_QUEUES", {"input": _FakeInputQueue(), "output": None})
     with pytest.raises(admin_api.HTTPException) as exc:
         await admin_api.run_task_coding_loop("missing_task", {"session_id": "web-main"})
     assert exc.value.status_code == 404
@@ -2361,6 +2418,7 @@ async def test_auto_link_release_gate_endpoint(monkeypatch):
             return None
 
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalForEndpoint())
+    monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalForEndpoint())
     monkeypatch.setattr(admin_api, "_build_workflow_observability_metrics", lambda limit=200: {"total_runs": 0})
     monkeypatch.setattr(admin_api, "_latest_persona_consistency_signal", lambda: {})
     monkeypatch.setattr(
