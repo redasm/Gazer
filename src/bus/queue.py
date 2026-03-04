@@ -109,7 +109,12 @@ class MessageBus:
                     
                 subscribers = self._outbound_subscribers.get(msg.channel, [])
                 if not subscribers:
-                    pass
+                    logger.warning(
+                        "No outbound subscribers for channel=%s chat_id=%s (registered channels: %s)",
+                        msg.channel,
+                        msg.chat_id,
+                        list(self._outbound_subscribers.keys()),
+                    )
                     
                 for callback in subscribers:
                     await self._dispatch_with_retry(callback, msg)

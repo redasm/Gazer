@@ -264,6 +264,7 @@ app = FastAPI(
     title="Gazer Admin API",
     description="Internal administration API for Gazer",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 def get_ctx(request: Request) -> AppContext:

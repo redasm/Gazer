@@ -141,7 +141,6 @@ pytest -q
 
 - 文档中心：[`docs/README.md`](docs/README.md)
 - 模块文档总览：[`docs/modules/index.md`](docs/modules/index.md)
-- Soul 架构重构说明：[`doc/soul_architecture_reform.md`](doc/soul_architecture_reform.md)、[`doc/soul_architecture_reform_patch_v1.2.md`](doc/soul_architecture_reform_patch_v1.2.md)
 
 ## 许可证
 
