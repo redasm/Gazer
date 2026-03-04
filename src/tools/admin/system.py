@@ -11,25 +11,33 @@ from runtime.resilience import classify_error_message
 from tools.admin._shared import (
     config, _resolve_export_output_path,
     _coding_quality_history, _coding_benchmark_history, _coding_benchmark_scheduler_state,
-    _workflow_run_history, _policy_audit_buffer, _FAVICON_ICO_PATH,
+    _workflow_run_history, _policy_audit_buffer, _FAVICON_ICO_PATH, _WEB_ONBOARDING_GUIDE_PATH, _is_success_status, _merge_error_code_counts, _parse_tool_error_result,
     get_usage_tracker, get_prompt_cache_tracker, get_tool_batching_tracker,
     get_tool_registry, get_trajectory_store, get_llm_router,
     get_canvas_state, get_orchestrator,
 )
+from tools.registry import ToolSafetyTier
 # Backward-compat aliases for static helpers that are NOT runtime-injected
 from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER, CANVAS_STATE, ORCHESTRATOR  # noqa: F401
 from tools.admin.auth import verify_admin_token
 from tools.admin._shared import _append_policy_audit, get_provider_registry, get_owner_manager
 import tools.admin._shared as _shared
 from security.pairing import get_pairing_manager
-
 def _get_training_job_manager():
-    from eval.trainer import TrainingJobManager
-    return TrainingJobManager.get_instance()
+    global _TRAINING_JOB_MANAGER
+    if _TRAINING_JOB_MANAGER is None:
+        from eval.trainer import TrainingJobManager
+        _TRAINING_JOB_MANAGER = TrainingJobManager()
+    return _TRAINING_JOB_MANAGER
+_TRAINING_JOB_MANAGER = None
 
 def _get_training_bridge_manager():
-    from eval.training_bridge import TrainingBridgeManager
-    return TrainingBridgeManager.get_instance()
+    global _TRAINING_BRIDGE_MANAGER
+    if _TRAINING_BRIDGE_MANAGER is None:
+        from eval.training_bridge import TrainingBridgeManager
+        _TRAINING_BRIDGE_MANAGER = TrainingBridgeManager()
+    return _TRAINING_BRIDGE_MANAGER
+_TRAINING_BRIDGE_MANAGER = None
 app = APIRouter()
 logger = logging.getLogger('system')
 
@@ -176,10 +184,10 @@ async def _invoke_gui_action_via_tool_registry(action: str, args: Dict[str, Any]
         "node_invoke",
         payload,
         max_tier=ToolSafetyTier.PRIVILEGED,
-        confirmed=False,
     )
     raw = str(text or "")
     if raw.startswith("Error"):
+        from tools.admin._shared import _parse_tool_error_result
         parsed = _parse_tool_error_result(raw)
         return {
             "ok": False,
@@ -1415,3 +1423,34 @@ async def get_tool_governance_health(limit: int = 50):
         "tool_governance": _get_tool_governance_snapshot(limit=limit),
     }
     return response
+
+async def set_llm_router_strategy(payload: dict) -> dict:
+    template_name = payload.get("template")
+    if not template_name:
+        return {"ok": False, "status": "error", "message": "template name required"}
+    try:
+        from llm.router import resolve_router_strategy_template
+        template = resolve_router_strategy_template(template_name)
+    except Exception as e:
+        return {"ok": False, "status": "error", "message": str(e)}
+        
+    router = get_llm_router()
+    router.set_strategy(template["strategy"])
+    if "budget" in template:
+        router.set_budget_policy(template["budget"])
+    if "outlier_ejection" in template:
+        router.set_outlier_policy(template["outlier_ejection"])
+    
+    config.set_many({
+        "models.router.strategy": template["strategy"],
+        "models.router.strategy_template": template_name,
+        "models.router.budget": template.get("budget", {}),
+        "models.router.outlier_ejection": template.get("outlier_ejection", {})
+    })
+    
+    return {
+        "ok": True,
+        "status": "ok", 
+        "strategy": template["strategy"],
+        "template": template_name
+    }

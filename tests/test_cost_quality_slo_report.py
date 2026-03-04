@@ -74,14 +74,13 @@ async def test_cost_quality_slo_build_and_export(monkeypatch, tmp_path: Path):
         }
     )
 
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore())
+    monkeypatch.setattr("tools.admin.observability.config", fake_cfg)
+    monkeypatch.setattr("tools.admin.observability.get_trajectory_store", lambda: _FakeTrajectoryStore())
     monkeypatch.setattr(
-        admin_api,
-        "USAGE_TRACKER",
-        SimpleNamespace(summary=lambda: {"prompt_tokens": 1000, "completion_tokens": 3000, "total_tokens": 4000}),
+        "tools.admin.observability.get_usage_tracker",
+        lambda: SimpleNamespace(summary=lambda: {"prompt_tokens": 1000, "completion_tokens": 3000, "total_tokens": 4000}),
     )
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.observability.get_llm_router", lambda: _FakeRouter())
 
     report_payload = await admin_api.get_cost_quality_slo(window=20)
     report = report_payload["report"]

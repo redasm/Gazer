@@ -816,7 +816,7 @@ async def test_agent_loop_applies_tool_max_tier_to_definitions(monkeypatch, tmp_
     )
     monkeypatch.setattr(config_manager, "config", fake_config)
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -852,7 +852,7 @@ async def test_agent_loop_applies_group_policy_to_definitions(monkeypatch, tmp_p
     fake_config = _FakeConfig(fake_data)
     monkeypatch.setattr(config_manager, "config", fake_config)
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -888,7 +888,7 @@ async def test_agent_loop_records_basic_trajectory(monkeypatch, tmp_path):
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -925,7 +925,7 @@ async def test_agent_loop_normalizes_string_tool_arguments(monkeypatch, tmp_path
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -978,7 +978,7 @@ async def test_agent_loop_non_owner_cannot_execute_privileged_tool(monkeypatch, 
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -1031,7 +1031,7 @@ async def test_agent_loop_parallel_tool_errors_do_not_break_response(monkeypatch
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -1081,7 +1081,7 @@ async def test_agent_loop_tool_timeout_returns_error_and_recovers(monkeypatch, t
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -1128,7 +1128,7 @@ async def test_agent_loop_retries_llm_exception_and_recovers(monkeypatch, tmp_pa
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -1165,7 +1165,7 @@ async def test_agent_loop_returns_readable_message_when_llm_retries_exhausted(mo
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -1204,7 +1204,7 @@ async def test_agent_loop_llm_retry_budget_exhausted(monkeypatch, tmp_path):
     }
     monkeypatch.setattr(config_manager, "config", _FakeConfig(fake_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 

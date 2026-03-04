@@ -373,13 +373,11 @@ class TestFlowEngine:
             {"msg": "world"},
             max_tier=sentinel_tier,
             policy=sentinel_policy,
-            confirmed=True,
         )
         assert result.status == "completed"
         call = mock_tool_registry.execute.await_args_list[0]
         assert call.kwargs["max_tier"] is sentinel_tier
         assert call.kwargs["policy"] is sentinel_policy
-        assert call.kwargs["confirmed"] is True
 
     @pytest.mark.asyncio
     async def test_run_unknown_flow(self, engine):
@@ -925,7 +923,6 @@ class TestFlowRunTool:
             args={"msg": "world"},
             _access_max_tier=sentinel_tier,
             _access_policy=sentinel_policy,
-            _access_confirmed=True,
         )
         parsed = json.loads(result)
         assert parsed["status"] == "completed"
@@ -934,7 +931,6 @@ class TestFlowRunTool:
             {"msg": "world"},
             max_tier=sentinel_tier,
             policy=sentinel_policy,
-            confirmed=True,
         )
 
     @pytest.mark.asyncio

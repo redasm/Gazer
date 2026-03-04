@@ -29,8 +29,11 @@ class _FakeConfig:
 
 
 class _StubToolRegistry:
-    def get_definitions(self):
+    def get_definitions(self, **kwargs):
         return []
+
+    def __len__(self):
+        return 0
 
     async def execute(self, _name: str, _args: dict):
         return {"ok": True}

@@ -355,7 +355,7 @@ async def create_online_policy_candidate(payload: Dict[str, Any]):
             "job_id": created.get("job_id", ""),
         },
     )
-    return {"status": "ok", "candidate": OnlinePolicyLoopManager._compact(created)}
+    return {"status": "ok", "candidate": loop_manager._compact(created)}
 
 @app.post("/debug/online-policy/candidates/{candidate_id}/offpolicy-eval", dependencies=[Depends(verify_admin_token)])
 async def run_online_policy_offpolicy_eval(candidate_id: str, payload: Optional[Dict[str, Any]] = None):
@@ -427,7 +427,7 @@ async def run_online_policy_gate_check(candidate_id: str, payload: Optional[Dict
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"status": "ok", "candidate": OnlinePolicyLoopManager._compact(updated)}
+    return {"status": "ok", "candidate": manager._compact(updated)}
 
 @app.post("/debug/online-policy/candidates/{candidate_id}/review", dependencies=[Depends(verify_admin_token)])
 async def review_online_policy_candidate(candidate_id: str, payload: Dict[str, Any]):
@@ -452,7 +452,7 @@ async def review_online_policy_candidate(candidate_id: str, payload: Dict[str, A
             "reviewer": reviewer,
         },
     )
-    return {"status": "ok", "candidate": OnlinePolicyLoopManager._compact(updated)}
+    return {"status": "ok", "candidate": manager._compact(updated)}
 
 @app.post("/debug/online-policy/candidates/{candidate_id}/publish", dependencies=[Depends(verify_admin_token)])
 async def publish_online_policy_candidate(candidate_id: str, payload: Dict[str, Any]):
@@ -540,7 +540,7 @@ async def publish_online_policy_candidate(candidate_id: str, payload: Dict[str, 
     )
     return {
         "status": "ok",
-        "candidate": OnlinePolicyLoopManager._compact(published),
+        "candidate": loop_manager._compact(published),
         "release": release,
         "summary": diff.get("summary", {}),
     }

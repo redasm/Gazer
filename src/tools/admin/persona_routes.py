@@ -30,6 +30,8 @@ from tools.admin._shared import (
     PERSONA_EVAL_MANAGER, PERSONA_RUNTIME_MANAGER,
 )
 from tools.admin.auth import verify_admin_token
+from tools.registry import ToolPolicy, normalize_tool_policy
+from agent.persona_tool_policy import evaluate_persona_tool_policy_linkage
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -67,6 +69,8 @@ def _lazy(name: str):
             "_build_persona_memory_joint_drift_report": ("tools.admin.memory", "_build_persona_memory_joint_drift_report"),
             "_get_memory_manager": ("tools.admin.memory", "_get_memory_manager"),
             "_append_alert": ("tools.admin.observability", "_append_alert"),
+            "_resolve_global_policy": ("tools.admin.config_routes", "_resolve_global_policy"),
+            "_policy_to_payload": ("tools.admin.config_routes", "_policy_to_payload"),
         }
         mod_path, attr = _LAZY_MAP[name]
         import importlib
@@ -80,6 +84,8 @@ def _build_memory_extraction_quality_report(*a, **kw): return _lazy("_build_memo
 def _build_persona_memory_joint_drift_report(*a, **kw): return _lazy("_build_persona_memory_joint_drift_report")(*a, **kw)
 def _get_memory_manager(*a, **kw): return _lazy("_get_memory_manager")(*a, **kw)
 def _append_alert(*a, **kw): return _lazy("_append_alert")(*a, **kw)
+def _resolve_global_policy(*a, **kw): return _lazy("_resolve_global_policy")(*a, **kw)
+def _policy_to_payload(*a, **kw): return _lazy("_policy_to_payload")(*a, **kw)
 
 
 @app.get("/debug/persona/mental-process", dependencies=[Depends(verify_admin_token)])

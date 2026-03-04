@@ -56,7 +56,8 @@ async def test_admin_router_strategy_supports_template(monkeypatch):
             }
 
     fake_cfg = _FakeConfig()
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _Router())
+    monkeypatch.setattr("tools.admin.state.LLM_ROUTER", _Router())
+    monkeypatch.setattr("tools.admin.state.get_app_context", lambda: None)
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
     result = await admin_api.set_llm_router_strategy({"template": "latency_first"})

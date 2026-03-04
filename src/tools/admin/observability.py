@@ -17,9 +17,11 @@ from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER  # n
 from tools.admin.auth import verify_admin_token
 from tools.admin._shared import _append_policy_audit
 import tools.admin._shared as _shared
-from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary
+from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary, _invoke_gui_action_via_tool_registry
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
 from runtime.resilience import classify_error_message
+from tools.admin.memory import _resolve_openviking_backend_dir
+from memory.quality_eval import build_memory_quality_report
 
 app = APIRouter()
 
@@ -547,6 +549,7 @@ def _build_product_health_weekly_report(
     )
     persona_drift: Dict[str, Any] = {}
     if include_persona_drift:
+        from tools.admin.memory import _build_persona_memory_joint_drift_report
         joint = _build_persona_memory_joint_drift_report(
             window_days=safe_window_days,
             source=str(persona_source or "persona_eval"),

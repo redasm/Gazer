@@ -200,11 +200,12 @@ async def test_tool_batching_observability_endpoint(monkeypatch):
     )
 
     monkeypatch.setattr(
-        admin_api,
-        "USAGE_TRACKER",
-        SimpleNamespace(summary=lambda: {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70}),
+        "tools.admin.system.get_usage_tracker",
+        lambda: SimpleNamespace(summary=lambda: {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70}),
     )
-    monkeypatch.setattr(admin_api, "TOOL_BATCHING_TRACKER", tracker)
+    monkeypatch.setattr("tools.admin.system.get_tool_batching_tracker", lambda: tracker)
+    monkeypatch.setattr("tools.admin._shared.get_tool_batching_tracker", lambda: tracker)
+    monkeypatch.setattr("tools.admin.state.get_tool_batching_tracker", lambda: tracker)
 
     usage = await admin_api.get_usage_stats()
     assert usage["status"] == "ok"

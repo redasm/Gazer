@@ -87,8 +87,11 @@ class _StubToolRegistry:
             }
         ]
 
-    def get_definitions(self):
+    def get_definitions(self, **kwargs):
         return self._definitions
+
+    def __len__(self):
+        return len(self._definitions)
 
     async def execute(self, name: str, args: dict, *, sender_id: str = "", channel: str = ""):
         self.calls.append((name, args, sender_id, channel))

@@ -197,7 +197,6 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
             tool_name,
             arguments,
             max_tier=ToolSafetyTier.PRIVILEGED,
-            confirmed=False,
         )
         is_error = str(result).startswith("Error")
         return _mcp_response_ok(

@@ -483,6 +483,7 @@ async def test_workflow_graph_observability_metrics_include_workflow(monkeypatch
     await admin_api.run_workflow_graph(workflow_id, {"input": "hello"})
     await admin_api.run_workflow_graph(workflow_id, {"input": "world"})
     monkeypatch.setattr(_shared, "LLM_ROUTER", None)
+    monkeypatch.setattr(observability, "get_llm_router", lambda: None)
 
     metrics = await observability.get_observability_metrics(limit=20)
     assert metrics["status"] == "ok"

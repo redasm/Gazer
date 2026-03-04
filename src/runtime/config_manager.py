@@ -226,10 +226,14 @@ class ConfigManager:
             if isinstance(models, dict):
                 if "active_profile" in models:
                     deprecated_paths.append("models.active_profile")
+                if "embedding_provider" in models:
+                    deprecated_paths.append("models.embedding_provider")
+                if "embedding_model" in models:
+                    deprecated_paths.append("models.embedding_model")
 
         if deprecated_paths:
             joined = ", ".join(deprecated_paths)
-            raise ValueError(
+            raise RuntimeError(
                 "Deprecated config keys detected: "
                 f"{joined}. Use agents.defaults.model.primary/fallbacks."
             )

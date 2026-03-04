@@ -59,7 +59,9 @@ async def test_agents_md_effective_endpoint_returns_overlay_debug(monkeypatch, t
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(admin_api, "_PROJECT_ROOT", workspace)
+    monkeypatch.setattr("tools.admin.debug._PROJECT_ROOT", workspace, raising=False)
+    monkeypatch.setattr("tools.admin.policy._PROJECT_ROOT", workspace, raising=False)
+    monkeypatch.setattr("tools.admin.config_routes._PROJECT_ROOT", workspace, raising=False)
 
     payload = await admin_api.get_agents_md_effective("apps")
     assert payload["status"] == "ok"
@@ -87,7 +89,9 @@ async def test_agents_md_lint_endpoint(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(admin_api, "_PROJECT_ROOT", workspace)
+    monkeypatch.setattr("tools.admin.debug._PROJECT_ROOT", workspace, raising=False)
+    monkeypatch.setattr("tools.admin.policy._PROJECT_ROOT", workspace, raising=False)
+    monkeypatch.setattr("tools.admin.config_routes._PROJECT_ROOT", workspace, raising=False)
     payload = await admin_api.run_agents_md_lint({"agents_target_dir": "."})
     assert payload["status"] == "ok"
     assert payload["summary"]["error"] >= 1

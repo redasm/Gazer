@@ -36,7 +36,9 @@ class _StubScreenSource(ContextSource):
 @patch("perception.capture.ModelRegistry")
 @patch("perception.capture.LLMCognitiveStep")
 def test_capture_manager_structured_observation_contract(mock_llm_cls, mock_registry):
-    mock_registry.resolve_model.return_value = ("key", "url", "model")
+    mock_registry.resolve_model.return_value = ("key", "url", "model", {})
+    mock_registry.resolve_model_ref.return_value = ("provider", "model")
+    mock_registry.get_provider_config.return_value = {}
     vlm_instance = MagicMock()
     vlm_instance.process_with_image = AsyncMock(return_value="Browser window. Search page is active.")
     mock_llm_cls.return_value = vlm_instance

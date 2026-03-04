@@ -32,7 +32,7 @@ class _Provider:
 def _build_loop(monkeypatch, workspace: Path, tool_policy: dict | None = None) -> AgentLoop:
     monkeypatch.setattr(config_manager, "config", _FakeConfig({"security": {"tool_groups": {}}}))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
     return AgentLoop(

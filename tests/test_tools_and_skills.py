@@ -13,6 +13,7 @@ os.chdir(project_root)
 
 def test_all_tools_register():
     """All Tool ABC classes can be instantiated and registered in ToolRegistry."""
+    from tools.base import Tool, ToolSafetyTier
     from tools.registry import ToolRegistry
     from tools.coding import (
         ExecTool, ReadFileTool, WriteFileTool, EditFileTool,
@@ -51,11 +52,13 @@ def test_all_tools_register():
         registry.register(tool)
 
     # Verify count
-    assert len(registry) == 16, f"Expected 16 tools, got {len(registry)}"
+    assert len(registry) == 16, f"Expected 16 registered tools, got {len(registry)}"
 
     # Verify all have valid schemas
     definitions = registry.get_definitions()
-    assert len(definitions) == 16
+    # PRIVILEGED tools are filtered by owner_only fail-closed when no sender context
+    visible_count = sum(1 for t in tools if t.safety_tier != ToolSafetyTier.PRIVILEGED)
+    assert len(definitions) == visible_count, f"Expected {visible_count} visible definitions, got {len(definitions)}"
 
     for defn in definitions:
         assert defn["type"] == "function"

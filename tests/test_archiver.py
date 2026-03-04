@@ -146,6 +146,7 @@ class TestArchiveDay:
 
         mock_result = MagicMock()
         mock_result.content = '```json\n{"knowledge": [{"category": "TOPIC", "subject": "Test", "content": "A fact."}]}\n```'
+        archiver.llm = MagicMock()
         archiver.llm.run = AsyncMock(return_value=mock_result)
 
         await archiver.archive_day("2026-02-05")

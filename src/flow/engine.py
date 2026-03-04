@@ -94,7 +94,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> FlowResult:
         """Run a workflow from the beginning.
 
@@ -129,7 +128,6 @@ class FlowEngine:
             retry_budget=budget,
             max_tier=max_tier,
             policy=policy,
-            confirmed=confirmed,
         )
 
     async def resume_interrupted(
@@ -138,7 +136,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> FlowResult:
         """Resume a workflow from the latest persisted checkpoint."""
         flow = self._flows.get(flow_name)
@@ -163,7 +160,6 @@ class FlowEngine:
             retry_budget=budget,
             max_tier=max_tier,
             policy=policy,
-            confirmed=confirmed,
         )
 
     # ------------------------------------------------------------------
@@ -176,7 +172,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> FlowResult:
         """Resume a workflow past an approval gate.
 
@@ -214,7 +209,6 @@ class FlowEngine:
             retry_budget=budget,
             max_tier=max_tier,
             policy=policy,
-            confirmed=confirmed,
         )
 
     # ------------------------------------------------------------------
@@ -300,7 +294,6 @@ class FlowEngine:
                 retry_budget,
                 max_tier=max_tier,
                 policy=policy,
-                confirmed=confirmed,
             )
 
             ctx.steps[step.id] = result
@@ -357,7 +350,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> StepResult:
         retries = max(0, int(step.retry_max or 0))
         backoff = max(0, int(step.retry_backoff_ms or 0))
@@ -368,7 +360,6 @@ class FlowEngine:
                 deadline,
                 max_tier=max_tier,
                 policy=policy,
-                confirmed=confirmed,
             )
             if not result.error:
                 return result
@@ -390,7 +381,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> StepResult:
         if step.each:
             coro = self._execute_each(
@@ -399,7 +389,6 @@ class FlowEngine:
                 deadline,
                 max_tier=max_tier,
                 policy=policy,
-                confirmed=confirmed,
             )
         else:
             coro = self._execute_single_step(
@@ -407,7 +396,6 @@ class FlowEngine:
                 ctx,
                 max_tier=max_tier,
                 policy=policy,
-                confirmed=confirmed,
             )
 
         if step.timeout_ms is None:
@@ -427,7 +415,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> StepResult:
         """Execute one tool or LLM-task step."""
         try:
@@ -441,7 +428,6 @@ class FlowEngine:
                     resolved_args,
                     max_tier=max_tier,
                     policy=policy,
-                    confirmed=confirmed,
                 )
             else:
                 # No tool — treat as a pass-through (args become output)
@@ -458,7 +444,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> StepResult:
         """Delegate to ToolRegistry."""
         result = await self._tools.execute(
@@ -466,7 +451,6 @@ class FlowEngine:
             params,
             max_tier=max_tier,
             policy=policy,
-            confirmed=confirmed,
         )
         # ToolRegistry.execute always returns a string
         if isinstance(result, str) and result.startswith("Error"):
@@ -504,7 +488,6 @@ class FlowEngine:
         *,
         max_tier: Optional[Any] = None,
         policy: Optional[Any] = None,
-        confirmed: bool = False,
     ) -> StepResult:
         """Execute a step once per item in the ``each`` iterable."""
         items = interpolate(step.each, ctx)
@@ -523,7 +506,6 @@ class FlowEngine:
                 ctx,
                 max_tier=max_tier,
                 policy=policy,
-                confirmed=confirmed,
             )
             if single.error:
                 return StepResult(error=f"each[{idx}]: {single.error}")

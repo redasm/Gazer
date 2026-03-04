@@ -272,7 +272,7 @@ class LiteLLMProvider(LLMProvider):
 
     @staticmethod
     def _resolve_reasoning_supported(settings: Dict[str, Any]) -> Optional[bool]:
-        for key in ("reasoning_supported", "reasoningSupported", "reasoning"):
+        for key in ("reasoning_supported", "reasoningSupported"):
             if key not in settings:
                 continue
             raw = settings.get(key)

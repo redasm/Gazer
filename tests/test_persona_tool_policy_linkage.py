@@ -99,7 +99,7 @@ def _build_runtime_cfg() -> Dict[str, Any]:
 def test_persona_tool_policy_linkage_applies_dynamic_deny(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(config_manager, "config", _FakeConfig(_build_runtime_cfg()))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -111,7 +111,7 @@ def test_persona_tool_policy_linkage_applies_dynamic_deny(monkeypatch, tmp_path:
                 "created_at": time.time(),
             }
 
-    monkeypatch.setattr("agent.loop.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
     loop = AgentLoop(
         bus=MessageBus(),
         provider=_Provider(),
@@ -130,7 +130,7 @@ def test_persona_tool_policy_linkage_applies_dynamic_deny(monkeypatch, tmp_path:
 def test_persona_tool_policy_linkage_ignores_stale_signal(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(config_manager, "config", _FakeConfig(_build_runtime_cfg()))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -142,7 +142,7 @@ def test_persona_tool_policy_linkage_ignores_stale_signal(monkeypatch, tmp_path:
                 "created_at": time.time() - 7200,
             }
 
-    monkeypatch.setattr("agent.loop.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
     loop = AgentLoop(
         bus=MessageBus(),
         provider=_Provider(),

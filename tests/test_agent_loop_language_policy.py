@@ -65,7 +65,7 @@ def _make_loop(monkeypatch, tmp_path, response: LLMResponse) -> AgentLoop:
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
     return AgentLoop(
@@ -124,7 +124,7 @@ async def test_agent_loop_persona_runtime_guard_can_rewrite(monkeypatch, tmp_pat
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -154,7 +154,7 @@ async def test_agent_loop_persona_runtime_guard_can_rewrite(monkeypatch, tmp_pat
                 },
             }
 
-    monkeypatch.setattr("agent.loop.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
 
     loop = AgentLoop(
         bus=MessageBus(),
@@ -191,7 +191,7 @@ def test_agent_loop_persona_runtime_critical_signal_downgrades_tool_tier(monkeyp
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -205,7 +205,7 @@ def test_agent_loop_persona_runtime_critical_signal_downgrades_tool_tier(monkeyp
                 "created_at": time.time(),
             }
 
-    monkeypatch.setattr("agent.loop.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
     loop = AgentLoop(
         bus=MessageBus(),
         provider=_Provider(LLMResponse(content="ok", tool_calls=[], error=False)),
@@ -242,7 +242,7 @@ def test_agent_loop_persona_runtime_warning_high_risk_can_downgrade_tool_tier(mo
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -256,7 +256,7 @@ def test_agent_loop_persona_runtime_warning_high_risk_can_downgrade_tool_tier(mo
                 "created_at": time.time(),
             }
 
-    monkeypatch.setattr("agent.loop.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
     loop = AgentLoop(
         bus=MessageBus(),
         provider=_Provider(LLMResponse(content="ok", tool_calls=[], error=False)),

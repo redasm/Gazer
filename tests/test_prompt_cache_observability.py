@@ -98,14 +98,12 @@ async def test_prompt_cache_tracks_hit_on_llm_retry(monkeypatch, tmp_path: Path)
 @pytest.mark.asyncio
 async def test_usage_stats_includes_prompt_cache(monkeypatch):
     monkeypatch.setattr(
-        admin_api,
-        "USAGE_TRACKER",
-        SimpleNamespace(summary=lambda: {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}),
+        "tools.admin.system.get_usage_tracker",
+        lambda: SimpleNamespace(summary=lambda: {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}),
     )
     monkeypatch.setattr(
-        admin_api,
-        "PROMPT_CACHE_TRACKER",
-        SimpleNamespace(summary=lambda: {"enabled": True, "hits": 3, "lookups": 5}),
+        "tools.admin.system.get_prompt_cache_tracker",
+        lambda: SimpleNamespace(summary=lambda: {"enabled": True, "hits": 3, "lookups": 5}),
     )
 
     payload = await admin_api.get_usage_stats()

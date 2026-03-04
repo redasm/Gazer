@@ -96,7 +96,8 @@ def test_remote_source_drops_old_frames():
 @patch("perception.capture.LLMCognitiveStep")
 def test_capture_manager_register_and_observation(mock_llm_cls, mock_registry):
     """CaptureManager should use the VLM and return a description."""
-    mock_registry.resolve_model.return_value = ("key", "url", "model")
+    mock_registry.resolve_model.return_value = ("key", "url", "model", {})
+    mock_registry.resolve_model_ref.return_value = ("provider", "model")
     vlm_instance = MagicMock()
     vlm_instance.process_with_image = AsyncMock(return_value="User is editing code in VS Code.")
     mock_llm_cls.return_value = vlm_instance
@@ -120,7 +121,8 @@ def test_capture_manager_register_and_observation(mock_llm_cls, mock_registry):
 @patch("perception.capture.ModelRegistry")
 @patch("perception.capture.LLMCognitiveStep")
 def test_capture_manager_structured_observation_contains_elements(mock_llm_cls, mock_registry):
-    mock_registry.resolve_model.return_value = ("key", "url", "model")
+    mock_registry.resolve_model.return_value = ("key", "url", "model", {})
+    mock_registry.resolve_model_ref.return_value = ("provider", "model")
     vlm_instance = MagicMock()
     vlm_instance.process_with_image = AsyncMock(return_value="VS Code opened. User edits code.")
     mock_llm_cls.return_value = vlm_instance
@@ -148,7 +150,8 @@ def test_capture_manager_structured_observation_contains_elements(mock_llm_cls, 
 @patch("perception.capture.LLMCognitiveStep")
 def test_capture_manager_persist_on_passive_loop(mock_llm_cls, mock_registry):
     """Passive loop should persist observations to MemoryManager."""
-    mock_registry.resolve_model.return_value = ("key", "url", "model")
+    mock_registry.resolve_model.return_value = ("key", "url", "model", {})
+    mock_registry.resolve_model_ref.return_value = ("provider", "model")
     vlm_instance = MagicMock()
     vlm_instance.process_with_image = AsyncMock(return_value="User browsing docs.")
     mock_llm_cls.return_value = vlm_instance
@@ -179,7 +182,8 @@ async def _run_one_cycle(mgr: CaptureManager):
 @patch("perception.capture.ModelRegistry")
 @patch("perception.capture.LLMCognitiveStep")
 def test_persist_writes_memory_entry(mock_llm_cls, mock_registry):
-    mock_registry.resolve_model.return_value = ("k", "u", "m")
+    mock_registry.resolve_model.return_value = ("k", "u", "m", {})
+    mock_registry.resolve_model_ref.return_value = ("provider", "model")
     vlm_instance = MagicMock()
     vlm_instance.process_with_image = AsyncMock(return_value="Terminal open.")
     mock_llm_cls.return_value = vlm_instance

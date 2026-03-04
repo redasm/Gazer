@@ -55,7 +55,7 @@ async def test_agent_loop_persists_turn_via_callback(monkeypatch, tmp_path: Path
     fake_cfg = _FakeConfig({"agents": {"defaults": {"model": {"primary": "openai/gpt-4o", "fallbacks": []}}}})
     monkeypatch.setattr(config_manager, "config", fake_cfg)
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda _channel, _sender_id: False),
     )
 

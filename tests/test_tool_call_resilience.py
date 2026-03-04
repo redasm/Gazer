@@ -102,7 +102,7 @@ class _LaneProbeTool(Tool):
 def _build_loop(monkeypatch, tmp_path, config_data: dict) -> AgentLoop:
     monkeypatch.setattr(config_manager, "config", _FakeConfig(config_data))
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
     return AgentLoop(

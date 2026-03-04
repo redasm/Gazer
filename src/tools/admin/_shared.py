@@ -777,6 +777,63 @@ def _auto_link_release_gate_by_coding_benchmark(
     return actions
 
 
+def _apply_edit_operation(original: str, item: Dict[str, Any]) -> tuple[str, bool, str]:
+    """Applies an edit operation to the original text based on operation types."""
+    import re
+    if not isinstance(item, dict):
+        return original, False, "invalid_item"
+    operation = str(item.get("operation", "replace") or "replace").lower()
+    
+    if operation == "replace":
+        find_text = str(item.get("find", ""))
+        replace_text = str(item.get("replace", ""))
+        if not find_text:
+            return original, False, "empty_find"
+        if find_text in original:
+            return original.replace(find_text, replace_text), True, "exact"
+        return original, False, "not_found"
+    
+    elif operation == "insert_before":
+        anchor = str(item.get("anchor", ""))
+        replace_text = str(item.get("replace", ""))
+        if not anchor:
+            return original, False, "empty_anchor"
+        if anchor in original:
+            return original.replace(anchor, replace_text + anchor), True, "exact"
+        return original, False, "not_found"
+        
+    elif operation == "insert_after":
+        anchor = str(item.get("anchor", ""))
+        replace_text = str(item.get("replace", ""))
+        if not anchor:
+            return original, False, "empty_anchor"
+        if anchor in original:
+            return original.replace(anchor, anchor + replace_text), True, "exact"
+        return original, False, "not_found"
+        
+    elif operation == "delete":
+        find_text = str(item.get("find", ""))
+        if not find_text:
+            return original, False, "empty_find"
+        if find_text in original:
+            return original.replace(find_text, ""), True, "exact"
+        return original, False, "not_found"
+        
+    elif operation == "regex_replace":
+        find_text = str(item.get("find", ""))
+        replace_text = str(item.get("replace", ""))
+        if not find_text:
+            return original, False, "empty_find"
+        try:
+            matched = bool(re.search(find_text, original))
+            if matched:
+                return re.sub(find_text, replace_text, original), True, "regex"
+            return original, False, "not_found"
+        except re.error:
+            return original, False, "regex_error"
+            
+    return original, False, "unsupported"
+
 
 def _execute_deterministic_coding_loop(
     *,
@@ -2064,7 +2121,6 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
                     tool_name,
                     tool_args,
                     max_tier=ToolSafetyTier.PRIVILEGED,
-                    confirmed=False,
                 )
                 return str(text), None
             if node_type == "condition":
@@ -2535,6 +2591,15 @@ def _persona_runtime_thresholds() -> Dict[str, Any]:
     }
 
 
+
+def _get_satellite_node_config(node_id: str) -> dict:
+    """Read satellite node config from devices.satellite.<node_id>"""
+    satellites = config.get("devices.satellite", {})
+    if isinstance(satellites, dict):
+        node_cfg = satellites.get(node_id, {})
+        if isinstance(node_cfg, dict):
+            return node_cfg
+    return {}
 
 def _validate_satellite_node_auth(node_id: str, token: str) -> tuple[bool, str]:
     node_id = str(node_id or "").strip()

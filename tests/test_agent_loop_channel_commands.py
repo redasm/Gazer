@@ -90,7 +90,7 @@ def _make_loop(monkeypatch, tmp_path, cfg_data: dict, *, owner_sender_ids: set[s
 
     _owner_stub = lambda: SimpleNamespace(is_owner_sender=_is_owner)
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         _owner_stub,
     )
     # After extracting _execute_channel_command into the mixin, its module

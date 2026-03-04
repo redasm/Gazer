@@ -11,11 +11,13 @@ import yaml
 import psutil
 import io
 import csv
+from tools.admin.state import _PROJECT_ROOT
+from agent.agents_md_lint import lint_agents_overlay
 from tools.admin._shared import (
     config, _redact_config, _llm_history,
     TRAINING_JOB_MANAGER, TRAINING_BRIDGE_MANAGER,
     ONLINE_POLICY_LOOP_MANAGER, PERSONA_EVAL_MANAGER,
-    PERSONA_RUNTIME_MANAGER, EVAL_BENCHMARK_MANAGER, TRAJECTORY_STORE,
+    PERSONA_RUNTIME_MANAGER, EVAL_BENCHMARK_MANAGER, TRAJECTORY_STORE, TASK_RUN_STORE,
     # Helpers used by debug routes (28 functions)
     _append_policy_audit, _assess_coding_benchmark_health,
     _auto_link_release_gate_by_coding_benchmark, _build_resume_payload,

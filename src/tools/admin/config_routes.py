@@ -793,7 +793,6 @@ async def update_config(new_config: Dict[str, Any]):
             if (
                 key.startswith("security.tool_")
                 or key.startswith("agents.list")
-                or key.startswith("models.router.")
                 or key.startswith("personality.mental_process")
                 or key.startswith("personality.runtime.auto_correction")
             )
@@ -874,6 +873,12 @@ async def apply_web_config_wizard(payload: Dict[str, Any]):
                 elif target_key in {"fast", "fallback", "fast_brain"}:
                     updates["agents.defaults.model.fallbacks"] = [selected_ref]
 
+            # Embedding model
+            if _wizard_bool(llm.get("apply_embedding"), False):
+                embedding_model = str(llm.get("embedding_model", "") or "").strip()
+                if embedding_model:
+                    updates["models.embedding.model"] = embedding_model
+                    updates["models.embedding.provider"] = provider_name
 
     channels = payload.get("channels", {})
     if isinstance(channels, dict):

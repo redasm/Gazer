@@ -101,7 +101,7 @@ async def test_agent_loop_emits_tool_call_stream_events(monkeypatch, tmp_path):
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -179,7 +179,7 @@ async def test_agent_loop_fake_tool_call_guard_retries(monkeypatch, tmp_path):
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 

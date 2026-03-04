@@ -130,7 +130,7 @@ async def test_agent_loop_builds_final_response_after_iteration_limit(monkeypatc
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -182,7 +182,7 @@ async def test_agent_loop_blocks_when_tool_calls_exceed_turn_limit(monkeypatch, 
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
@@ -234,7 +234,7 @@ async def test_agent_loop_parallel_tool_execution_respects_config_limit(monkeypa
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 

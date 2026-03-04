@@ -133,7 +133,7 @@ async def test_e2e_html_502_error_surfaces_to_dialog(monkeypatch: pytest.MonkeyP
         ),
     )
     monkeypatch.setattr(
-        "agent.loop.get_owner_manager",
+        "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
 
