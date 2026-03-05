@@ -3,9 +3,18 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List, Optional
 import time
-from tools.admin._shared import _log_buffer, _policy_audit_buffer, _strategy_change_history, _mcp_audit_buffer, _dedupe_dict_rows, _read_jsonl_tail, _POLICY_AUDIT_LOG_PATH, _STRATEGY_SNAPSHOT_LOG_PATH, config
 from tools.admin.auth import verify_admin_token
-from tools.admin._shared import _find_strategy_snapshot, _apply_strategy_snapshot, _append_policy_audit
+from tools.admin.state import (
+    _POLICY_AUDIT_LOG_PATH,
+    _STRATEGY_SNAPSHOT_LOG_PATH,
+    config,
+    _log_buffer,
+    _mcp_audit_buffer,
+    _policy_audit_buffer,
+    _strategy_change_history,
+)
+from tools.admin.strategy_helpers import _append_policy_audit, _apply_strategy_snapshot, _find_strategy_snapshot
+from tools.admin.utils import _dedupe_dict_rows, _read_jsonl_tail
 
 app = APIRouter()
 

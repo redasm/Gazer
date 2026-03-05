@@ -13,26 +13,51 @@ import io
 import csv
 from tools.admin.state import _PROJECT_ROOT
 from agent.agents_md_lint import lint_agents_overlay
-from tools.admin._shared import (
-    config, _redact_config, _llm_history,
-    TRAINING_JOB_MANAGER, TRAINING_BRIDGE_MANAGER,
-    ONLINE_POLICY_LOOP_MANAGER, PERSONA_EVAL_MANAGER,
-    PERSONA_RUNTIME_MANAGER, EVAL_BENCHMARK_MANAGER, TRAJECTORY_STORE, TASK_RUN_STORE,
-    # Helpers used by debug routes (28 functions)
-    _append_policy_audit, _assess_coding_benchmark_health,
-    _auto_link_release_gate_by_coding_benchmark, _build_resume_payload,
-    _build_rule_prompt_patch, _build_task_view, _build_training_publish_diff,
-    _build_training_release_explanation, _capture_strategy_snapshot,
-    _compare_replay_steps, _enqueue_chat_message,
-    _evaluate_training_release_canary_guard, _execute_deterministic_coding_loop,
-    _get_release_gate_health_thresholds, _is_subpath,
-    _maybe_run_scheduled_coding_benchmark, _normalize_trajectory_steps,
-    _persona_runtime_thresholds, _prepare_training_inputs,
-    _require_orchestrator, _resolve_export_output_path,
-    _resolve_online_policy_gate_thresholds, _resolve_online_policy_offpolicy_config,
-    _resolve_training_publish_rollout, _resolve_training_release_approval,
-    _run_coding_benchmark_suite, _score_training_job,
-    _coding_benchmark_history, _coding_benchmark_scheduler_state,
+from tools.admin.coding_helpers import TASK_RUN_STORE
+from tools.admin.state import (
+    EVAL_BENCHMARK_MANAGER,
+    ONLINE_POLICY_LOOP_MANAGER,
+    PERSONA_EVAL_MANAGER,
+    PERSONA_RUNTIME_MANAGER,
+    TRAINING_BRIDGE_MANAGER,
+    TRAINING_JOB_MANAGER,
+    TRAJECTORY_STORE,
+    config,
+    _coding_benchmark_history,
+    _coding_benchmark_scheduler_state,
+    _llm_history,
+)
+from tools.admin.utils import _redact_config, _is_subpath, _resolve_export_output_path
+from tools.admin.coding_helpers import (
+    _assess_coding_benchmark_health,
+    _auto_link_release_gate_by_coding_benchmark,
+    _execute_deterministic_coding_loop,
+    _maybe_run_scheduled_coding_benchmark,
+    _run_coding_benchmark_suite,
+)
+from tools.admin.strategy_helpers import (
+    _append_policy_audit,
+    _capture_strategy_snapshot,
+    _enqueue_chat_message,
+    _get_release_gate_health_thresholds,
+    _persona_runtime_thresholds,
+    _require_orchestrator,
+)
+from tools.admin.training_helpers import (
+    _build_resume_payload,
+    _build_rule_prompt_patch,
+    _build_task_view,
+    _build_training_publish_diff,
+    _build_training_release_explanation,
+    _compare_replay_steps,
+    _evaluate_training_release_canary_guard,
+    _normalize_trajectory_steps,
+    _prepare_training_inputs,
+    _resolve_online_policy_gate_thresholds,
+    _resolve_online_policy_offpolicy_config,
+    _resolve_training_publish_rollout,
+    _resolve_training_release_approval,
+    _score_training_job,
 )
 from tools.admin.auth import verify_admin_token
 

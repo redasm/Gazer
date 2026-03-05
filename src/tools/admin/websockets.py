@@ -9,6 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ._shared import API_QUEUES, _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
 from .auth import _verify_ws_auth
+from tools.admin.state import API_QUEUES, CANVAS_STATE
 
 router = APIRouter(tags=["websockets"])
 
@@ -175,7 +176,6 @@ async def canvas_endpoint(websocket: WebSocket):
 
     # Lazy import to avoid circular dependencies
     from tools.admin_api import canvas_ws_manager
-    from tools.admin._shared import CANVAS_STATE, API_QUEUES
     
     logger.info("Canvas WebSocket accepting connection...")
     await canvas_ws_manager.connect(websocket)

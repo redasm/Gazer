@@ -10,8 +10,8 @@ import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Request, Response
+from tools.admin.state import GOOGLE_CHAT_CHANNEL, TEAMS_CHANNEL
 
-from tools.admin._shared import TEAMS_CHANNEL, GOOGLE_CHAT_CHANNEL
 
 logger = logging.getLogger("GazerAdminAPI")
 

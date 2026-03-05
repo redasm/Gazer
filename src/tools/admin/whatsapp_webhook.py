@@ -11,8 +11,8 @@ import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Query, Request, Response
+from tools.admin.state import WHATSAPP_CHANNEL
 
-from tools.admin._shared import WHATSAPP_CHANNEL
 
 logger = logging.getLogger("GazerAdminAPI")
 

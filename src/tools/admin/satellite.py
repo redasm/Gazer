@@ -6,7 +6,6 @@ import time
 import json
 import asyncio
 import logging
-from tools.admin._shared import config, API_QUEUES, SATELLITE_SESSION_MANAGER, SATELLITE_SOURCES
 from tools.admin.auth import verify_admin_token
 from tools.admin.auth import _verify_ws_auth, _extract_ws_token
 from security.pairing import get_pairing_manager
@@ -15,6 +14,12 @@ from devices.satellite_protocol import (
     FRAME_TYPE_HELLO, FRAME_TYPE_INVOKE_RESULT, FRAME_TYPE_ERROR,
     ensure_frame, ensure_hello, ensure_invoke_result,
     SatelliteProtocolError, SessionMetadata,
+)
+from tools.admin.state import (
+    API_QUEUES,
+    SATELLITE_SESSION_MANAGER,
+    SATELLITE_SOURCES,
+    config,
 )
 from devices.satellite_session import SatelliteSessionManager, create_satellite_session_manager
 

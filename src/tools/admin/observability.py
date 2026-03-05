@@ -5,23 +5,38 @@ from typing import Dict, Any, List, Optional
 import time
 import json
 from datetime import datetime
-from tools.admin._shared import _resolve_export_output_path, _alert_buffer, logger
-from tools.admin._shared import (
-    config, _p95, _gui_simple_benchmark_history, _workflow_run_history,
-    _policy_audit_buffer, _build_llm_tool_failure_profile,
-    _build_tool_timing_profile, _parse_tool_result_stats, _get_tool_governance_snapshot,
-    get_usage_tracker, get_llm_router, get_trajectory_store, get_tool_registry,
-)
 # Backward-compat aliases for static references only
-from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER  # noqa: F401
 from tools.admin.auth import verify_admin_token
-from tools.admin._shared import _append_policy_audit
 import tools.admin._shared as _shared
 from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary, _invoke_gui_action_via_tool_registry
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
 from runtime.resilience import classify_error_message
 from tools.admin.memory import _resolve_openviking_backend_dir
 from memory.quality_eval import build_memory_quality_report
+from tools.admin.observability_helpers import (
+    _build_llm_tool_failure_profile,
+    _build_tool_timing_profile,
+    _p95,
+    _parse_tool_result_stats,
+)
+from tools.admin.state import (
+    LLM_ROUTER,
+    TOOL_REGISTRY,
+    TRAJECTORY_STORE,
+    _alert_buffer,
+    config,
+    get_llm_router,
+    get_tool_batching_tracker,
+    get_tool_registry,
+    get_trajectory_store,
+    get_usage_tracker,
+    _gui_simple_benchmark_history,
+    logger,
+    _policy_audit_buffer,
+    _workflow_run_history,
+)
+from tools.admin.strategy_helpers import _append_policy_audit, _get_tool_governance_snapshot
+from tools.admin.utils import _resolve_export_output_path
 
 app = APIRouter()
 
@@ -1270,7 +1285,6 @@ async def export_observability_baseline_panel(payload: Dict[str, Any]):
 
 @app.get("/observability/tool-batching", dependencies=[Depends(verify_admin_token)])
 async def get_tool_batching_observability():
-    from tools.admin._shared import get_tool_batching_tracker
     _tb = get_tool_batching_tracker()
     if _tb is None or not hasattr(_tb, "summary"):
         return {"status": "ok", "available": False, "metrics": {}}

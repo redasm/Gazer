@@ -8,21 +8,43 @@ import json
 import logging
 from datetime import datetime
 from runtime.resilience import classify_error_message
-from tools.admin._shared import (
-    config, _resolve_export_output_path,
-    _coding_quality_history, _coding_benchmark_history, _coding_benchmark_scheduler_state,
-    _workflow_run_history, _policy_audit_buffer, _FAVICON_ICO_PATH, _WEB_ONBOARDING_GUIDE_PATH, _is_success_status, _merge_error_code_counts, _parse_tool_error_result,
-    get_usage_tracker, get_prompt_cache_tracker, get_tool_batching_tracker,
-    get_tool_registry, get_trajectory_store, get_llm_router,
-    get_canvas_state, get_orchestrator,
-)
 from tools.registry import ToolSafetyTier
 # Backward-compat aliases for static helpers that are NOT runtime-injected
-from tools.admin._shared import TOOL_REGISTRY, TRAJECTORY_STORE, LLM_ROUTER, CANVAS_STATE, ORCHESTRATOR  # noqa: F401
 from tools.admin.auth import verify_admin_token
-from tools.admin._shared import _append_policy_audit, get_provider_registry, get_owner_manager
 import tools.admin._shared as _shared
 from security.pairing import get_pairing_manager
+from tools.admin.coding_helpers import _parse_tool_error_result
+from tools.admin.state import (
+    CANVAS_STATE,
+    _FAVICON_ICO_PATH,
+    LLM_ROUTER,
+    ORCHESTRATOR,
+    TOOL_REGISTRY,
+    TRAJECTORY_STORE,
+    _WEB_ONBOARDING_GUIDE_PATH,
+    _coding_benchmark_history,
+    _coding_benchmark_scheduler_state,
+    _coding_quality_history,
+    config,
+    get_canvas_state,
+    get_llm_router,
+    get_orchestrator,
+    get_prompt_cache_tracker,
+    get_tool_batching_tracker,
+    get_tool_registry,
+    get_trajectory_store,
+    get_usage_tracker,
+    _policy_audit_buffer,
+    _workflow_run_history,
+)
+from tools.admin.strategy_helpers import (
+    _append_policy_audit,
+    _get_tool_governance_snapshot,
+    _is_success_status,
+    _merge_error_code_counts,
+)
+from tools.admin.utils import _resolve_export_output_path
+from tools.admin._shared import get_owner_manager, get_provider_registry
 def _get_training_job_manager():
     global _TRAINING_JOB_MANAGER
     if _TRAINING_JOB_MANAGER is None:
@@ -187,7 +209,6 @@ async def _invoke_gui_action_via_tool_registry(action: str, args: Dict[str, Any]
     )
     raw = str(text or "")
     if raw.startswith("Error"):
-        from tools.admin._shared import _parse_tool_error_result
         parsed = _parse_tool_error_result(raw)
         return {
             "ok": False,
@@ -1417,7 +1438,6 @@ async def get_usage_stats():
 @app.get("/health/tool-governance", dependencies=[Depends(verify_admin_token)])
 async def get_tool_governance_health(limit: int = 50):
     """Return runtime tool-governance snapshot (budget + recent rejections)."""
-    from tools.admin._shared import _get_tool_governance_snapshot
     response = {
         "status": "ok",
         "tool_governance": _get_tool_governance_snapshot(limit=limit),

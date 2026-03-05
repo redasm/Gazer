@@ -19,6 +19,7 @@ from tools.coding import (
     ExecTool, ReadFileTool, WriteFileTool, EditFileTool,
     ListDirTool, FindFilesTool, GrepTool, ReadSkillTool,
 )
+from tools.admin.state import SATELLITE_SESSION_MANAGER, SATELLITE_SOURCES
 from tools.system_tools import GetTimeTool, ImageAnalyzeTool
 from plugins.hooks import HookRegistry
 from plugins.loader import PluginLoader
@@ -261,7 +262,6 @@ class GazerBrain:
 
         # Enforce mutually exclusive mode:
         # satellite mode (if any satellite_ids) OR local mode (if enabled).
-        from tools.admin._shared import SATELLITE_SOURCES
         if satellite_ids:
             for sid in satellite_ids:
                 remote = RemoteScreenSource(source_id=sid)
@@ -321,7 +321,6 @@ class GazerBrain:
             satellite_transport_backend = "python"
 
         if satellite_ids:
-            from tools.admin._shared import SATELLITE_SESSION_MANAGER
             timeout_seconds = float(config.get("devices.satellite.invoke_timeout_seconds", 15) or 15)
             default_target = ""
             for idx, sid in enumerate(satellite_ids):

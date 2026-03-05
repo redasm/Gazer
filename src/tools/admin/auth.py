@@ -17,8 +17,8 @@ from fastapi.responses import JSONResponse
 
 from runtime.config_manager import config
 from security.owner import get_owner_manager
+from tools.admin.state import logger
 
-from tools.admin._shared import logger
 
 router = APIRouter(tags=["auth"])
 

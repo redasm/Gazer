@@ -17,20 +17,31 @@ import json
 import yaml
 import time
 
-from tools.admin._shared import (
-    config, TRAJECTORY_STORE,
-    _append_policy_audit, _build_training_publish_diff,
-    _build_training_release_explanation, _capture_strategy_snapshot,
-    _evaluate_training_release_canary_guard,
-    _get_release_gate_health_thresholds,
-    _prepare_training_inputs, _resolve_export_output_path,
-    _resolve_online_policy_gate_thresholds, _resolve_online_policy_offpolicy_config,
-    _resolve_training_publish_rollout, _resolve_training_release_approval,
-    _score_training_job, TASK_RUN_STORE,
-)
 from tools.admin.auth import verify_admin_token
 
 from typing import TYPE_CHECKING
+from tools.admin.coding_helpers import TASK_RUN_STORE
+from tools.admin.state import (
+    EVAL_BENCHMARK_MANAGER,
+    ONLINE_POLICY_LOOP_MANAGER,
+    TRAINING_BRIDGE_MANAGER,
+    TRAINING_JOB_MANAGER,
+    TRAJECTORY_STORE,
+    config,
+)
+from tools.admin.strategy_helpers import _append_policy_audit, _capture_strategy_snapshot, _get_release_gate_health_thresholds
+from tools.admin.training_helpers import (
+    _build_training_publish_diff,
+    _build_training_release_explanation,
+    _evaluate_training_release_canary_guard,
+    _prepare_training_inputs,
+    _resolve_online_policy_gate_thresholds,
+    _resolve_online_policy_offpolicy_config,
+    _resolve_training_publish_rollout,
+    _resolve_training_release_approval,
+    _score_training_job,
+)
+from tools.admin.utils import _resolve_export_output_path
 if TYPE_CHECKING:
     from eval.trainer import TrainingJobManager
     from eval.training_bridge import TrainingBridgeManager
@@ -42,10 +53,6 @@ logger = logging.getLogger("GazerAdminAPI")
 
 
 # --- Manager accessors (mirrors debug.py lazy-init pattern) ---
-from tools.admin._shared import (
-    TRAINING_JOB_MANAGER, TRAINING_BRIDGE_MANAGER,
-    ONLINE_POLICY_LOOP_MANAGER, EVAL_BENCHMARK_MANAGER,
-)
 
 def _get_eval_benchmark_manager():
     global EVAL_BENCHMARK_MANAGER
