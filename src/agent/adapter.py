@@ -319,7 +319,6 @@ class GazerAgent:
             slow_provider_resolver=self._resolve_slow_provider_for_message,
             persist_turn_callback=self._persist_turn_memory,
             turn_hooks=self.turn_hooks,
-            soul_turn_callback=self._run_soul_turn,
         )
         self.personality = GazerPersonality(
             memory_manager=self.memory_manager,
@@ -1086,34 +1085,8 @@ class GazerAgent:
             logger.error(f"Failed to persist turn memory: {e}")
             return False
 
-    async def _run_soul_turn(self, msg: InboundMessage) -> str:
-        """Route a normal message through the soul pipeline."""
-        from soul.memory.working_context import WorkingContext
 
-        user_content = str(msg.content or "").strip()
-        if not user_content:
-            return ""
 
-        # Build session context from recent memory
-        base_memory = self.memory_manager.load_recent(limit=20)
-        session_ctx = tuple(
-            f"{m.sender}: {m.content}"
-            for m in base_memory.memories
-            if m.content
-        )
-
-        context = WorkingContext(
-            user_input=user_content,
-            session_context=session_ctx,
-            turn_count=len(base_memory.memories),
-            metadata=(
-                ("channel", str(msg.channel or "")),
-                ("chat_id", str(msg.chat_id or "")),
-                ("sender_id", str(msg.sender_id or "")),
-            ),
-        )
-        result_ctx = await self.personality.process(context)
-        return str(result_ctx.get_metadata("reply") or "").strip()
 
     def set_skill_loader(self, loader: SkillLoader) -> None:
         """Attach a SkillLoader so its metadata is injected into the system prompt."""

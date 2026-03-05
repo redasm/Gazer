@@ -234,7 +234,7 @@ class AgentLoop(
         slow_provider_resolver: Optional[Callable[[InboundMessage, LLMProvider], LLMProvider]] = None,
         persist_turn_callback: Optional[Callable[[InboundMessage, str], Any]] = None,
         turn_hooks: Optional[TurnHookManager] = None,
-        soul_turn_callback: Optional[Callable[[InboundMessage], Any]] = None,
+
     ):
         self.bus = bus
         self.provider = provider
@@ -244,7 +244,7 @@ class AgentLoop(
         self.max_iterations = max_iterations
         self._slow_provider_resolver = slow_provider_resolver
         self._persist_turn_callback = persist_turn_callback
-        self._soul_turn_callback = soul_turn_callback
+
         self._turn_hooks = turn_hooks
         self._active_provider_override: Optional[LLMProvider] = None
         self._active_model_override: Optional[str] = None
@@ -524,11 +524,8 @@ class AgentLoop(
         if parsed_command is not None:
             return await self._handle_channel_command_impl(msg, session_key, parsed_command)
 
-        if self._soul_turn_callback is not None:
-            return await self._handle_soul_turn_impl(
-                msg=msg, session_key=session_key, reply_language=reply_language,
-                trajectory_id=trajectory_id, turn_started=turn_started,
-            )
+
+
 
         # Fast brain shortcut
         fast_response = await self._try_fast_brain(msg)
