@@ -109,7 +109,6 @@ personality:
       strategy: rewrite
       trigger_levels:
       - critical
-
     tool_policy_linkage:
       enabled: true
       trigger_levels:
@@ -596,7 +595,7 @@ sandbox:
 agents:
   defaults:
     model:
-      primary: gmn/gpt-5.3-codex
+      primary: gmn/gpt-5.2
       fallbacks:
       - dashscope/qwen3-vl-plus
     models:

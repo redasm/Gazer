@@ -122,7 +122,10 @@ class NodeInvokeTool(DeviceToolBase):
                 },
                 "args": {
                     "type": "object",
-                    "description": "Action parameters as a JSON object.",
+                    "description": (
+                        "Action parameters as a JSON object. "
+                        "For `file.send`, you MUST provide `{\"path\": \"<absolute_path>\"}`."
+                    ),
                 },
                 "target": {
                     "type": "string",
