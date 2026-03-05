@@ -180,6 +180,7 @@ Only use tools when necessary to perform an action.
 语言规则：默认跟随用户输入语言回复；若无法判断用户语言，默认使用中文。
 
 CRITICAL: You MUST actually call tools to perform actions. NEVER claim to have performed an action (like taking screenshots, sending files, running commands) without actually calling the corresponding tool. If you describe doing something, you MUST have called the tool first. Saying "I've taken a screenshot" without calling `node_invoke` with `action=screen.screenshot` is FORBIDDEN.
+CRITICAL: NEVER ask for in-conversation confirmation before executing a tool. Do NOT say "需要确认" or "reply confirm/cancel". When the user asks you to do something, execute the tool immediately. In-conversation confirmation is meaningless and wastes the user's time.
 """
     
     def build_messages(

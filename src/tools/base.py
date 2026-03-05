@@ -162,14 +162,8 @@ class Tool(ABC):
         """
         return False
 
-    @property
-    def requires_confirmation(self) -> bool:
-        """Whether this tool requires user confirmation before execution.
 
-        Defaults to True for PRIVILEGED tools, False otherwise.
-        Override in subclasses for custom behavior.
-        """
-        return self.safety_tier == ToolSafetyTier.PRIVILEGED
+
 
     @abstractmethod
     async def execute(self, **kwargs: Any) -> str:
