@@ -140,7 +140,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
 
     const exportCsv = () => {
         const rows = [
-            ['tool', 'allowed', 'reason', 'provider', 'tier'],
+            ['tool', 'allowed', 'reason', 'provider', 'owner_only'],
             ...filteredResults.map((item) => [
                 item.tool,
                 item.allowed,

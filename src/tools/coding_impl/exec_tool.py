@@ -17,7 +17,7 @@ logger = logging.getLogger("CodingTools")
 class ExecTool(CodingToolBase):
     """Run a shell command inside the workspace.
 
-    Safety tier: PRIVILEGED -- commands run with full host access.
+    Warning: commands run with full host access.
     A built-in dangerous-command guard rejects destructive patterns
     (similar to OpenClaw's elevated-mode gating).
     """

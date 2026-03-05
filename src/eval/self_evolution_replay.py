@@ -223,7 +223,7 @@ def build_default_replays() -> List[Dict[str, Any]]:
             "episode_id": "offline_case_1",
             "max_steps": 3,
             "initial_state": {"progress": 0.0, "risk": 0.28, "budget_pressure": 0.1, "failure_bias": 0.2},
-            "tool_policy": {"deny_tools": ["shell_exec"], "max_tier": "standard"},
+            "tool_policy": {"deny_tools": ["shell_exec"]},
             "preferred_action": "gather_context",
             "candidate_actions": [
                 {"name": "shell_exec", "tool": "shell_exec", "owner_only": True, "base_success": 0.2, "delta_progress": 0.8, "delta_risk": 0.35, "cost": 2.8, "failure_type": "policy_blocked"},

@@ -1,8 +1,6 @@
 """Tool registry for dynamic tool management with owner-only / allow-deny policy.
 
-Inspired by OpenClaw's allowlist / denylist model, the registry supports
-per-request filtering so that untrusted callers can only access tools
-within their allowed safety tier.
+    from its provider to map generic requests to local executions.
 """
 
 import asyncio
@@ -138,8 +136,6 @@ class ToolRegistry:
     Registry for agent tools.
     
     Allows dynamic registration and execution of tools.
-    Supports *safety-tier* filtering: callers can specify a maximum allowed
-    tier so that untrusted sessions only see ``SAFE`` or ``STANDARD`` tools.
     """
     
     def __init__(self) -> None:
@@ -154,7 +150,7 @@ class ToolRegistry:
         self._failure_state: Dict[str, Dict[str, float]] = {}
         # Rolling events for global tool-call budget.
         self._budget_events: List[Dict[str, float | str]] = []
-        # Rolling governance rejection events (policy/tier/circuit/budget).
+        # Rolling governance rejection events (policy/circuit/budget).
         self._rejection_events: deque[Dict[str, Any]] = deque(maxlen=300)
 
     @staticmethod
@@ -583,7 +579,7 @@ class ToolRegistry:
                 "policy_allow_model_selectors": True,
                 "policy_deny_model_selectors": True,
                 "owner_only": True,
-                "tier": True,
+                "system": True,
             },
             "rule_chain": rule_chain,
         }
