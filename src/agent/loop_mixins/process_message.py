@@ -19,7 +19,7 @@ class TurnContext:
     messages: List[Dict[str, Any]]
     memory_context_chars: int = 0
     recall_count: int = 0
-    tool_max_tier: Any = None  # ToolSafetyTier
+    sender_is_owner: bool = False
     tool_policy: Optional[ToolPolicy] = None
     retry_budget: Any = None  # RetryBudget
     max_tool_calls_per_turn: int = 0
@@ -120,10 +120,7 @@ class ProcessMessageMixin:
                 logger.info("Plan generated for complex task.")
 
         # Tool governance
-        tool_max_tier = self._resolve_tool_max_tier(msg)
-        if self._release_gate_limits_tier(sender_id=msg.sender_id, channel=msg.channel):
-            from tools.base import ToolSafetyTier
-            tool_max_tier = ToolSafetyTier.SAFE
+        sender_is_owner = self._is_sender_owner(msg)
         tool_policy = self._resolve_tool_policy()
         max_tool_calls_per_turn, max_parallel_tool_calls = self._get_tool_governance_limits()
 
@@ -131,7 +128,7 @@ class ProcessMessageMixin:
             messages=messages,
             memory_context_chars=memory_context_chars,
             recall_count=recall_count,
-            tool_max_tier=tool_max_tier,
+            sender_is_owner=sender_is_owner,
             tool_policy=tool_policy,
             retry_budget=retry_budget,
             max_tool_calls_per_turn=max_tool_calls_per_turn,
@@ -284,7 +281,6 @@ class ProcessMessageMixin:
             # --- LLM call ---
             model_provider, model_name = self._current_tool_policy_model_context()
             tool_defs = self.tools.get_definitions(
-                max_tier=ctx.tool_max_tier,
                 policy=ctx.tool_policy,
                 sender_id=msg.sender_id,
                 channel=msg.channel,
@@ -300,9 +296,9 @@ class ProcessMessageMixin:
             if iteration == 1:
                 tool_names = [t["function"]["name"] for t in tool_defs]
                 logger.info(
-                    "Passing %d tools to LLM (max_tier=%s policy=%s): %s",
+                    "Passing %d tools to LLM (sender_is_owner=%s policy=%s): %s",
                     len(tool_defs),
-                    ctx.tool_max_tier.value,
+                    ctx.sender_is_owner,
                     bool(
                         ctx.tool_policy
                         and (
@@ -460,7 +456,6 @@ class ProcessMessageMixin:
                         )
                     results, executed_plan = await self._execute_tool_calls_with_batching(
                         tool_calls,
-                        max_tier=ctx.tool_max_tier,
                         policy=ctx.tool_policy,
                         retry_budget=ctx.retry_budget,
                         sender_id=msg.sender_id,
@@ -532,7 +527,6 @@ class ProcessMessageMixin:
                         )
                         result = await self._execute_single_tool_call(
                             tool_call,
-                            max_tier=ctx.tool_max_tier,
                             policy=ctx.tool_policy,
                             retry_budget=ctx.retry_budget,
                             sender_id=msg.sender_id,

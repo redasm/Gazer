@@ -334,12 +334,10 @@ class ToolResultUtilsMixin:
 
     @staticmethod
     def _is_fake_tool_call(content: str) -> bool:
-        """Detect if LLM is claiming to have performed an action without calling tools,
-        or asking for in-conversation confirmation instead of executing the tool.
+        """Detect if LLM is claiming to have performed an action without calling tools.
 
         Some models output text like "(正在调用工具：screenshot)" or "Screenshot captured"
-        without actually making a tool call. Others ask "需要确认, 回复确认/confirm"
-        instead of directly calling the tool. This detects both hallucinations.
+        without actually making a tool call. This detects such hallucinations.
         """
         if not content:
             return False
@@ -351,17 +349,5 @@ class ToolResultUtilsMixin:
             "(calling tool", "(executing tool", "i have taken a screenshot",
             "i've taken a screenshot", "here is the screenshot",
         ]
-        # Patterns that suggest the LLM is asking for in-conversation confirmation
-        # instead of directly executing the tool (OpenClaw: confirmation is meaningless)
-        confirmation_markers = [
-            "需要确认", "回复确认", "回复\"确认\"", "回复'确认'", "回复`confirm`",
-            "回复\"confirm\"", "回复'confirm'", "回复取消", "回复\"取消\"",
-            "requires confirmation", "awaiting confirmation", "please confirm",
-            "reply confirm", "reply cancel", "reply with confirm",
-            "do you want to proceed", "shall i proceed",
-        ]
-        return (
-            any(marker in content_lower for marker in fake_markers)
-            or any(marker in content_lower for marker in confirmation_markers)
-        )
+        return any(marker in content_lower for marker in fake_markers)
 

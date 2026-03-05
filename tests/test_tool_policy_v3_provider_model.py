@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.registry import ToolPolicy, ToolRegistry, normalize_tool_policy
 
 
 class _DummyTool(Tool):
-    def __init__(self, name: str, tier: ToolSafetyTier = ToolSafetyTier.STANDARD, provider: str = "web"):
+    def __init__(self, name: str, owner_only: bool = False, provider: str = "web"):
         self._name = name
-        self._tier = tier
+        self._owner_only = owner_only
         self._provider = provider
 
     @property
@@ -27,8 +27,8 @@ class _DummyTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return self._tier
+    def owner_only(self) -> bool:
+        return self._owner_only
 
     @property
     def provider(self) -> str:

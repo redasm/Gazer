@@ -1,4 +1,4 @@
-"""Tool registry for dynamic tool management with safety tiers.
+"""Tool registry for dynamic tool management with owner-only / allow-deny policy.
 
 Inspired by OpenClaw's allowlist / denylist model, the registry supports
 per-request filtering so that untrusted callers can only access tools
@@ -14,7 +14,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
 
-from tools.base import CancellationToken, Tool, ToolSafetyTier
+from tools.base import CancellationToken, Tool
 from runtime.config_manager import config as gazer_config
 from runtime.rust_gate import push_tool_access_context
 
@@ -37,7 +37,7 @@ class BudgetSettings:
 
 _DEFAULT_ERROR_HINTS: Dict[str, str] = {
     "TOOL_NOT_FOUND": "Tool 名称不存在。先调用 tool definitions 获取可用工具列表，再重试。",
-    "TOOL_NOT_PERMITTED": "工具被安全策略拦截。检查 security.tool_max_tier / owner 权限 / allowlist 配置。",
+    "TOOL_NOT_PERMITTED": "工具被安全策略拦截。检查 owner 权限 / allowlist 配置。",
     "TOOL_PARAMS_INVALID": "参数不符合工具 schema。请根据工具 parameters 重新构建参数对象。",
     "TOOL_CIRCUIT_OPEN": "该工具近期连续失败触发熔断。等待冷却或改用替代工具路径。",
     "TOOL_BUDGET_EXCEEDED": "工具调用预算超限。降低调用频率或调整 security.tool_budget_* 配置。",
@@ -431,10 +431,6 @@ class ToolRegistry:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _tier_order(tier: ToolSafetyTier) -> int:
-        return {ToolSafetyTier.SAFE: 0, ToolSafetyTier.STANDARD: 1, ToolSafetyTier.PRIVILEGED: 2}.get(tier, 2)
-
-    @staticmethod
     def _tool_provider(tool: Tool) -> str:
         provider = (tool.provider or "").strip().lower()
         if provider and provider != "core":
@@ -471,7 +467,7 @@ class ToolRegistry:
         explicit_owner_only = bool(getattr(tool, "owner_only", False))
         if explicit_owner_only:
             return True
-        return tool.safety_tier == ToolSafetyTier.PRIVILEGED
+
 
     @staticmethod
     def _normalize_model_context(model_provider: str, model_name: str) -> tuple[str, str]:
@@ -506,7 +502,6 @@ class ToolRegistry:
     def _is_allowed(
         self,
         name: str,
-        max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
         sender_id: str = "",
         channel: str = "",
@@ -516,7 +511,6 @@ class ToolRegistry:
         """Check if tool *name* passes allowlist, denylist and tier filters."""
         decision = self.evaluate_tool_access(
             name,
-            max_tier=max_tier,
             policy=policy,
             sender_id=sender_id,
             channel=channel,
@@ -529,7 +523,6 @@ class ToolRegistry:
         self,
         name: str,
         *,
-        max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
         sender_id: str = "",
         channel: str = "",
@@ -568,7 +561,7 @@ class ToolRegistry:
             "tool": name,
             "exists": True,
             "provider": provider,
-            "tier": tool.safety_tier.value,
+            "owner_only": tool.owner_only,
             "model_context": {
                 "provider": resolved_model_provider,
                 "model": resolved_model_name,
@@ -817,33 +810,11 @@ class ToolRegistry:
                     },
                 )
 
-        if max_tier is not None and self._tier_order(tool.safety_tier) > self._tier_order(max_tier):
-            decision["allowed"] = False
-            decision["reason"] = "blocked_by_tier"
-            decision["checks"]["tier"] = False
-            _append_rule(
-                "tier",
-                False,
-                "tool tier exceeds requested max_tier",
-                {"max_tier": max_tier.value, "tool_tier": tool.safety_tier.value},
-            )
-            return decision
-        _append_rule(
-            "tier",
-            True,
-            "tool tier allowed",
-            {
-                "max_tier": max_tier.value if isinstance(max_tier, ToolSafetyTier) else "",
-                "tool_tier": tool.safety_tier.value,
-            },
-        )
-
         return decision
 
     def simulate_access(
         self,
         *,
-        max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
         names: Optional[List[str]] = None,
         sender_id: str = "",
@@ -856,7 +827,6 @@ class ToolRegistry:
         return [
             self.evaluate_tool_access(
                 name,
-                max_tier=max_tier,
                 policy=policy,
                 sender_id=sender_id,
                 channel=channel,
@@ -876,20 +846,18 @@ class ToolRegistry:
     
     def get_definitions(
         self,
-        max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
         sender_id: str = "",
         channel: str = "",
         model_provider: str = "",
         model_name: str = "",
     ) -> List[Dict[str, Any]]:
-        """Get tool definitions in OpenAI format, filtered by tier."""
+        """Get tool definitions in OpenAI format, filtered by policy."""
         return [
             tool.to_schema()
             for tool in self._tools.values()
             if self._is_allowed(
                 tool.name,
-                max_tier=max_tier,
                 policy=policy,
                 sender_id=sender_id,
                 channel=channel,
@@ -903,7 +871,6 @@ class ToolRegistry:
         name: str,
         params: Dict[str, Any],
         *,
-        max_tier: Optional[ToolSafetyTier] = None,
         policy: Optional[ToolPolicy] = None,
         cancel_token: Optional[CancellationToken] = None,
         sender_id: str = "",
@@ -913,12 +880,11 @@ class ToolRegistry:
     ) -> str:
         """
         Execute a tool by name with given parameters.
-        
+
         Args:
             name: Tool name.
             params: Tool parameters.
-            max_tier: If set, reject tools above this safety tier.
-        
+
         Returns:
             Tool execution result as string.
         """
@@ -930,24 +896,22 @@ class ToolRegistry:
 
         if not self._is_allowed(
             name,
-            max_tier=max_tier,
             policy=policy,
             sender_id=sender_id,
             channel=channel,
             model_provider=model_provider,
             model_name=model_name,
         ):
-            logger.warning(f"Tool '{name}' blocked by safety policy (tier={tool.safety_tier.value})")
+            logger.warning(f"Tool '{name}' blocked by safety policy (owner_only={tool.owner_only})")
             access = self.evaluate_tool_access(
                 name,
-                max_tier=max_tier,
                 policy=policy,
                 sender_id=sender_id,
                 channel=channel,
                 model_provider=model_provider,
                 model_name=model_name,
             )
-            reason = str(access.get("reason", "policy_or_tier"))
+            reason = str(access.get("reason", "policy"))
             self._record_rejection_event(
                 code="TOOL_NOT_PERMITTED",
                 name=name,
@@ -955,8 +919,7 @@ class ToolRegistry:
                 reason=reason,
                 trace_id=trace_id,
                 metadata={
-                    "tier": tool.safety_tier.value,
-                    "max_tier": max_tier.value if isinstance(max_tier, ToolSafetyTier) else "",
+                    "owner_only": tool.owner_only,
                     "channel": str(channel or "").strip(),
                     "sender_id": str(sender_id or "").strip(),
                     "model_provider": str(model_provider or "").strip().lower(),
@@ -1051,10 +1014,13 @@ class ToolRegistry:
             # (e.g. workflow tools that trigger additional tool calls).
             if isinstance(effective_params, dict):
                 effective_params = dict(effective_params)
-                effective_params.setdefault("_access_max_tier", max_tier)
+
                 effective_params.setdefault("_access_policy", policy)
                 effective_params.setdefault("_access_sender_id", str(sender_id or ""))
                 effective_params.setdefault("_access_channel", str(channel or ""))
+                owner_context_available = self._has_sender_context(channel=channel, sender_id=sender_id)
+                owner_sender = self._is_owner_sender(channel=channel, sender_id=sender_id) if owner_context_available else False
+                effective_params.setdefault("_access_sender_is_owner", owner_sender)
 
             with push_tool_access_context(channel=str(channel or ""), sender_id=str(sender_id or "")):
                 result = await tool.execute(**effective_params)

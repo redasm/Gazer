@@ -940,7 +940,6 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
                 text = await TOOL_REGISTRY.execute(
                     tool_name,
                     tool_args,
-                    max_tier=ToolSafetyTier.PRIVILEGED,
                 )
                 return str(text), None
             if node_type == "condition":

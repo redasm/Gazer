@@ -18,7 +18,7 @@ from bus.events import InboundMessage
 from bus.queue import MessageBus
 from eval.benchmark import EvalBenchmarkManager
 from llm.base import LLMResponse, ToolCallRequest
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.coding import ExecTool
 from tools.registry import ToolRegistry
 
@@ -105,10 +105,11 @@ class _DummyAuthWs:
 
 
 class _DummyTool(Tool):
-    def __init__(self, name: str, tier: ToolSafetyTier, provider: str = "core"):
+    def __init__(self, name: str, owner_only: bool = False, provider: str = "core", bypass_release_gate: bool = False):
         self._name = name
-        self._tier = tier
+        self._owner_only = owner_only
         self._provider = provider
+        self._bypass_release_gate = bypass_release_gate
 
     @property
     def name(self) -> str:
@@ -123,20 +124,24 @@ class _DummyTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return self._tier
+    def owner_only(self) -> bool:
+        return self._owner_only
 
     @property
     def provider(self) -> str:
         return self._provider
+
+    @property
+    def bypass_release_gate(self) -> bool:
+        return self._bypass_release_gate
 
     async def execute(self, **kwargs) -> str:
         return "ok"
 
 
 class _CountingTool(_DummyTool):
-    def __init__(self, name: str, tier: ToolSafetyTier, provider: str = "core"):
-        super().__init__(name, tier, provider=provider)
+    def __init__(self, name: str, owner_only: bool = False, provider: str = "core", bypass_release_gate: bool = False):
+        super().__init__(name, owner_only, provider=provider, bypass_release_gate=bypass_release_gate)
         self.calls = 0
 
     async def execute(self, **kwargs) -> str:
@@ -741,23 +746,6 @@ def test_run_verify_command_executes_without_shell(monkeypatch):
     assert called["kwargs"]["shell"] is False
 
 
-@pytest.mark.asyncio
-async def test_update_config_rejects_invalid_tool_max_tier(monkeypatch):
-    fake_cfg = _FakeConfig(
-        {
-            "security": {"tool_groups": {"coding": ["read_file"]}},
-            "agents": {"list": []},
-        }
-    )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.update_config(
-            {"agents": {"list": [{"id": "coder", "tool_policy": {"max_tier": "dangerous"}}]}}
-        )
-    assert exc.value.status_code == 400
-    assert "max_tier" in str(exc.value.detail)
-
 
 @pytest.mark.asyncio
 async def test_skill_update_rejects_path_traversal(monkeypatch, tmp_path):
@@ -809,41 +797,12 @@ async def test_exec_tool_uses_native_backend(tmp_path):
 
 
 
-@pytest.mark.asyncio
-async def test_agent_loop_applies_tool_max_tier_to_definitions(monkeypatch, tmp_path):
-    fake_config = SimpleNamespace(
-        get=lambda key, default=None: "safe" if key == "security.tool_max_tier" else default
-    )
-    monkeypatch.setattr(config_manager, "config", fake_config)
-    monkeypatch.setattr(
-        "security.owner.get_owner_manager",
-        lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
-    )
-
-    provider = _DummyProvider()
-    loop = AgentLoop(
-        bus=MessageBus(),
-        provider=provider,
-        workspace=Path(tmp_path),
-        context_builder=_DummyContext(),
-    )
-    loop.tools.register(_DummyTool("safe_tool", ToolSafetyTier.SAFE))
-    loop.tools.register(_DummyTool("priv_tool", ToolSafetyTier.PRIVILEGED))
-
-    msg = InboundMessage(channel="web", sender_id="WebUser", chat_id="web-main", content="please help")
-    out = await loop._process_message(msg)
-
-    assert out is not None
-    exposed = [tool_def["function"]["name"] for tool_def in provider.last_tools]
-    assert "safe_tool" in exposed
-    assert "priv_tool" not in exposed
-
 
 @pytest.mark.asyncio
 async def test_agent_loop_applies_group_policy_to_definitions(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_groups": {
                 "coding": ["read_file", "write_file"],
             },
@@ -864,9 +823,9 @@ async def test_agent_loop_applies_group_policy_to_definitions(monkeypatch, tmp_p
         context_builder=_DummyContext(),
         tool_policy={"allow_groups": ["coding"]},
     )
-    loop.tools.register(_DummyTool("read_file", ToolSafetyTier.SAFE, provider="coding"))
-    loop.tools.register(_DummyTool("write_file", ToolSafetyTier.STANDARD, provider="coding"))
-    loop.tools.register(_DummyTool("web_search", ToolSafetyTier.STANDARD, provider="web"))
+    loop.tools.register(_DummyTool("read_file", False, provider="coding"))
+    loop.tools.register(_DummyTool("write_file", False, provider="coding"))
+    loop.tools.register(_DummyTool("web_search", False, provider="web"))
 
     msg = InboundMessage(channel="web", sender_id="WebUser", chat_id="web-main", content="please help")
     out = await loop._process_message(msg)
@@ -880,7 +839,7 @@ async def test_agent_loop_applies_group_policy_to_definitions(monkeypatch, tmp_p
 async def test_agent_loop_records_basic_trajectory(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "safe",
+
             "tool_groups": {},
             "llm_max_retries": 0,
             "llm_retry_backoff_seconds": 0.0,
@@ -918,7 +877,7 @@ async def test_agent_loop_records_basic_trajectory(monkeypatch, tmp_path):
 async def test_agent_loop_normalizes_string_tool_arguments(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_call_timeout_seconds": 2.0,
             "tool_groups": {},
         }
@@ -954,7 +913,7 @@ async def test_agent_loop_normalizes_string_tool_arguments(monkeypatch, tmp_path
         workspace=Path(tmp_path),
         context_builder=_DummyContext(),
     )
-    loop.tools.register(_EchoTool("echo_tool", ToolSafetyTier.SAFE))
+    loop.tools.register(_EchoTool("echo_tool", False))
 
     msg = InboundMessage(channel="web", sender_id="WebUser", chat_id="web-main", content="please help")
     out = await loop._process_message(msg)
@@ -969,7 +928,7 @@ async def test_agent_loop_normalizes_string_tool_arguments(monkeypatch, tmp_path
 async def test_agent_loop_non_owner_cannot_execute_privileged_tool(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_call_timeout_seconds": 2.0,
             "tool_groups": {},
             "llm_max_retries": 0,
@@ -984,7 +943,7 @@ async def test_agent_loop_non_owner_cannot_execute_privileged_tool(monkeypatch, 
 
     class _PrivilegedNoopTool(_DummyTool):
         def __init__(self, name: str):
-            super().__init__(name, ToolSafetyTier.PRIVILEGED)
+            super().__init__(name, True)
             self.calls = 0
 
         async def execute(self, **kwargs) -> str:
@@ -1024,7 +983,7 @@ async def test_agent_loop_non_owner_cannot_execute_privileged_tool(monkeypatch, 
 async def test_agent_loop_parallel_tool_errors_do_not_break_response(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_call_timeout_seconds": 2.0,
             "tool_groups": {},
         }
@@ -1057,8 +1016,8 @@ async def test_agent_loop_parallel_tool_errors_do_not_break_response(monkeypatch
         workspace=Path(tmp_path),
         context_builder=_DummyContext(),
     )
-    loop.tools.register(_OkTool("ok_tool", ToolSafetyTier.SAFE))
-    loop.tools.register(_OkTool("bad_args_tool", ToolSafetyTier.SAFE))
+    loop.tools.register(_OkTool("ok_tool", False))
+    loop.tools.register(_OkTool("bad_args_tool", False))
 
     msg = InboundMessage(channel="web", sender_id="WebUser", chat_id="web-main", content="please help")
     out = await loop._process_message(msg)
@@ -1074,7 +1033,7 @@ async def test_agent_loop_parallel_tool_errors_do_not_break_response(monkeypatch
 async def test_agent_loop_tool_timeout_returns_error_and_recovers(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_call_timeout_seconds": 0.01,
             "tool_groups": {},
         }
@@ -1105,7 +1064,7 @@ async def test_agent_loop_tool_timeout_returns_error_and_recovers(monkeypatch, t
         workspace=Path(tmp_path),
         context_builder=_DummyContext(),
     )
-    loop.tools.register(_SlowTool("slow_tool", ToolSafetyTier.SAFE))
+    loop.tools.register(_SlowTool("slow_tool", False))
 
     msg = InboundMessage(channel="web", sender_id="WebUser", chat_id="web-main", content="please help")
     out = await loop._process_message(msg)
@@ -1120,7 +1079,7 @@ async def test_agent_loop_tool_timeout_returns_error_and_recovers(monkeypatch, t
 async def test_agent_loop_retries_llm_exception_and_recovers(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "safe",
+
             "tool_groups": {},
             "llm_max_retries": 1,
             "llm_retry_backoff_seconds": 0.0,
@@ -1157,7 +1116,7 @@ async def test_agent_loop_retries_llm_exception_and_recovers(monkeypatch, tmp_pa
 async def test_agent_loop_returns_readable_message_when_llm_retries_exhausted(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "safe",
+
             "tool_groups": {},
             "llm_max_retries": 1,
             "llm_retry_backoff_seconds": 0.0,
@@ -1195,7 +1154,7 @@ async def test_agent_loop_returns_readable_message_when_llm_retries_exhausted(mo
 async def test_agent_loop_llm_retry_budget_exhausted(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "safe",
+
             "tool_groups": {},
             "llm_max_retries": 3,
             "llm_retry_backoff_seconds": 0.0,
@@ -1233,7 +1192,7 @@ async def test_agent_loop_llm_retry_budget_exhausted(monkeypatch, tmp_path):
 async def test_agent_loop_release_gate_blocks_standard_tools(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_groups": {},
             "release_gate_enforcement": True,
             "release_gate_owner_bypass": False,
@@ -1256,7 +1215,7 @@ async def test_agent_loop_release_gate_blocks_standard_tools(monkeypatch, tmp_pa
         workspace=Path(tmp_path),
         context_builder=_DummyContext(),
     )
-    std_tool = _CountingTool("std_tool", ToolSafetyTier.STANDARD, provider="coding")
+    std_tool = _CountingTool("std_tool", False, provider="coding")
     loop.tools.register(std_tool)
     loop._eval_benchmark_manager = SimpleNamespace(  # type: ignore[attr-defined]
         get_release_gate_status=lambda: {"blocked": True, "reason": "quality_gate_blocked"}
@@ -1274,7 +1233,7 @@ async def test_agent_loop_release_gate_blocks_standard_tools(monkeypatch, tmp_pa
 async def test_agent_loop_release_gate_allows_safe_tools(monkeypatch, tmp_path):
     fake_data = {
         "security": {
-            "tool_max_tier": "privileged",
+
             "tool_groups": {},
             "release_gate_enforcement": True,
             "release_gate_owner_bypass": False,
@@ -1297,7 +1256,7 @@ async def test_agent_loop_release_gate_allows_safe_tools(monkeypatch, tmp_path):
         workspace=Path(tmp_path),
         context_builder=_DummyContext(),
     )
-    safe_tool = _CountingTool("safe_tool", ToolSafetyTier.SAFE, provider="coding")
+    safe_tool = _CountingTool("safe_tool", False, provider="coding", bypass_release_gate=True)
     loop.tools.register(safe_tool)
     loop._eval_benchmark_manager = SimpleNamespace(  # type: ignore[attr-defined]
         get_release_gate_status=lambda: {"blocked": True, "reason": "quality_gate_blocked"}
@@ -1314,7 +1273,7 @@ async def test_agent_loop_release_gate_allows_safe_tools(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_policy_explain_endpoint_reports_reason(monkeypatch):
     registry = ToolRegistry()
-    registry.register(_DummyTool("priv_tool", ToolSafetyTier.PRIVILEGED, provider="desktop"))
+    registry.register(_DummyTool("priv_tool", True, provider="desktop"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
     monkeypatch.setattr(
         admin_api,
@@ -1331,8 +1290,8 @@ async def test_policy_explain_endpoint_reports_reason(monkeypatch):
 @pytest.mark.asyncio
 async def test_policy_simulate_endpoint_with_agent_policy(monkeypatch):
     registry = ToolRegistry()
-    registry.register(_DummyTool("read_file", ToolSafetyTier.SAFE, provider="coding"))
-    registry.register(_DummyTool("web_search", ToolSafetyTier.STANDARD, provider="web"))
+    registry.register(_DummyTool("read_file", False, provider="coding"))
+    registry.register(_DummyTool("web_search", False, provider="web"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
     fake_cfg = _FakeConfig(
         {
@@ -1354,7 +1313,7 @@ async def test_policy_effective_endpoint_with_agent(monkeypatch):
     fake_cfg = _FakeConfig(
         {
             "security": {
-                "tool_max_tier": "standard",
+
                 "tool_allowlist": [],
                 "tool_denylist": [],
                 "tool_allow_providers": [],
@@ -1376,7 +1335,7 @@ async def test_policy_effective_endpoint_with_agent(monkeypatch):
 @pytest.mark.asyncio
 async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_path: Path):
     registry = ToolRegistry()
-    registry.register(_DummyTool("web_search", ToolSafetyTier.SAFE, provider="web"))
+    registry.register(_DummyTool("web_search", False, provider="web"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
 
     workspace = tmp_path / "workspace"
@@ -1393,7 +1352,7 @@ async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_
                 "tool_denylist": ["web_search"],
                 "tool_allow_providers": [],
                 "tool_deny_providers": [],
-                "tool_max_tier": "privileged",
+    
             },
             "agents": {"list": [{"id": "coder", "tool_policy": {"allow_names": ["web_search"]}}]},
         }
@@ -1424,7 +1383,7 @@ async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_
 @pytest.mark.asyncio
 async def test_policy_explain_endpoint_with_model_context(monkeypatch):
     registry = ToolRegistry()
-    registry.register(_DummyTool("web_search", ToolSafetyTier.SAFE, provider="web"))
+    registry.register(_DummyTool("web_search", False, provider="web"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
     fake_cfg = _FakeConfig({"security": {"tool_groups": {}}, "agents": {"list": []}})
     monkeypatch.setattr(admin_api, "config", fake_cfg)
@@ -1457,7 +1416,7 @@ async def test_policy_effective_endpoint_includes_directory_conflicts(monkeypatc
     fake_cfg = _FakeConfig(
         {
             "security": {
-                "tool_max_tier": "standard",
+
                 "tool_allowlist": [],
                 "tool_denylist": ["web_search"],
                 "tool_allow_providers": [],
@@ -1483,13 +1442,13 @@ async def test_policy_effective_endpoint_includes_directory_conflicts(monkeypatc
 @pytest.mark.asyncio
 async def test_policy_effective_endpoint_preview_with_model_context(monkeypatch):
     registry = ToolRegistry()
-    registry.register(_DummyTool("web_search", ToolSafetyTier.SAFE, provider="web"))
+    registry.register(_DummyTool("web_search", False, provider="web"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
 
     fake_cfg = _FakeConfig(
         {
             "security": {
-                "tool_max_tier": "privileged",
+    
                 "tool_allowlist": [],
                 "tool_denylist": [],
                 "tool_allow_providers": [],
@@ -1808,6 +1767,7 @@ async def test_observability_metrics_endpoint(monkeypatch):
     monkeypatch.setattr("tools.admin.observability.get_tool_registry", lambda: _Registry())
     monkeypatch.setattr("tools.admin.observability.TOOL_REGISTRY", _Registry())
     monkeypatch.setattr("tools.admin._shared.TOOL_REGISTRY", _Registry())
+    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
     monkeypatch.setattr(
         "tools.admin.system._build_training_bridge_policy_scoreboard",
         lambda limit=50, dataset_id=None: {
@@ -1841,6 +1801,7 @@ async def test_tool_governance_health_endpoint(monkeypatch):
             return [{"code": "TOOL_NOT_PERMITTED", "tool": "priv_tool"}][:limit]
 
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _Registry())
+    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
 
     payload = await admin_api.get_tool_governance_health(limit=5)
     assert payload["status"] == "ok"
@@ -1882,8 +1843,18 @@ async def test_tool_governance_slo_endpoint_and_export(monkeypatch, tmp_path: Pa
             ]
             return events[:limit]
 
+    monkeypatch.setattr(
+        "tools.admin.observability._build_llm_tool_failure_profile",
+        lambda limit=200: {"tool": {"calls": 3, "failures": 1, "success_rate": 0.6667}}
+    )
+    monkeypatch.setattr(
+        "tools.admin.observability._build_tool_timing_profile",
+        lambda limit=200: {"p95_latency_ms": 1000.0, "success_timestamps_by_tool": {"echo": [31.0]}}
+    )
+
     monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _Store())
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _Registry())
+    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
     monkeypatch.setattr(
         admin_api,
         "config",

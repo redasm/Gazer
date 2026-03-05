@@ -3,14 +3,14 @@
 import asyncio
 import pytest
 from unittest.mock import patch
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.registry import ToolRegistry
 
 
 class FakeTool(Tool):
-    def __init__(self, name, tier=ToolSafetyTier.STANDARD, provider="core"):
+    def __init__(self, name, owner_only=False, provider="core"):
         self._name = name
-        self._tier = tier
+        self._owner_only = owner_only
         self._provider = provider
 
     @property
@@ -26,8 +26,8 @@ class FakeTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self):
-        return self._tier
+    def owner_only(self):
+        return self._owner_only
 
     @property
     def provider(self):
@@ -40,9 +40,9 @@ class FakeTool(Tool):
 @pytest.fixture
 def registry():
     r = ToolRegistry()
-    r.register(FakeTool("safe_tool", ToolSafetyTier.SAFE, provider="system"))
-    r.register(FakeTool("std_tool", ToolSafetyTier.STANDARD, provider="coding"))
-    r.register(FakeTool("priv_tool", ToolSafetyTier.PRIVILEGED, provider="desktop"))
+    r.register(FakeTool("safe_tool", False, provider="system"))
+    r.register(FakeTool("std_tool", False, provider="coding"))
+    r.register(FakeTool("priv_tool", True, provider="desktop"))
     return r
 
 
@@ -79,17 +79,9 @@ class TestToolRegistry:
         defs_owner = registry.get_definitions(sender_id="owner", channel="web")
         assert len(defs_owner) == 3
 
-    def test_get_definitions_tier_filter(self, registry):
-        safe_only = registry.get_definitions(max_tier=ToolSafetyTier.SAFE)
-        assert len(safe_only) == 1
-        assert safe_only[0]["function"]["name"] == "safe_tool"
-
-        standard = registry.get_definitions(max_tier=ToolSafetyTier.STANDARD)
-        assert len(standard) == 2
-
-    def test_get_definitions_owner_only_filtered_by_sender_context(self, registry):
+    def test_get_definitions_owner_only_filter(self, registry):
+        # Without sender context, owner-only tools are excluded (fail-closed)
         non_owner_defs = registry.get_definitions(
-            max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="user-1",
             channel="telegram",
         )
@@ -98,7 +90,6 @@ class TestToolRegistry:
         assert sorted(non_owner_names) == ["safe_tool", "std_tool"]
 
         owner_defs = registry.get_definitions(
-            max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="owner",
             channel="web",
         )
@@ -165,8 +156,8 @@ class TestToolRegistry:
         assert "not found" in result
 
     @pytest.mark.asyncio
-    async def test_execute_blocked_by_tier(self, registry):
-        result = await registry.execute("priv_tool", {}, max_tier=ToolSafetyTier.SAFE)
+    async def test_execute_blocked_owner_only(self, registry):
+        result = await registry.execute("priv_tool", {})
         assert "not permitted" in result
 
     @pytest.mark.asyncio
@@ -174,7 +165,6 @@ class TestToolRegistry:
         result = await registry.execute(
             "priv_tool",
             {},
-            max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="user-1",
             channel="telegram",
         )
@@ -186,7 +176,6 @@ class TestToolRegistry:
         result = await registry.execute(
             "priv_tool",
             {},
-            max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="owner",
             channel="web",
         )
@@ -197,7 +186,6 @@ class TestToolRegistry:
         result = await registry.execute(
             "priv_tool",
             {},
-            max_tier=ToolSafetyTier.PRIVILEGED,
             sender_id="user-1",
             channel="telegram",
         )
@@ -209,7 +197,6 @@ class TestToolRegistry:
         result = await registry.execute(
             "priv_tool",
             {},
-            max_tier=ToolSafetyTier.PRIVILEGED,
         )
         assert "TOOL_NOT_PERMITTED" in result
 
@@ -219,7 +206,7 @@ class TestToolRegistry:
 
         class CaptureTool(FakeTool):
             def __init__(self):
-                super().__init__("capture_tool", ToolSafetyTier.STANDARD, provider="coding")
+                super().__init__("capture_tool", False, provider="coding")
                 self.last_kwargs = None
 
             async def execute(self, **kwargs):
@@ -233,7 +220,6 @@ class TestToolRegistry:
         result = await registry.execute(
             "capture_tool",
             {"payload": "x"},
-            max_tier=ToolSafetyTier.STANDARD,
             policy=policy,
             sender_id="u1",
             channel="web",
@@ -242,7 +228,7 @@ class TestToolRegistry:
         assert result == "ok"
         assert capture_tool.last_kwargs is not None
         assert capture_tool.last_kwargs["payload"] == "x"
-        assert capture_tool.last_kwargs["_access_max_tier"] == ToolSafetyTier.STANDARD
+        assert capture_tool.last_kwargs["_access_sender_is_owner"] is not None
         assert capture_tool.last_kwargs["_access_policy"] is policy
         assert capture_tool.last_kwargs["_access_sender_id"] == "u1"
         assert capture_tool.last_kwargs["_access_channel"] == "web"
@@ -258,7 +244,7 @@ class TestToolRegistry:
             async def execute(self, **kwargs):
                 return "Error [X_FAIL]: fail"
 
-        registry.register(FailTool("flaky_tool", ToolSafetyTier.SAFE, provider="system"))
+        registry.register(FailTool("flaky_tool", False, provider="system"))
 
         def _get(key, default=None):
             cfg = {
@@ -283,7 +269,7 @@ class TestToolRegistry:
     async def test_execute_circuit_resets_after_success(self, mock_config, registry):
         class FlipTool(FakeTool):
             def __init__(self):
-                super().__init__("flip_tool", ToolSafetyTier.SAFE, provider="system")
+                super().__init__("flip_tool", False, provider="system")
                 self.calls = 0
 
             async def execute(self, **kwargs):
@@ -394,13 +380,13 @@ class TestToolRegistry:
         mock_config.get.side_effect = _get
         # Use std_tool (STANDARD tier) to test tier rejection without
         # interference from owner-only fail-closed (only PRIVILEGED is owner-only)
-        result = await registry.execute("std_tool", {}, max_tier=ToolSafetyTier.SAFE)
+        result = await registry.execute("priv_tool", {})
         assert "TOOL_NOT_PERMITTED" in result
         events = registry.get_recent_rejection_events(limit=10)
         assert len(events) >= 1
         assert events[0]["code"] == "TOOL_NOT_PERMITTED"
-        assert events[0]["tool"] == "std_tool"
-        assert events[0]["reason"] == "blocked_by_tier"
+        assert events[0]["tool"] == "priv_tool"
+        assert events[0]["reason"] == "blocked_by_owner_only_no_context"
 
     @pytest.mark.asyncio
     @patch("tools.registry.gazer_config")

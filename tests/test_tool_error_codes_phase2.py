@@ -1,6 +1,6 @@
 import asyncio
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.cron_tool import CronTool
 from tools.hardware import HardwareControlTool
 from tools.registry import ToolRegistry
@@ -34,8 +34,8 @@ class _EchoTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self):
-        return ToolSafetyTier.SAFE
+    def owner_only(self):
+        return False
 
     @property
     def provider(self):

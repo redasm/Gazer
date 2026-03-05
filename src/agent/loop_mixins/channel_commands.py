@@ -172,10 +172,8 @@ class ChannelCommandsMixin:
 
     def _build_tools_status_text(self, *, msg: InboundMessage) -> str:
         role = self._resolve_command_role(msg)
-        max_tier = self._resolve_tool_max_tier(msg)
         policy = self._resolve_tool_policy()
         tool_defs = self.tools.get_definitions(
-            max_tier=max_tier,
             policy=policy,
             sender_id=msg.sender_id,
             channel=msg.channel,
@@ -205,7 +203,7 @@ class ChannelCommandsMixin:
 
     def _build_policy_status_text(self, *, msg: InboundMessage) -> str:
         role = self._resolve_command_role(msg)
-        tier = self._resolve_tool_max_tier(msg)
+        sender_is_owner = self._is_sender_owner(msg)
         policy = self._resolve_tool_policy()
         pipeline_status = self.get_tool_policy_pipeline_status()
         pipeline_steps = pipeline_status.get("steps", []) if isinstance(pipeline_status, dict) else []
@@ -227,7 +225,7 @@ class ChannelCommandsMixin:
         return (
             "当前策略状态:\n"
             f"- role={self._describe_command_role(role)}\n"
-            f"- effective_max_tier={tier.value}\n"
+            f"- sender_is_owner={sender_is_owner}\n"
             f"- allow_names={self._format_compact_items(sorted(policy.allow_names), limit=8)}\n"
             f"- deny_names={self._format_compact_items(sorted(policy.deny_names), limit=8)}\n"
             f"- allow_providers={self._format_compact_items(sorted(policy.allow_providers), limit=8)}\n"

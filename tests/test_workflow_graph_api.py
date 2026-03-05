@@ -40,9 +40,14 @@ class _FakeRouter:
 @pytest.mark.asyncio
 async def test_workflow_graph_crud_and_run(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "demo_flow",
@@ -95,9 +100,14 @@ async def test_workflow_graph_crud_and_run(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_node_enabled_locked_persist_and_skip(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "flags_flow",
@@ -129,9 +139,14 @@ async def test_workflow_graph_node_enabled_locked_persist_and_skip(monkeypatch, 
 @pytest.mark.asyncio
 async def test_workflow_graph_dag_fanout_merge(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "dag_flow",
@@ -163,9 +178,14 @@ async def test_workflow_graph_dag_fanout_merge(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_condition_branch_by_edge_when(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "branch_flow",
@@ -202,9 +222,14 @@ async def test_workflow_graph_condition_branch_by_edge_when(monkeypatch, tmp_pat
 @pytest.mark.asyncio
 async def test_workflow_graph_reject_cycle(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "cycle_flow",
@@ -227,9 +252,14 @@ async def test_workflow_graph_reject_cycle(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_retry_success(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "retry_flow",
@@ -259,9 +289,14 @@ async def test_workflow_graph_retry_success(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_timeout_continue(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "timeout_continue_flow",
@@ -300,9 +335,14 @@ async def test_workflow_graph_timeout_continue(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_timeout_fail_fast(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "timeout_fail_flow",
@@ -340,9 +380,14 @@ async def test_workflow_graph_timeout_fail_fast(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_workflow_graph_timeout_fallback_output(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "timeout_fallback_flow",
@@ -381,9 +426,14 @@ async def test_workflow_graph_timeout_fallback_output(monkeypatch, tmp_path: Pat
 @pytest.mark.asyncio
 async def test_workflow_graph_reject_when_on_non_condition(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "invalid_when_non_condition",
@@ -405,9 +455,14 @@ async def test_workflow_graph_reject_when_on_non_condition(monkeypatch, tmp_path
 @pytest.mark.asyncio
 async def test_workflow_graph_reject_condition_mixed_tagged_and_untagged(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "invalid_condition_mixed",
@@ -433,9 +488,14 @@ async def test_workflow_graph_reject_condition_mixed_tagged_and_untagged(monkeyp
 @pytest.mark.asyncio
 async def test_workflow_graph_reject_no_reachable_output(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "invalid_no_reachable_output",
@@ -458,13 +518,21 @@ async def test_workflow_graph_reject_no_reachable_output(monkeypatch, tmp_path: 
 @pytest.mark.asyncio
 async def test_workflow_graph_observability_metrics_include_workflow(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
     dq = collections.deque(maxlen=300)
-    monkeypatch.setattr(_shared, "_workflow_run_history", dq)
+    monkeypatch.setattr("tools.admin.workflows._workflow_run_history", dq)
+    monkeypatch.setattr("tools.admin.strategy_helpers._workflow_run_history", dq)
+    monkeypatch.setattr("tools.admin.system._workflow_run_history", dq)
+    monkeypatch.setattr("tools.admin.observability._workflow_run_history", dq)
     from tools.admin import system
-    monkeypatch.setattr(system, "_workflow_run_history", dq)
+    # removed monkeypatch(system, history)
 
     payload = {
         "name": "obs_flow",
@@ -482,8 +550,9 @@ async def test_workflow_graph_observability_metrics_include_workflow(monkeypatch
     workflow_id = saved["workflow"]["id"]
     await admin_api.run_workflow_graph(workflow_id, {"input": "hello"})
     await admin_api.run_workflow_graph(workflow_id, {"input": "world"})
-    monkeypatch.setattr(_shared, "LLM_ROUTER", None)
-    monkeypatch.setattr(observability, "get_llm_router", lambda: None)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", None)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", None)
+    monkeypatch.setattr("tools.admin.observability.get_llm_router", lambda: None)
 
     metrics = await observability.get_observability_metrics(limit=20)
     assert metrics["status"] == "ok"
@@ -497,9 +566,14 @@ async def test_workflow_graph_observability_metrics_include_workflow(monkeypatch
 @pytest.mark.asyncio
 async def test_flowise_import_three_common_flows_and_run(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     cases = [
         {
@@ -585,9 +659,14 @@ async def test_flowise_import_three_common_flows_and_run(monkeypatch, tmp_path: 
 @pytest.mark.asyncio
 async def test_flowise_export_and_import_roundtrip(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     payload = {
         "name": "roundtrip_flow",
@@ -687,9 +766,14 @@ async def test_flowise_migration_report_template_and_export(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_flowise_import_reports_node_level_errors(monkeypatch, tmp_path: Path):
     graph_dir = tmp_path / "graphs"
-    monkeypatch.setattr(_shared, "_WORKFLOW_GRAPH_DIR", graph_dir)
-    monkeypatch.setattr(_shared, "TOOL_REGISTRY", _FakeToolRegistry())
-    monkeypatch.setattr(_shared, "LLM_ROUTER", _FakeRouter())
+    monkeypatch.setattr("tools.admin.workflow_helpers._WORKFLOW_GRAPH_DIR", graph_dir)
+    monkeypatch.setattr("tools.admin.workflows._WORKFLOW_GRAPH_DIR", graph_dir)
+    fake_tr = _FakeToolRegistry()
+    fake_router = _FakeRouter()
+    monkeypatch.setattr("tools.admin.workflow_helpers.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflow_helpers.LLM_ROUTER", fake_router)
+    monkeypatch.setattr("tools.admin.workflows.TOOL_REGISTRY", fake_tr)
+    monkeypatch.setattr("tools.admin.workflows.LLM_ROUTER", fake_router)
 
     flowise_payload = {
         "nodes": [

@@ -3,8 +3,7 @@ from tools.admin import api_facade as admin_api
 
 def test_validate_satellite_node_auth_success(monkeypatch) -> None:
     monkeypatch.setattr(
-        admin_api,
-        "_get_satellite_node_config",
+        "tools.admin.strategy_helpers._get_satellite_node_config",
         lambda node_id: {"token": "secret-1"} if node_id == "sat-01" else {},
     )
     ok, message = admin_api._validate_satellite_node_auth("sat-01", "secret-1")
@@ -19,14 +18,14 @@ def test_validate_satellite_node_auth_rejects_missing_node() -> None:
 
 
 def test_validate_satellite_node_auth_rejects_unconfigured_node(monkeypatch) -> None:
-    monkeypatch.setattr(admin_api, "_get_satellite_node_config", lambda node_id: {})
+    monkeypatch.setattr("tools.admin.strategy_helpers._get_satellite_node_config", lambda node_id: {})
     ok, message = admin_api._validate_satellite_node_auth("sat-02", "token")
     assert ok is False
     assert "not configured" in message
 
 
 def test_validate_satellite_node_auth_rejects_invalid_token(monkeypatch) -> None:
-    monkeypatch.setattr(admin_api, "_get_satellite_node_config", lambda node_id: {"token": "real-token"})
+    monkeypatch.setattr("tools.admin.strategy_helpers._get_satellite_node_config", lambda node_id: {"token": "real-token"})
     ok, message = admin_api._validate_satellite_node_auth("sat-03", "bad-token")
     assert ok is False
     assert "Invalid node token" in message

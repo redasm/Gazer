@@ -43,7 +43,6 @@ def _build_workflow_observability_metrics(limit: int = 200):
     return _impl(limit=limit)
 from tools.admin.auth import verify_admin_token
 from tools.admin.auth import _verify_ws_auth, _extract_ws_token
-from tools.registry import ToolSafetyTier
 from urllib.parse import urlparse, parse_qs
 from ._shared import _redact_config
 
@@ -183,7 +182,7 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
     if method == "tools/list":
         if TOOL_REGISTRY is None:
             return _mcp_response_error(request_id, -32000, "Tool registry unavailable")
-        definitions = TOOL_REGISTRY.get_definitions(max_tier=ToolSafetyTier.PRIVILEGED)
+        definitions = TOOL_REGISTRY.get_definitions()
         tools: List[Dict[str, Any]] = []
         for item in definitions:
             fn = item.get("function", {}) if isinstance(item, dict) else {}
@@ -208,7 +207,6 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
         result = await TOOL_REGISTRY.execute(
             tool_name,
             arguments,
-            max_tier=ToolSafetyTier.PRIVILEGED,
         )
         is_error = str(result).startswith("Error")
         return _mcp_response_ok(

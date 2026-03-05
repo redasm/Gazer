@@ -109,7 +109,7 @@ _PLUGIN_PY_TEMPLATE = textwrap.dedent("""\
     \"\"\"Gazer plugin: {plugin_name}.\"\"\"
 
     from plugins.api import PluginAPI
-    from tools.base import Tool, ToolSafetyTier
+    from tools.base import Tool
     from typing import Any, Dict
 
 
@@ -136,10 +136,6 @@ class {class_name}(Tool):
                 }},
                 "required": ["query"],
             }}
-
-        @property
-        def safety_tier(self) -> ToolSafetyTier:
-            return ToolSafetyTier.SAFE
 
         async def execute(self, **kwargs: Any) -> str:
             query = kwargs.get("query", "")

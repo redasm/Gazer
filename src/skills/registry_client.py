@@ -107,7 +107,7 @@ class SkillRegistryClient:
 # Agent-facing tools
 # ---------------------------------------------------------------------------
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 
 class SkillSearchTool(Tool):
@@ -133,10 +133,6 @@ class SkillSearchTool(Tool):
             },
             "required": ["query"],
         }
-
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     async def execute(self, query: str = "", **kwargs: Any) -> str:
         results = await self._client.search(query)
@@ -170,10 +166,6 @@ class SkillInstallTool(Tool):
             },
             "required": ["name"],
         }
-
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     async def execute(self, name: str = "", **kwargs: Any) -> str:
         if not name:

@@ -9,7 +9,7 @@ from agent.loop import AgentLoop
 from bus.queue import MessageBus
 from llm.base import LLMResponse, ToolCallRequest
 from runtime.resilience import RetryBudget
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.batching import ToolBatchPlanner, ToolBatchingTracker
 
 
@@ -56,8 +56,8 @@ class _EchoTool(Tool):
         }
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
+    def owner_only(self) -> bool:
+        return False
 
     @property
     def provider(self) -> str:
@@ -171,7 +171,7 @@ async def test_loop_execute_tool_calls_with_batching(monkeypatch, tmp_path):
 
     results, plan = await loop._execute_tool_calls_with_batching(
         calls,
-        max_tier=ToolSafetyTier.SAFE,
+
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(4),
         sender_id="u1",
@@ -204,8 +204,8 @@ async def test_tool_batching_observability_endpoint(monkeypatch):
         lambda: SimpleNamespace(summary=lambda: {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70}),
     )
     monkeypatch.setattr("tools.admin.system.get_tool_batching_tracker", lambda: tracker)
-    monkeypatch.setattr("tools.admin._shared.get_tool_batching_tracker", lambda: tracker)
     monkeypatch.setattr("tools.admin.state.get_tool_batching_tracker", lambda: tracker)
+    monkeypatch.setattr("tools.admin.observability.get_tool_batching_tracker", lambda: tracker)
 
     usage = await admin_api.get_usage_stats()
     assert usage["status"] == "ok"

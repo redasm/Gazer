@@ -6,42 +6,38 @@ from typing import Any, Dict, List, Tuple
 from eval.self_evolution_world_model import CompressedState, MinimalWorldModel, TransitionPrediction
 
 
-_TIER_ORDER = {"safe": 0, "standard": 1, "privileged": 2}
 
-
-def _tier_rank(tier: str) -> int:
-    return _TIER_ORDER.get(str(tier or "standard").strip().lower(), _TIER_ORDER["standard"])
 
 
 @dataclass
 class ToolPolicyView:
     deny_tools: set[str]
-    max_tier: str
-    tool_tiers: Dict[str, str]
+    allow_owner_only: bool
+    tool_owner_flags: Dict[str, bool]
 
     @classmethod
     def from_payload(cls, payload: Dict[str, Any]) -> "ToolPolicyView":
         raw_deny = payload.get("deny_tools", [])
         deny_tools = {str(item).strip() for item in raw_deny if str(item).strip()} if isinstance(raw_deny, list) else set()
-        max_tier = str(payload.get("max_tier", "standard")).strip().lower() or "standard"
-        tool_tiers_raw = payload.get("tool_tiers", {})
-        tool_tiers: Dict[str, str] = {}
-        if isinstance(tool_tiers_raw, dict):
-            for key, value in tool_tiers_raw.items():
+        allow_owner_only = bool(payload.get("allow_owner_only", False))
+        tool_owner_flags_raw = payload.get("tool_owner_flags", {})
+        tool_owner_flags: Dict[str, bool] = {}
+        if isinstance(tool_owner_flags_raw, dict):
+            for key, value in tool_owner_flags_raw.items():
                 k = str(key).strip()
                 if not k:
                     continue
-                tool_tiers[k] = str(value).strip().lower() or "standard"
-        return cls(deny_tools=deny_tools, max_tier=max_tier, tool_tiers=tool_tiers)
+                tool_owner_flags[k] = bool(value)
+        return cls(deny_tools=deny_tools, allow_owner_only=allow_owner_only, tool_owner_flags=tool_owner_flags)
 
 
 def _action_allowed(action: Dict[str, Any], policy: ToolPolicyView) -> Tuple[bool, str]:
     tool_name = str(action.get("tool", action.get("name", ""))).strip()
     if tool_name in policy.deny_tools:
         return False, "tool_denied"
-    tier = str(action.get("tier", policy.tool_tiers.get(tool_name, "standard"))).strip().lower() or "standard"
-    if _tier_rank(tier) > _tier_rank(policy.max_tier):
-        return False, "tier_exceeded"
+    is_owner_only = bool(action.get("owner_only", policy.tool_owner_flags.get(tool_name, False)))
+    if is_owner_only and not policy.allow_owner_only:
+        return False, "owner_only_exceeded"
     return True, "allowed"
 
 

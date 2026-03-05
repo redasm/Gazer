@@ -207,9 +207,9 @@ async def test_memory_recall_regression_endpoint_warn_mode_does_not_block_gate(
     )
     fake_eval = _FakeEvalBenchmarkManager()
 
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
-    monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: fake_eval)
+    monkeypatch.setattr("tools.admin.workflow_helpers.config", fake_cfg)
+    monkeypatch.setattr("tools.admin.memory._get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
+    monkeypatch.setattr("tools.admin.workflow_helpers._get_eval_benchmark_manager", lambda: fake_eval)
 
     payload = await admin_api.get_memory_recall_regression(
         window_days=7,
@@ -276,9 +276,9 @@ async def test_memory_recall_regression_endpoint_block_mode_updates_release_gate
     )
     fake_eval = _FakeEvalBenchmarkManager()
 
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
-    monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: fake_eval)
+    monkeypatch.setattr("tools.admin.workflow_helpers.config", fake_cfg)
+    monkeypatch.setattr("tools.admin.memory._get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
+    monkeypatch.setattr("tools.admin.workflow_helpers._get_eval_benchmark_manager", lambda: fake_eval)
 
     payload = await admin_api.get_memory_recall_regression(
         window_days=7,
@@ -327,9 +327,9 @@ async def test_memory_recall_regression_export_markdown(monkeypatch, tmp_path: P
         }
     )
     fake_eval = _FakeEvalBenchmarkManager()
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
-    monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: fake_eval)
+    monkeypatch.setattr("tools.admin.workflow_helpers.config", fake_cfg)
+    monkeypatch.setattr("tools.admin.memory._get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
+    monkeypatch.setattr("tools.admin.workflow_helpers._get_eval_benchmark_manager", lambda: fake_eval)
 
     output_path = tmp_path / "memory_recall_regression.md"
     payload = await admin_api.export_memory_recall_regression(

@@ -475,13 +475,10 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
     router_patch = output.get("router_patch") if isinstance(output, dict) else {}
     prompt_rules = _unique_str_list((prompt_patch or {}).get("rules", []))
     deny_add = _unique_str_list((policy_patch or {}).get("security.tool_denylist.add", []))
-    suggested_tier = str((policy_patch or {}).get("security.tool_max_tier.suggested", "")).strip().lower()
-    if suggested_tier not in {"safe", "standard", "privileged"}:
-        suggested_tier = ""
 
     before_prompt = str(config.get("personality.system_prompt", ""))
     before_deny = _unique_str_list(config.get("security.tool_denylist", []) or [])
-    before_tier = str(config.get("security.tool_max_tier", "standard")).strip().lower() or "standard"
+
     before_router_strategy = str(config.get("models.router.strategy", "priority")).strip().lower() or "priority"
     before_router_strategy = _normalize_router_strategy(before_router_strategy, fallback="priority")
     before_router_template = str(config.get("models.router.strategy_template", "")).strip()
@@ -498,7 +495,7 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
         job_id=str(job.get("job_id", "")),
     )
     after_deny = sorted(set(before_deny + deny_add))
-    after_tier = suggested_tier or before_tier
+
     after_router_strategy = _normalize_router_strategy(
         (router_patch or {}).get("strategy", (router_patch or {}).get("models.router.strategy", before_router_strategy)),
         fallback=before_router_strategy,
@@ -523,7 +520,6 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
     before = {
         "personality.system_prompt": before_prompt,
         "security.tool_denylist": before_deny,
-        "security.tool_max_tier": before_tier,
         "models.router.strategy": before_router_strategy,
         "models.router.strategy_template": before_router_template,
         "models.router.budget": dict(before_router_budget),
@@ -532,7 +528,6 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
     after = {
         "personality.system_prompt": after_prompt,
         "security.tool_denylist": after_deny,
-        "security.tool_max_tier": after_tier,
         "models.router.strategy": after_router_strategy,
         "models.router.strategy_template": after_router_template,
         "models.router.budget": dict(after_router_budget),
@@ -554,13 +549,11 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
                 "patch": dict(policy_patch) if isinstance(policy_patch, dict) else {},
                 "before": {
                     "security.tool_denylist": before_deny,
-                    "security.tool_max_tier": before_tier,
                 },
                 "after": {
                     "security.tool_denylist": after_deny,
-                    "security.tool_max_tier": after_tier,
                 },
-                "changed": before_deny != after_deny or before_tier != after_tier,
+                "changed": before_deny != after_deny,
             },
             "router": {
                 "kind": "router",
@@ -595,7 +588,7 @@ def _build_training_publish_diff(job: Dict[str, Any]) -> Dict[str, Any]:
         "summary": {
             "prompt_rules_added": len(prompt_rules),
             "denylist_added": sorted(set(after_deny) - set(before_deny)),
-            "tool_max_tier_changed": before_tier != after_tier,
+
             "router_strategy_changed": before_router_strategy != after_router_strategy,
             "router_strategy": after_router_strategy,
         },
@@ -906,7 +899,7 @@ def _summarize_training_output(output: Any) -> Dict[str, Any]:
         "prompt_rule_count": len(rules),
         "has_policy_patch": bool(policy_patch),
         "denylist_add_count": len(denylist),
-        "suggested_max_tier": str(policy_patch.get("security.tool_max_tier.suggested", "")).strip() or None,
+
         "has_router_patch": bool(router_patch),
         "router_strategy": str(router_patch.get("strategy", "")).strip() or None,
     }

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from tools.base import ShellOperations, Tool, ToolSafetyTier
+from tools.base import ShellOperations, Tool
 
 logger = logging.getLogger("CodingTools")
 

@@ -147,7 +147,7 @@ async def test_online_policy_loop_admin_api_enforces_gate_before_publish(monkeyp
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
             "models": {
                 "router": {
                     "strategy": "priority",

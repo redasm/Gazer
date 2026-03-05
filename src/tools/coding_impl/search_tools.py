@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from tools.base import ShellOperations, ToolSafetyTier
+from tools.base import ShellOperations
 
 from .helpers import CodingToolBase, _to_workspace_relative_path
 from .native_ops import native_find, native_grep, native_ls
@@ -24,9 +24,6 @@ class ListDirTool(CodingToolBase):
     def name(self) -> str:
         return "list_dir"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -94,9 +91,6 @@ class FindFilesTool(CodingToolBase):
     def name(self) -> str:
         return "find_files"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -150,9 +144,6 @@ class ReadSkillTool(CodingToolBase):
     def name(self) -> str:
         return "read_skill"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -195,9 +186,6 @@ class GrepTool(CodingToolBase):
     def name(self) -> str:
         return "grep"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

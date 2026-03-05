@@ -19,7 +19,7 @@ from bus.command_queue import CommandLane, CommandQueue
 from bus.events import InboundMessage
 from bus.queue import MessageBus
 from llm.base import LLMProvider
-from tools.base import CancellationToken, Tool, ToolSafetyTier
+from tools.base import CancellationToken, Tool
 
 logger = logging.getLogger("AgentOrchestrator")
 
@@ -1008,10 +1008,6 @@ class DelegateTaskTool(Tool):
             },
             "required": ["agent_id", "task"],
         }
-
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     async def execute(
         self,

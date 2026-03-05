@@ -21,7 +21,7 @@ from tools.coding import EditFileTool, FindFilesTool, GrepTool, ReadFileTool, Wr
 from tools.device_tools import NodeInvokeTool, NodeListTool
 from tools.email_tools import EmailReadTool, EmailSendTool
 from tools.media_marker import MEDIA_MARKER
-from tools.registry import ToolRegistry, ToolSafetyTier
+from tools.registry import ToolRegistry
 from tools.web_tools import WebFetchTool, WebSearchTool
 
 
@@ -155,7 +155,6 @@ async def test_golden_path_device_observe_and_screenshot(monkeypatch, tmp_path: 
     observed = await registry.execute(
         "node_invoke",
         {"action": "screen.observe", "args": {"query": "active app"}},
-        max_tier=ToolSafetyTier.PRIVILEGED,
         sender_id="owner",
     )
     assert "observed: active app" in observed
@@ -163,7 +162,6 @@ async def test_golden_path_device_observe_and_screenshot(monkeypatch, tmp_path: 
     shot = await registry.execute(
         "node_invoke",
         {"action": "screen.screenshot", "args": {}},
-        max_tier=ToolSafetyTier.PRIVILEGED,
         sender_id="owner",
     )
     assert MEDIA_MARKER in shot
@@ -186,7 +184,6 @@ async def test_golden_path_device_hidden_capability_returns_stable_code(monkeypa
     result = await registry.execute(
         "node_invoke",
         {"action": "screen.screenshot", "args": {}},
-        max_tier=ToolSafetyTier.PRIVILEGED,
         sender_id="owner",
     )
     assert "DEVICE_ACTION_UNSUPPORTED" in result

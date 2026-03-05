@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from tools.base import FileOperations, ShellOperations, ToolSafetyTier
+from tools.base import FileOperations, ShellOperations
 
 from .helpers import (
     MAX_READ_LINES,
@@ -42,9 +42,6 @@ class ReadFileTool(CodingToolBase):
     def name(self) -> str:
         return "read_file"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

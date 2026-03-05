@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tools.base import ToolSafetyTier
+
 from tools.email_tools import EmailReadTool, EmailSendTool
 
 
@@ -79,7 +79,7 @@ async def test_email_send_tool_is_standard_and_sends():
     client = _FakeEmailClient()
     tool = EmailSendTool(client)
 
-    assert tool.safety_tier == ToolSafetyTier.STANDARD
+    assert tool.owner_only is False
     result = await tool.execute(
         to="alice@example.com",
         subject="Re: Hello",

@@ -69,7 +69,6 @@ class _Provider:
 def _build_runtime_cfg() -> Dict[str, Any]:
     return {
         "security": {
-            "tool_max_tier": "standard",
             "tool_groups": {},
             "tool_allowlist": [],
             "tool_denylist": [],

@@ -135,7 +135,6 @@ class LightningLiteTrainer:
             },
             "policy_patch": {
                 "security.tool_denylist.add": unique_deny,
-                "security.tool_max_tier.suggested": "safe" if unique_deny else "standard",
             },
             "router_patch": {
                 "strategy": router_strategy,

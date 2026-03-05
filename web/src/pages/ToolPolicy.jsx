@@ -23,7 +23,6 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
     const [groupsText, setGroupsText] = useState('{}');
     const [explainTool, setExplainTool] = useState('exec');
     const [simAgentId, setSimAgentId] = useState('');
-    const [simTier, setSimTier] = useState('standard');
     const [explainResult, setExplainResult] = useState(null);
     const [simulateResults, setSimulateResults] = useState([]);
     const [reasonFilter, setReasonFilter] = useState('all');
@@ -84,7 +83,6 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
             const res = await axios.post(`${API_BASE}/policy/explain`, {
                 tool_name: explainTool,
                 agent_id: simAgentId || undefined,
-                max_tier: simTier,
             });
             setExplainResult(res.data?.result || null);
             showNotice(t.noticePolicyExplanationLoaded || 'Policy explanation loaded', 'success');
@@ -101,7 +99,6 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
         try {
             const res = await axios.post(`${API_BASE}/policy/simulate`, {
                 agent_id: simAgentId || undefined,
-                max_tier: simTier,
             });
             setSimulateResults(res.data?.results || []);
             showNotice(t.noticePolicySimulationCompleted || 'Policy simulation completed', 'success');
@@ -149,7 +146,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                 item.allowed,
                 item.reason,
                 item.provider || '',
-                item.tier || '',
+                item.owner_only || '',
             ]),
         ];
         const csv = rows.map((row) => row.map(toCsvLine).join(',')).join('\n');
@@ -181,19 +178,6 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                 {t.toolPolicyDesc || 'Manage tool exposure and execution policy outside general settings.'}
             </p>
             <NoticeBanner notice={notice} />
-
-            <div className="card" style={{ padding: 16, marginBottom: 14 }}>
-                <label className="label">{t.toolMaxTier || 'Tool Max Tier'}</label>
-                <select
-                    className="input"
-                    value={security.tool_max_tier || 'standard'}
-                    onChange={(e) => setSecurity({ tool_max_tier: e.target.value })}
-                >
-                    <option value="safe">safe</option>
-                    <option value="standard">standard</option>
-                    <option value="privileged">privileged</option>
-                </select>
-            </div>
 
             <div className="card" style={{ padding: 16, marginBottom: 14 }}>
                 <label className="label">{t.toolAllowlist || 'Tool Allowlist'}</label>
@@ -235,7 +219,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                 <h3 style={{ fontSize: 14, color: '#cdd9e8', marginTop: 0 }}>
                     {t.policySimulator || 'Policy Simulator'}
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 180px 120px 120px', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 120px', gap: 8 }}>
                     <input
                         className="input"
                         value={explainTool}
@@ -248,11 +232,6 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                         onChange={(e) => setSimAgentId(e.target.value)}
                         placeholder="agent id (optional)"
                     />
-                    <select className="input" value={simTier} onChange={(e) => setSimTier(e.target.value)}>
-                        <option value="safe">safe</option>
-                        <option value="standard">standard</option>
-                        <option value="privileged">privileged</option>
-                    </select>
                     <button className="btn-ghost" onClick={explainPolicy}>
                         {t.explain || 'Explain'}
                     </button>
@@ -337,7 +316,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
                         <div style={{ color: '#9fb3c8' }}>
-                            max_tier: <span style={{ color: '#dbeafe' }}>{effectivePolicy.global?.max_tier || '-'}</span>
+                            owner_only_tools: <span style={{ color: '#dbeafe' }}>{effectivePolicy.global?.owner_only_count || 0}</span>
                         </div>
                         <div style={{ color: '#9fb3c8' }}>
                             groups: <span style={{ color: '#dbeafe' }}>{effectivePolicy.global?.group_count || 0}</span>

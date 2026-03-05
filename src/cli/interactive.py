@@ -266,9 +266,9 @@ class InteractiveCLI:
         print(f"{_BOLD}Registered tools ({len(names)}):{_RESET}")
         for n in sorted(names):
             tool = self.agent.loop.tools.get(n)
-            tier = tool.safety_tier.value if tool else "?"
+            owner = "owner_only" if (tool and tool.owner_only) else "public"
             desc = (tool.description[:60] + "...") if tool and len(tool.description) > 60 else (tool.description if tool else "")
-            print(f"  {_GREEN}{n:20s}{_RESET} [{tier:10s}] {desc}")
+            print(f"  {_GREEN}{n:20s}{_RESET} [{owner:10s}] {desc}")
 
     async def _cmd_new_session(self, _args: str) -> None:
         """Reset the current session (clear conversation history)."""

@@ -320,7 +320,6 @@ async def test_channel_tools_show_command_returns_runtime_status(monkeypatch, tm
                 }
             },
             "security": {
-                "tool_max_tier": "standard",
                 "max_tool_calls_per_turn": 12,
                 "max_parallel_tool_calls": 4,
                 "parallel_tool_lane_limits": {"io": 2, "device": 1, "network": 2, "default": 2},
@@ -350,7 +349,6 @@ async def test_channel_policy_show_command_returns_policy_snapshot(monkeypatch, 
                 }
             },
             "security": {
-                "tool_max_tier": "standard",
                 "tool_groups": {"web": ["web_search"]},
             },
         },
@@ -361,7 +359,7 @@ async def test_channel_policy_show_command_returns_policy_snapshot(monkeypatch, 
     )
     assert out is not None
     assert "当前策略状态" in out.content
-    assert "effective_max_tier=standard" in out.content
+    assert "sender_is_owner=False" in out.content
     assert "policy_pipeline=" in out.content
     assert provider.calls == 0
 

@@ -142,17 +142,7 @@ DEFAULT_CONFIG = {
                 "strategy": "rewrite",
                 "trigger_levels": ["critical"],
             },
-            "tool_tier_guard": {
-                "enabled": True,
-                "trigger_levels": ["warning", "critical"],
-                "high_risk_levels": ["critical"],
-                "downgrade_to": "safe",
-                "downgrade_by_level": {
-                    "critical": "safe",
-                },
-                "window_seconds": 1800,
-                "sources": ["agent_loop", "persona_eval"],
-            },
+
             "tool_policy_linkage": {
                 "enabled": True,
                 "trigger_levels": ["warning", "critical"],
@@ -549,8 +539,7 @@ DEFAULT_CONFIG = {
         # Read-only sender IDs per channel (e.g. {"telegram": ["111", "222"]}).
         # Read-only users may run query commands but cannot execute write commands.
         "readonly_channel_ids": {},
-        # Tool safety: max tier exposed to non-primary users
-        "tool_max_tier": "standard",
+
         # Tool denylist: names that are always disabled
         "tool_denylist": [],
         # Tool allowlist: if non-empty, only these tools are available

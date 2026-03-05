@@ -23,7 +23,7 @@ def test_light_planner_respects_tool_policy() -> None:
     model.fit(episodes)
     target = episodes[0]
     state = model.compress_state(target["initial_state"])
-    policy = ToolPolicyView.from_payload({"deny_tools": ["memory_lookup"], "max_tier": "standard"})
+    policy = ToolPolicyView.from_payload({"deny_tools": ["memory_lookup"], "allow_owner_only": False})
 
     result = plan_light_action(
         model,

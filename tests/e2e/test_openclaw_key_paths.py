@@ -119,7 +119,6 @@ async def test_e2e_html_502_error_surfaces_to_dialog(monkeypatch: pytest.MonkeyP
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,

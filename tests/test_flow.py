@@ -366,17 +366,17 @@ class TestFlowEngine:
 
     @pytest.mark.asyncio
     async def test_run_passes_access_context_to_tool_registry(self, engine, mock_tool_registry):
-        sentinel_tier = object()
+        sentinel_sender_is_owner = object()
         sentinel_policy = object()
         result = await engine.run(
             "simple",
             {"msg": "world"},
-            max_tier=sentinel_tier,
+            sender_is_owner=sentinel_sender_is_owner,
             policy=sentinel_policy,
         )
         assert result.status == "completed"
         call = mock_tool_registry.execute.await_args_list[0]
-        assert call.kwargs["max_tier"] is sentinel_tier
+        assert call.kwargs["sender_is_owner"] is sentinel_sender_is_owner
         assert call.kwargs["policy"] is sentinel_policy
 
     @pytest.mark.asyncio
@@ -891,7 +891,7 @@ class TestFlowRunTool:
     def test_tool_properties(self, tool):
         assert tool.name == "run_flow"
         assert "action" in tool.parameters["properties"]
-        assert tool.safety_tier.value == "standard"
+        assert tool.owner_only is False
 
     @pytest.mark.asyncio
     async def test_list_action(self, tool):
@@ -909,7 +909,7 @@ class TestFlowRunTool:
 
     @pytest.mark.asyncio
     async def test_run_action_forwards_access_context(self):
-        sentinel_tier = object()
+        sentinel_sender_is_owner = object()
         sentinel_policy = object()
         fake_engine = MagicMock()
         fake_engine.list_flows.return_value = []
@@ -921,7 +921,7 @@ class TestFlowRunTool:
             action="run",
             flow_name="tool_test",
             args={"msg": "world"},
-            _access_max_tier=sentinel_tier,
+            _access_sender_is_owner=sentinel_sender_is_owner,
             _access_policy=sentinel_policy,
         )
         parsed = json.loads(result)
@@ -929,7 +929,7 @@ class TestFlowRunTool:
         fake_engine.run.assert_awaited_once_with(
             "tool_test",
             {"msg": "world"},
-            max_tier=sentinel_tier,
+            sender_is_owner=sentinel_sender_is_owner,
             policy=sentinel_policy,
         )
 

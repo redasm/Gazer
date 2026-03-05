@@ -6,7 +6,6 @@ Extracted from loop.py to avoid circular imports between loop.py and mixin modul
 import re
 from typing import Dict
 
-from tools.base import ToolSafetyTier
 
 # Explicit __all__ so that `from agent.constants import *` also exports
 # underscore-prefixed names used by mixin modules.
@@ -21,7 +20,7 @@ __all__ = [
     "DEFAULT_TURN_TIMEOUT_SECONDS",
     "_LANG_DEFAULT", "_CJK_RE",
     "TRUSTED_LOCAL_COMMAND_CHANNELS",
-    "_TIER_MAP", "_REPLAN_ERROR_HINTS", "_LANG_MESSAGES",
+    "_REPLAN_ERROR_HINTS", "_LANG_MESSAGES",
 ]
 
 # Agent loop constants (formerly magic numbers)
@@ -55,11 +54,6 @@ FAST_BRAIN_PATTERNS = {
 }
 TRUSTED_LOCAL_COMMAND_CHANNELS = {"web", "gazer"}
 
-_TIER_MAP: Dict[str, ToolSafetyTier] = {
-    "safe": ToolSafetyTier.SAFE,
-    "standard": ToolSafetyTier.STANDARD,
-    "privileged": ToolSafetyTier.PRIVILEGED,
-}
 
 _REPLAN_ERROR_HINTS: Dict[str, str] = {
     "TOOL_CIRCUIT_OPEN": "Tool circuit is open. Do not retry the same tool immediately; choose alternative actions.",

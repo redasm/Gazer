@@ -9,7 +9,7 @@ import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from tools.base import ShellOperations, ToolSafetyTier
+from tools.base import ShellOperations
 
 from .helpers import MAX_OUTPUT_CHARS, CodingToolBase
 
@@ -27,9 +27,6 @@ class GitStatusTool(CodingToolBase):
     def name(self) -> str:
         return "git_status"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -90,9 +87,6 @@ class GitDiffTool(CodingToolBase):
     def name(self) -> str:
         return "git_diff"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -255,9 +249,6 @@ class GitLogTool(CodingToolBase):
     def name(self) -> str:
         return "git_log"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -321,8 +312,8 @@ class GitPushTool(CodingToolBase):
         return "git_push"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:
@@ -416,9 +407,6 @@ class GitBranchTool(CodingToolBase):
     def name(self) -> str:
         return "git_branch"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

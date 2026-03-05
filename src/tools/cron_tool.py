@@ -5,7 +5,7 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 logger = logging.getLogger("CronTool")
 
@@ -81,9 +81,6 @@ class CronTool(Tool):
             "required": ["action"],
         }
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @staticmethod
     def _error(code: str, message: str) -> str:

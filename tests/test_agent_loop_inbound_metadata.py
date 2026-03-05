@@ -72,7 +72,6 @@ async def test_agent_loop_injects_inbound_metadata_note_and_records_trajectory(m
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,

@@ -7,7 +7,7 @@ Contains 13 methods.
 from __future__ import annotations
 
 from agent.constants import *  # noqa: F403
-from tools.base import ToolSafetyTier, CancellationToken
+from tools.base import CancellationToken
 from tools.registry import ToolPolicy
 from tools.batching import ToolBatchPlan
 from tools.planner import ToolPlannerPlan
@@ -47,7 +47,6 @@ class ToolExecutionMixin:
         self,
         tool_call: Any,
         *,
-        max_tier: ToolSafetyTier,
         policy: ToolPolicy,
         retry_budget: RetryBudget,
         sender_id: str,
@@ -110,7 +109,6 @@ class ToolExecutionMixin:
                     self.tools.execute(
                         name,
                         params,
-                        max_tier=max_tier,
                         policy=policy,
                         cancel_token=self._cancel_token,
                         sender_id=sender_id,
@@ -233,7 +231,6 @@ class ToolExecutionMixin:
         self,
         tool_calls: List[Any],
         *,
-        max_tier: ToolSafetyTier,
         policy: ToolPolicy,
         retry_budget: RetryBudget,
         sender_id: str,
@@ -247,7 +244,6 @@ class ToolExecutionMixin:
         for batch in plan.batches:
             batch_results = await self._execute_tools_parallel(
                 batch,
-                max_tier=max_tier,
                 policy=policy,
                 retry_budget=retry_budget,
                 sender_id=sender_id,
@@ -277,7 +273,6 @@ class ToolExecutionMixin:
     async def _execute_tools_parallel(
         self,
         tool_calls,
-        max_tier: ToolSafetyTier,
         policy: ToolPolicy,
         retry_budget: RetryBudget,
         sender_id: str,
@@ -303,7 +298,6 @@ class ToolExecutionMixin:
                     logger.info("Executing tool (parallel lane=%s): %s", lane, tc.name)
                     return await self._execute_single_tool_call(
                         tc,
-                        max_tier=max_tier,
                         policy=policy,
                         retry_budget=retry_budget,
                         sender_id=sender_id,

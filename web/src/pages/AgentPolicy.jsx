@@ -60,7 +60,6 @@ const AgentPolicy = ({ config, setConfig, saveConfig, t }) => {
                 workspace: '.',
                 model: '',
                 tool_policy: {
-                    max_tier: 'standard',
                     allow_names: [],
                     deny_names: [],
                     allow_groups: [],
@@ -208,18 +207,7 @@ const AgentPolicy = ({ config, setConfig, saveConfig, t }) => {
                                 />
                             </div>
 
-                            <div style={{ marginTop: 12 }}>
-                                <label className="label">{t.toolMaxTier || 'Tool Max Tier'}</label>
-                                <select
-                                    className="input"
-                                    value={selectedPolicy.max_tier || 'standard'}
-                                    onChange={(e) => updateToolPolicy(selectedIndex, { max_tier: e.target.value })}
-                                >
-                                    <option value="safe">safe</option>
-                                    <option value="standard">standard</option>
-                                    <option value="privileged">privileged</option>
-                                </select>
-                            </div>
+
 
                             {(nameConflicts.length > 0 || groupConflicts.length > 0 || providerConflicts.length > 0) && (
                                 <div className="card" style={{ padding: 10, marginTop: 10, borderColor: 'rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.08)' }}>
@@ -311,7 +299,7 @@ const AgentPolicy = ({ config, setConfig, saveConfig, t }) => {
                                 ) : (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
                                         <div style={{ color: '#9fb3c8' }}>
-                                            max_tier: <span style={{ color: '#dbeafe' }}>{effectivePolicy.max_tier || '-'}</span>
+                                            owner_only: <span style={{ color: '#dbeafe' }}>{effectivePolicy.owner_only ? 'yes' : 'no'}</span>
                                         </div>
                                         <div style={{ color: '#9fb3c8' }}>
                                             allow_names: <span style={{ color: '#dbeafe' }}>{(effectivePolicy.allow_names || []).length}</span>

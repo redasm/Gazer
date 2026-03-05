@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from gazer_email.client import EmailClient
 
 logger = logging.getLogger("EmailTools")
@@ -34,9 +34,6 @@ class EmailListTool(EmailToolBase):
     def name(self) -> str:
         return "email_list"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -103,9 +100,6 @@ class EmailReadTool(EmailToolBase):
     def name(self) -> str:
         return "email_read"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -184,9 +178,6 @@ class EmailSendTool(EmailToolBase):
     def name(self) -> str:
         return "email_send"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:
@@ -250,9 +241,6 @@ class EmailSearchTool(EmailToolBase):
     def name(self) -> str:
         return "email_search"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

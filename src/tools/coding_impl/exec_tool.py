@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from tools.base import ShellOperations, ToolSafetyTier
+from tools.base import ShellOperations
 
 from .helpers import CodingToolBase, _IMAGE_SUFFIXES
 from .native_ops import native_exec
@@ -37,8 +37,8 @@ class ExecTool(CodingToolBase):
         return "exec"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:

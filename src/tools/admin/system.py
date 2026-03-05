@@ -8,7 +8,6 @@ import json
 import logging
 from datetime import datetime
 from runtime.resilience import classify_error_message
-from tools.registry import ToolSafetyTier
 # Backward-compat aliases for static helpers that are NOT runtime-injected
 from tools.admin.auth import verify_admin_token
 import tools.admin._shared as _shared
@@ -205,7 +204,6 @@ async def _invoke_gui_action_via_tool_registry(action: str, args: Dict[str, Any]
     text = await TOOL_REGISTRY.execute(
         "node_invoke",
         payload,
-        max_tier=ToolSafetyTier.PRIVILEGED,
     )
     raw = str(text or "")
     if raw.startswith("Error"):
@@ -1330,12 +1328,12 @@ async def run_doctor():
     tool_denylist = config.get("security.tool_denylist", [])
     tool_allowlist = config.get("security.tool_allowlist", [])
     tool_groups = config.get("security.tool_groups", {})
-    tool_tier = config.get("security.tool_max_tier", "standard")
+    owner_only_count = sum(1 for t in TOOL_REGISTRY._tools.values() if t.owner_only) if TOOL_REGISTRY else 0
     checks.append({
         "name": "tool_security",
         "status": "ok",
         "message": (
-            f"Tool max tier: {tool_tier}, "
+            f"Owner-only tools: {owner_only_count}, "
             f"allowlist: {len(tool_allowlist)}, "
             f"denylist: {len(tool_denylist)}, "
             f"groups: {len(tool_groups) if isinstance(tool_groups, dict) else 0}."

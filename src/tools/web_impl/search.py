@@ -10,9 +10,6 @@ class WebSearchTool(WebToolBase):
     def name(self) -> str:
         return "web_search"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:

@@ -109,20 +109,7 @@ personality:
       strategy: rewrite
       trigger_levels:
       - critical
-    tool_tier_guard:
-      enabled: true
-      trigger_levels:
-      - warning
-      - critical
-      high_risk_levels:
-      - critical
-      downgrade_to: safe
-      downgrade_by_level:
-        critical: safe
-      window_seconds: 1800
-      sources:
-      - agent_loop
-      - persona_eval
+
     tool_policy_linkage:
       enabled: true
       trigger_levels:
@@ -526,7 +513,6 @@ security:
     feishu: ou_1f90dfc98260e960240a196435ce192e
   dm_policy: pairing
   readonly_channel_ids: {}
-  tool_max_tier: standard
   tool_denylist: []
   tool_allowlist: []
   max_tool_calls_per_turn: 12

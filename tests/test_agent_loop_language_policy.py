@@ -56,7 +56,6 @@ def _make_loop(monkeypatch, tmp_path, response: LLMResponse) -> AgentLoop:
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,
@@ -104,7 +103,6 @@ async def test_agent_loop_persona_runtime_guard_can_rewrite(monkeypatch, tmp_pat
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,
@@ -169,101 +167,3 @@ async def test_agent_loop_persona_runtime_guard_can_rewrite(monkeypatch, tmp_pat
     assert "Gazer" in out.content
 
 
-def test_agent_loop_persona_runtime_critical_signal_downgrades_tool_tier(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        config_manager,
-        "config",
-        _FakeConfig(
-            {
-                "security": {"tool_max_tier": "standard", "tool_groups": {}},
-                "personality": {
-                    "runtime": {
-                        "enabled": True,
-                        "tool_tier_guard": {
-                            "enabled": True,
-                            "trigger_levels": ["critical"],
-                            "downgrade_to": "safe",
-                            "window_seconds": 3600,
-                        },
-                    }
-                },
-            }
-        ),
-    )
-    monkeypatch.setattr(
-        "security.owner.get_owner_manager",
-        lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
-    )
-
-    class _FakePersonaRuntime:
-        def get_latest_signal(self):
-            import time
-
-            return {
-                "level": "critical",
-                "source": "persona_eval",
-                "created_at": time.time(),
-            }
-
-    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
-    loop = AgentLoop(
-        bus=MessageBus(),
-        provider=_Provider(LLMResponse(content="ok", tool_calls=[], error=False)),
-        workspace=Path(tmp_path),
-        context_builder=_DummyContext(),
-    )
-    tier = loop._resolve_tool_max_tier(
-        InboundMessage(channel="web", sender_id="u1", chat_id="chat1", content="hello")
-    )
-    assert tier.value == "safe"
-
-
-def test_agent_loop_persona_runtime_warning_high_risk_can_downgrade_tool_tier(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        config_manager,
-        "config",
-        _FakeConfig(
-            {
-                "security": {"tool_max_tier": "standard", "tool_groups": {}},
-                "personality": {
-                    "runtime": {
-                        "enabled": True,
-                        "tool_tier_guard": {
-                            "enabled": True,
-                            "trigger_levels": ["warning", "critical"],
-                            "high_risk_levels": ["warning", "critical"],
-                            "downgrade_to": "safe",
-                            "downgrade_by_level": {"warning": "safe", "critical": "safe"},
-                            "window_seconds": 3600,
-                        },
-                    }
-                },
-            }
-        ),
-    )
-    monkeypatch.setattr(
-        "security.owner.get_owner_manager",
-        lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
-    )
-
-    class _FakePersonaRuntime:
-        def get_latest_signal(self):
-            import time
-
-            return {
-                "level": "warning",
-                "source": "persona_eval",
-                "created_at": time.time(),
-            }
-
-    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime())
-    loop = AgentLoop(
-        bus=MessageBus(),
-        provider=_Provider(LLMResponse(content="ok", tool_calls=[], error=False)),
-        workspace=Path(tmp_path),
-        context_builder=_DummyContext(),
-    )
-    tier = loop._resolve_tool_max_tier(
-        InboundMessage(channel="web", sender_id="u1", chat_id="chat1", content="hello")
-    )
-    assert tier.value == "safe"

@@ -22,7 +22,6 @@ from ._shared import (
 )
 from .auth import verify_admin_token
 from .config_routes import (
-    _tier_from_str,
     _resolve_agent_policy,
     _resolve_global_policy,
     _policy_to_payload,
@@ -35,9 +34,8 @@ from .config_routes import (
 router = APIRouter(tags=["policy"])
 
 try:
-    from tools.registry import ToolSafetyTier, ToolPolicy, normalize_tool_policy
+    from tools.registry import ToolPolicy, normalize_tool_policy
 except ImportError:
-    ToolSafetyTier = None  # type: ignore
     ToolPolicy = None  # type: ignore
     normalize_tool_policy = None  # type: ignore
 
@@ -101,7 +99,6 @@ async def explain_policy(payload: Dict[str, Any]):
     if not tool_name:
         raise HTTPException(status_code=400, detail="'tool_name' is required")
 
-    tier = _tier_from_str(payload.get("max_tier", config.get("security.tool_max_tier", "standard")))
     model_provider = str(payload.get("model_provider", "")).strip().lower()
     model_name = str(payload.get("model_name", "")).strip().lower()
     groups = config.get("security.tool_groups", {})
@@ -146,7 +143,6 @@ async def explain_policy(payload: Dict[str, Any]):
 
     result = TOOL_REGISTRY.evaluate_tool_access(
         tool_name,
-        max_tier=tier,
         policy=effective_policy,
         model_provider=model_provider,
         model_name=model_name,
@@ -156,7 +152,6 @@ async def explain_policy(payload: Dict[str, Any]):
         "result": result,
         "explain": {
             "tool_name": tool_name,
-            "max_tier": tier.value,
             "model_context": {
                 "provider": model_provider,
                 "model": model_name,
@@ -185,7 +180,6 @@ async def simulate_policy(payload: Dict[str, Any]):
     if TOOL_REGISTRY is None:
         raise HTTPException(status_code=503, detail="Tool registry not available")
 
-    tier = _tier_from_str(payload.get("max_tier", config.get("security.tool_max_tier", "standard")))
     model_provider = str(payload.get("model_provider", "")).strip().lower()
     model_name = str(payload.get("model_name", "")).strip().lower()
     policy_raw = payload.get("policy")
@@ -196,7 +190,6 @@ async def simulate_policy(payload: Dict[str, Any]):
     names_raw = payload.get("tool_names")
     names = [str(item).strip() for item in names_raw] if isinstance(names_raw, list) else None
     results = TOOL_REGISTRY.simulate_access(
-        max_tier=tier,
         policy=policy,
         names=names,
         model_provider=model_provider,
@@ -238,7 +231,7 @@ async def get_effective_policy(
     result: Dict[str, Any] = {
         "status": "ok",
         "global": {
-            "max_tier": str(config.get("security.tool_max_tier", "standard")).strip().lower(),
+            "owner_only_tools": sum(1 for t in TOOL_REGISTRY._tools.values() if t.owner_only) if TOOL_REGISTRY else 0,
             "group_count": len(safe_groups),
             "groups": sorted(safe_groups.keys()),
             "policy": _policy_to_payload(global_policy),
@@ -268,7 +261,6 @@ async def get_effective_policy(
             "id": str(agent_id),
             "raw_policy": raw_policy,
             "effective_policy": {
-                "max_tier": str(raw_policy.get("max_tier", "")).strip().lower() or None,
                 **_policy_to_payload(normalized),
             },
         }
@@ -287,7 +279,6 @@ async def get_effective_policy(
         if TOOL_REGISTRY is not None:
             decision = TOOL_REGISTRY.evaluate_tool_access(
                 str(tool_name),
-                max_tier=_tier_from_str(config.get("security.tool_max_tier", "standard")),
                 policy=merged_effective,
                 model_provider=str(model_provider or "").strip().lower(),
                 model_name=str(model_name or "").strip().lower(),

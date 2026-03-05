@@ -18,7 +18,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 logger = logging.getLogger("Canvas")
 
@@ -479,9 +479,6 @@ class A2UIApplyTool(CanvasToolBase):
     def name(self) -> str:
         return "a2ui_apply"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:
@@ -551,9 +548,6 @@ class CanvasSnapshotTool(CanvasToolBase):
     def name(self) -> str:
         return "canvas_snapshot"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -580,9 +574,6 @@ class CanvasResetTool(CanvasToolBase):
     def name(self) -> str:
         return "canvas_reset"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

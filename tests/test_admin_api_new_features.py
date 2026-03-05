@@ -650,7 +650,7 @@ async def test_publish_and_rollback_training_release(monkeypatch, tmp_path: Path
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
         }
     )
     _patch_config(monkeypatch, fake_cfg)
@@ -707,7 +707,7 @@ async def test_publish_training_canary_release_gate_health_auto_rollback(monkeyp
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
         }
     )
     _patch_config(monkeypatch, fake_cfg)
@@ -776,7 +776,7 @@ async def test_training_release_explanation_endpoint(monkeypatch, tmp_path: Path
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
         }
     )
     _patch_config(monkeypatch, fake_cfg)
@@ -835,7 +835,7 @@ async def test_publish_training_release_pending_approval_auto_canary_then_approv
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
             "trainer": {
                 "canary": {
                     "default_percent": 15,
@@ -900,7 +900,7 @@ async def test_approve_training_release_canary_auto_rollback_on_gate(monkeypatch
     fake_cfg = _FakeConfig(
         {
             "personality": {"system_prompt": "You are Gazer."},
-            "security": {"tool_denylist": [], "tool_max_tier": "standard"},
+            "security": {"tool_denylist": []},
             "trainer": {
                 "canary": {
                     "default_percent": 10,

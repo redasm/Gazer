@@ -10,9 +10,6 @@ class WebFetchTool(WebToolBase):
     def name(self) -> str:
         return "web_fetch"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:

@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 logger = logging.getLogger("BrowserTool")
 
@@ -25,8 +25,8 @@ class BrowserTool(Tool):
         return "browser"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:

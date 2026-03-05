@@ -44,9 +44,9 @@ from .auth import verify_admin_token
 router = APIRouter(tags=["config"])
 
 try:
-    from tools.registry import ToolSafetyTier, ToolPolicy, normalize_tool_policy
+    from tools.registry import ToolPolicy, normalize_tool_policy
 except ImportError:
-    ToolSafetyTier = None  # type: ignore
+
     ToolPolicy = None  # type: ignore
     normalize_tool_policy = None  # type: ignore
 
@@ -74,14 +74,6 @@ _PROTECTED_NAMESPACES = {
 # ---------------------------------------------------------------------------
 # Policy helper functions  (shared with policy.py via re-export)
 # ---------------------------------------------------------------------------
-
-def _tier_from_str(raw: Any) -> "ToolSafetyTier":
-    val = str(raw or "standard").strip().lower()
-    if val == ToolSafetyTier.SAFE.value:
-        return ToolSafetyTier.SAFE
-    if val == ToolSafetyTier.PRIVILEGED.value:
-        return ToolSafetyTier.PRIVILEGED
-    return ToolSafetyTier.STANDARD
 
 
 def _resolve_agent_policy(agent_id: str) -> Dict[str, Any]:
@@ -361,7 +353,6 @@ def _validate_policy_config(new_config: Dict[str, Any]) -> None:
     if not isinstance(agents_candidate, list):
         raise HTTPException(status_code=400, detail="'agents.list' must be an array")
 
-    valid_tiers = {ToolSafetyTier.SAFE.value, ToolSafetyTier.STANDARD.value, ToolSafetyTier.PRIVILEGED.value}
     group_names = set(groups_candidate.keys())
 
     for idx, agent in enumerate(agents_candidate):
@@ -370,13 +361,6 @@ def _validate_policy_config(new_config: Dict[str, Any]) -> None:
         tool_policy = agent.get("tool_policy") or {}
         if not isinstance(tool_policy, dict):
             raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' must be an object")
-
-        max_tier = tool_policy.get("max_tier")
-        if max_tier and str(max_tier).strip().lower() not in valid_tiers:
-            raise HTTPException(
-                status_code=400,
-                detail=f"'agents.list[{idx}].tool_policy.max_tier' must be one of {sorted(valid_tiers)}",
-            )
 
         allow_names = set(_normalize_str_list(tool_policy.get("allow_names")))
         deny_names = set(_normalize_str_list(tool_policy.get("deny_names")))
@@ -575,11 +559,7 @@ def _build_web_config_validation_report(
     if auto_privileged:
         _issue("warning", "auto_approve_privileged_enabled", "security.auto_approve_privileged",
                "auto_approve_privileged should remain disabled for production safety.")
-    tool_max_tier = str(security_cfg.get("tool_max_tier", "standard") or "standard").strip().lower()
-    if tool_max_tier not in {"safe", "standard"}:
-        _issue("warning", "tool_max_tier_high", "security.tool_max_tier",
-               "tool_max_tier should be 'safe' or 'standard' for baseline safety.",
-               fix={"path": "security.tool_max_tier", "value": "standard", "reason": "reduce risky tool exposure"})
+
 
     owner_manager = get_owner_manager()
     if not str(getattr(owner_manager, "admin_token", "") or "").strip():
@@ -670,7 +650,7 @@ def _build_web_config_wizard_state() -> Dict[str, Any]:
     owner_ready = isinstance(owner_ids, dict) and bool(owner_ids)
     dm_policy = str(security_cfg.get("dm_policy", "pairing") or "pairing").strip().lower()
     auto_privileged = bool(security_cfg.get("auto_approve_privileged", False))
-    tool_tier = str(security_cfg.get("tool_max_tier", "standard") or "standard").strip().lower()
+
 
     steps = [
         {
@@ -704,17 +684,17 @@ def _build_web_config_wizard_state() -> Dict[str, Any]:
         {
             "id": "security_baseline",
             "title": "安全基线（owner/鉴权/危险工具）",
-            "completed": bool(owner_ready and dm_policy != "open" and not auto_privileged and tool_tier in {"safe", "standard"}),
+            "completed": bool(owner_ready and dm_policy != "open" and not auto_privileged),
             "details": {
                 "owner_channel_ids_ready": owner_ready,
                 "dm_policy": dm_policy,
                 "auto_approve_privileged": auto_privileged,
-                "tool_max_tier": tool_tier,
+
                 "validation_score": validation.get("summary", {}).get("score", 0),
             },
             "suggestions": [
                 "将 dm_policy 设为 pairing 或 allowlist。",
-                "保持 auto_approve_privileged=false，tool_max_tier 建议 standard。",
+                "保持 auto_approve_privileged=false，使用 owner_only 工具限制。",
             ],
         },
     ]
@@ -926,11 +906,7 @@ async def apply_web_config_wizard(payload: Dict[str, Any]):
                 if str(channel).strip() and str(sender).strip()
             }
             updates["security.owner_channel_ids"] = normalized_owner
-        if "tool_max_tier" in security:
-            tier = str(security.get("tool_max_tier", "")).strip().lower()
-            if tier not in {ToolSafetyTier.SAFE.value, ToolSafetyTier.STANDARD.value, ToolSafetyTier.PRIVILEGED.value}:
-                raise HTTPException(status_code=400, detail="security.tool_max_tier must be one of ['safe','standard','privileged']")
-            updates["security.tool_max_tier"] = tier
+
         if "auto_approve_privileged" in security:
             warnings.append("security.auto_approve_privileged is protected and was not changed by wizard endpoint.")
 

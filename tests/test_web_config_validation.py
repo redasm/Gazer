@@ -64,7 +64,7 @@ async def test_web_config_validate_reports_errors_and_fix_suggestions(monkeypatc
     fake_cfg = _FakeConfig(
         {
             "agents": {"defaults": {"model": {"primary": "", "fallbacks": []}}},
-            "security": {"owner_channel_ids": {}, "dm_policy": "pairing", "tool_max_tier": "standard"},
+            "security": {"owner_channel_ids": {}, "dm_policy": "pairing"},
         }
     )
     fake_registry = _FakeRegistry({})
@@ -76,7 +76,7 @@ async def test_web_config_validate_reports_errors_and_fix_suggestions(monkeypatc
         "config_patch": {
             "security": {
                 "dm_policy": "open",
-                "tool_max_tier": "privileged",
+
             }
         }
     }
@@ -86,7 +86,7 @@ async def test_web_config_validate_reports_errors_and_fix_suggestions(monkeypatc
     assert report["summary"]["warnings"] >= 2
     assert any(item.get("code") == "dm_policy_open" for item in report["issues"])
     assert any(item.get("path") == "security.dm_policy" for item in report["fixes"])
-    assert any(item.get("path") == "security.tool_max_tier" for item in report["fixes"])
+
 
 
 @pytest.mark.asyncio
@@ -107,7 +107,7 @@ async def test_web_config_validate_allows_local_provider_without_api_key(monkeyp
             "security": {
                 "owner_channel_ids": {"telegram": "1001"},
                 "dm_policy": "pairing",
-                "tool_max_tier": "standard",
+
                 "auto_approve_privileged": False,
             },
         }

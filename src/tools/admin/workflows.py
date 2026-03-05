@@ -218,11 +218,10 @@ def _build_flowise_roundtrip_report(cases: Optional[List[Dict[str, Any]]] = None
 
 @app.get("/workflows/graphs", dependencies=[Depends(verify_admin_token)])
 async def list_workflow_graphs(limit: int = 100):
-    from tools.admin import _shared
-    _shared._WORKFLOW_GRAPH_DIR.mkdir(parents=True, exist_ok=True)
+    _WORKFLOW_GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     items: List[Dict[str, Any]] = []
     paths = sorted(
-        _shared._WORKFLOW_GRAPH_DIR.glob("*.json"),
+        _WORKFLOW_GRAPH_DIR.glob("*.json"),
         key=lambda p: p.stat().st_mtime if p.exists() else 0.0,
         reverse=True,
     )

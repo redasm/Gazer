@@ -5,7 +5,7 @@ import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from agent.gui_model_adapter import GUIModelAdapter, get_gui_model_adapter
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from tools.media_marker import MEDIA_MARKER
 
 if TYPE_CHECKING:
@@ -35,9 +35,6 @@ class NodeListTool(DeviceToolBase):
     def name(self) -> str:
         return "node_list"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -62,9 +59,6 @@ class NodeDescribeTool(DeviceToolBase):
     def name(self) -> str:
         return "node_describe"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -103,8 +97,8 @@ class NodeInvokeTool(DeviceToolBase):
         return "node_invoke"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:
@@ -174,8 +168,8 @@ class GuiTaskExecuteTool(DeviceToolBase):
         return "gui_task_execute"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:

@@ -78,7 +78,7 @@ async def test_get_web_config_wizard_reports_completed_steps(monkeypatch):
             "security": {
                 "owner_channel_ids": {"telegram": "1001"},
                 "dm_policy": "pairing",
-                "tool_max_tier": "standard",
+
                 "auto_approve_privileged": False,
             },
         }
@@ -125,7 +125,7 @@ async def test_apply_web_config_wizard_updates_config_and_keeps_protected_flag(m
             "security": {
                 "owner_channel_ids": {"telegram": "1001"},
                 "dm_policy": "pairing",
-                "tool_max_tier": "standard",
+
                 "auto_approve_privileged": False,
                 "tool_groups": {},
             },
@@ -162,7 +162,7 @@ async def test_apply_web_config_wizard_updates_config_and_keeps_protected_flag(m
             "security": {
                 "dm_policy": "allowlist",
                 "owner_channel_ids": {"telegram": "1001"},
-                "tool_max_tier": "safe",
+
                 "auto_approve_privileged": True,
             },
         }
@@ -177,7 +177,7 @@ async def test_apply_web_config_wizard_updates_config_and_keeps_protected_flag(m
     assert fake_cfg.get("agents.defaults.model.fallbacks")[0] == "my_gateway/my-chat-model"
     assert fake_cfg.get("models.embedding.model") == "my-embed-model"
     assert fake_cfg.get("security.dm_policy") == "allowlist"
-    assert fake_cfg.get("security.tool_max_tier") == "safe"
+
     assert fake_cfg.get("security.auto_approve_privileged") is False
     assert fake_registry.get_provider("my_gateway")["api_key"] == "sk-new"
 

@@ -1,8 +1,8 @@
-"""Tests for tools.base -- Tool, CancellationToken, ToolSafetyTier."""
+"""Tests for tools.base -- Tool, CancellationToken."""
 
 import asyncio
 import pytest
-from tools.base import Tool, CancellationToken, ToolSafetyTier
+from tools.base import Tool, CancellationToken
 
 
 # Concrete tool for testing
@@ -61,11 +61,7 @@ class TestCancellationToken:
         assert token.is_cancelled is True
 
 
-class TestToolSafetyTier:
-    def test_values(self):
-        assert ToolSafetyTier.SAFE.value == "safe"
-        assert ToolSafetyTier.STANDARD.value == "standard"
-        assert ToolSafetyTier.PRIVILEGED.value == "privileged"
+
 
 
 class TestTool:
@@ -80,13 +76,11 @@ class TestTool:
         assert schema["function"]["name"] == "echo"
         assert "parameters" in schema["function"]
 
-    def test_default_safety_tier(self):
+    def test_default_owner_only(self):
         tool = EchoTool()
-        assert tool.safety_tier == ToolSafetyTier.STANDARD
+        assert tool.owner_only is False
 
-    def test_requires_confirmation_default(self):
-        tool = EchoTool()
-        assert tool.requires_confirmation is False
+
 
     @pytest.mark.asyncio
     async def test_execute(self):

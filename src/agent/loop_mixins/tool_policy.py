@@ -7,7 +7,6 @@ Contains 14 methods.
 from __future__ import annotations
 
 from agent.constants import *  # noqa: F403
-from tools.base import ToolSafetyTier
 from tools.registry import ToolPolicy, normalize_tool_policy
 from bus.events import InboundMessage
 import logging
@@ -51,6 +50,12 @@ merge_tool_policy_constraints = _lazy_merge_tool_policy_constraints
 class ToolPolicyMixin:
     """Mixin providing tool policy functionality."""
 
+    def _is_sender_owner(self, msg: InboundMessage) -> bool:
+        """Check if the message sender is an owner."""
+        if msg.sender_id == "owner":
+            return True
+        return get_owner_manager().is_owner_sender(msg.channel, msg.sender_id)
+
     @staticmethod
     def _is_release_gate_enforced() -> bool:
         from runtime.config_manager import config as _cfg
@@ -67,36 +72,27 @@ class ToolPolicyMixin:
         self,
         *,
         tool_name: str,
-        tier: ToolSafetyTier,
         gate_reason: str,
     ) -> str:
         reason = gate_reason or "quality gate blocked"
         return (
             "Error [TOOL_RELEASE_GATE_BLOCKED]: "
             f"Release gate is active and blocked by '{reason}'. "
-            f"Tool '{tool_name}' (tier={tier.value}) is disabled until gate is unblocked. "
+            f"Tool '{tool_name}' is disabled until gate is unblocked. "
             f"(trace_id={self._new_trace_id()})\n"
-            "Hint: Unblock the release gate or use a lower-tier alternative tool."
+            "Hint: Unblock the release gate or use an alternative tool."
         )
-
-    def _release_gate_limits_tier(self, *, sender_id: str, channel: str) -> bool:
-        if not self._is_release_gate_enforced():
-            return False
-        gate = self._eval_benchmark_manager.get_release_gate_status()
-        if not bool(gate.get("blocked", False)):
-            return False
-        if self._is_release_gate_owner_bypass_enabled():
-            owner_mgr = get_owner_manager()
-            if owner_mgr and owner_mgr.is_owner_sender(channel, sender_id):
-                return False
-        return True
 
     def _check_release_gate_for_tool(self, *, tool_name: str, sender_id: str, channel: str) -> Optional[str]:
         if not self._is_release_gate_enforced():
             return None
 
-        gate = self._eval_benchmark_manager.get_release_gate_status()
-        if not bool(gate.get("blocked", False)):
+        gate = getattr(self, "_eval_benchmark_manager", None)
+        if gate is None:
+            return None
+        
+        gate_status = gate.get_release_gate_status()
+        if not bool(gate_status.get("blocked", False)):
             return None
 
         if self._is_release_gate_owner_bypass_enabled():
@@ -107,19 +103,22 @@ class ToolPolicyMixin:
         tool = self.tools.get(tool_name)
         if tool is None:
             return None
-        if tool.safety_tier == ToolSafetyTier.SAFE:
+        
+        # Tools that are fundamentally safe (e.g. standard info lookup) might not be blocked by release gates
+        # In the new owner_only world, we don't have ToolSafetyTier.SAFE. So if a tool specifies explicitly
+        # bypass_release_gate or similar we might check that. For now, since SAFE is gone, we'll
+        # just block everything except if the owner bypasses it or the tool has explicitly asked to bypass.
+        if getattr(tool, "bypass_release_gate", False):
             return None
 
-        gate_reason = str(gate.get("reason", "")).strip()
+        gate_reason = str(gate_status.get("reason", "")).strip()
         message = self._release_gate_block_message(
             tool_name=tool_name,
-            tier=tool.safety_tier,
             gate_reason=gate_reason,
         )
         logger.warning(
-            "Release gate blocked tool execution: tool=%s tier=%s reason=%s",
+            "Release gate blocked tool execution: tool=%s reason=%s",
             tool_name,
-            tool.safety_tier.value,
             gate_reason,
         )
         return message
@@ -139,7 +138,7 @@ class ToolPolicyMixin:
         except (TypeError, ValueError):
             parallel_limit = DEFAULT_MAX_PARALLEL_TOOL_CALLS
 
-        provider_agents_defaults = self._resolve_active_provider_agents_defaults()
+        provider_agents_defaults = self._resolve_active_provider_agents_defaults() if hasattr(self, "_resolve_active_provider_agents_defaults") else {}
         raw_provider_parallel_limit = (
             provider_agents_defaults.get("maxConcurrent")
             if isinstance(provider_agents_defaults, dict)
@@ -173,123 +172,19 @@ class ToolPolicyMixin:
                     continue
                 merged[key] = min(max(value, 1), 32)
         return merged
-
     def _current_tool_policy_model_context(self) -> tuple[str, str]:
-        provider = str(self._tool_policy_model_provider or "").strip().lower()
-        model = str(self._tool_policy_model_name or "").strip().lower()
+        provider = str(getattr(self, "_tool_policy_model_provider", "") or "").strip().lower()
+        model = str(getattr(self, "_tool_policy_model_name", "") or "").strip().lower()
         if not provider:
-            provider = self._resolve_llm_provider_key(self._active_provider_override or self.provider)
+            active_prov = getattr(self, "_active_provider_override", None) or getattr(self, "provider", None)
+            if hasattr(self, "_resolve_llm_provider_key"):
+                provider = self._resolve_llm_provider_key(active_prov)
+            else:
+                provider = str(active_prov or "")
         if not model:
-            model = str(self._active_model_override or self.model or "").strip().lower()
+            model = str(getattr(self, "_active_model_override", None) or getattr(self, "model", "") or "").strip().lower()
         return provider, model
 
-    def _resolve_tool_max_tier(self, msg: InboundMessage) -> ToolSafetyTier:
-        """Resolve per-message tool tier.
-
-        Owner messages always get ``PRIVILEGED`` access.
-        Non-owner messages follow ``security.tool_max_tier``.
-        """
-        if msg.sender_id == "owner" or get_owner_manager().is_owner_sender(msg.channel, msg.sender_id):
-            return ToolSafetyTier.PRIVILEGED
-
-        from runtime.config_manager import config as _cfg
-
-        configured = str(_cfg.get("security.tool_max_tier", "standard")).strip().lower()
-        tier = _TIER_MAP.get(configured)
-        if tier is None:
-            logger.warning("Invalid security.tool_max_tier=%r, falling back to 'standard'", configured)
-            tier = ToolSafetyTier.STANDARD
-        return self._apply_persona_signal_tier_guard(base_tier=tier, msg=msg)
-
-    def _apply_persona_signal_tier_guard(self, *, base_tier: ToolSafetyTier, msg: InboundMessage) -> ToolSafetyTier:
-        from runtime.config_manager import config as _cfg
-
-        runtime_cfg = _cfg.get("personality.runtime", {}) or {}
-        if not isinstance(runtime_cfg, dict):
-            return base_tier
-        guard_cfg = runtime_cfg.get("tool_tier_guard", {}) or {}
-        if not isinstance(guard_cfg, dict):
-            guard_cfg = {}
-        if not bool(guard_cfg.get("enabled", True)):
-            return base_tier
-        levels_raw = guard_cfg.get("trigger_levels", ["critical"])
-        levels = {
-            str(item).strip().lower()
-            for item in levels_raw
-            if str(item).strip()
-        } if isinstance(levels_raw, list) else {"critical"}
-        if not levels:
-            levels = {"critical"}
-        high_risk_raw = guard_cfg.get("high_risk_levels", list(levels))
-        high_risk_levels = {
-            str(item).strip().lower()
-            for item in high_risk_raw
-            if str(item).strip()
-        } if isinstance(high_risk_raw, list) else set(levels)
-        if not high_risk_levels:
-            high_risk_levels = set(levels)
-        sources_raw = guard_cfg.get("sources", ["agent_loop", "persona_eval"])
-        source_filter = {
-            str(item).strip().lower()
-            for item in sources_raw
-            if str(item).strip()
-        } if isinstance(sources_raw, list) else set()
-        window_raw = guard_cfg.get("window_seconds", 1800)
-        try:
-            window_seconds = max(0, int(window_raw))
-        except (TypeError, ValueError):
-            window_seconds = 1800
-        downgrade_by_level_raw = guard_cfg.get("downgrade_by_level", {})
-        downgrade_by_level = (
-            {
-                str(key).strip().lower(): str(value).strip().lower()
-                for key, value in downgrade_by_level_raw.items()
-            }
-            if isinstance(downgrade_by_level_raw, dict)
-            else {}
-        )
-        downgrade_key_default = str(guard_cfg.get("downgrade_to", "safe")).strip().lower() or "safe"
-
-        manager = get_persona_runtime_manager()
-        signal = manager.get_latest_signal() if hasattr(manager, "get_latest_signal") else None
-        if not isinstance(signal, dict):
-            return base_tier
-        signal_level = str(signal.get("level", "")).strip().lower()
-        if signal_level not in levels:
-            return base_tier
-        if signal_level not in high_risk_levels:
-            return base_tier
-        signal_source = str(signal.get("source", "")).strip().lower()
-        if source_filter and signal_source and signal_source not in source_filter:
-            return base_tier
-        created_at = signal.get("created_at", 0.0)
-        try:
-            created_at_ts = float(created_at)
-        except (TypeError, ValueError):
-            created_at_ts = 0.0
-        if window_seconds > 0 and created_at_ts > 0 and (time.time() - created_at_ts) > float(window_seconds):
-            return base_tier
-        downgrade_key = str(downgrade_by_level.get(signal_level, downgrade_key_default)).strip().lower() or "safe"
-        downgrade_tier = _TIER_MAP.get(downgrade_key, ToolSafetyTier.SAFE)
-
-        rank = {
-            ToolSafetyTier.SAFE: 0,
-            ToolSafetyTier.STANDARD: 1,
-            ToolSafetyTier.PRIVILEGED: 2,
-        }
-        if rank[downgrade_tier] > rank[base_tier]:
-            return base_tier
-        if downgrade_tier != base_tier:
-            logger.info(
-                "Persona runtime signal downgraded tool tier: %s -> %s (level=%s source=%s sender=%s channel=%s)",
-                base_tier.value,
-                downgrade_tier.value,
-                signal_level,
-                signal_source,
-                msg.sender_id,
-                msg.channel,
-            )
-        return downgrade_tier
 
     def _resolve_tool_policy(self) -> ToolPolicy:
         """Build effective tool policy for this loop."""

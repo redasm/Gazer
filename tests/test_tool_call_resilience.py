@@ -9,7 +9,7 @@ from agent.loop import AgentLoop
 from bus.queue import MessageBus
 from llm.base import LLMResponse, ToolCallRequest
 from runtime.resilience import RetryBudget
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 
 class _FakeConfig:
@@ -51,8 +51,8 @@ class _SlowTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
+    def owner_only(self) -> bool:
+        return False
 
     @property
     def provider(self) -> str:
@@ -84,8 +84,8 @@ class _LaneProbeTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
+    def owner_only(self) -> bool:
+        return False
 
     @property
     def provider(self) -> str:
@@ -131,7 +131,6 @@ async def test_tool_call_timeout_retries(monkeypatch, tmp_path):
 
     result = await loop._execute_single_tool_call(
         ToolCallRequest(id="tc1", name="slow_tool", arguments={}),
-        max_tier=ToolSafetyTier.SAFE,
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(4),
         sender_id="u1",
@@ -166,7 +165,6 @@ async def test_tool_call_retry_budget_exhaustion(monkeypatch, tmp_path):
 
     result = await loop._execute_single_tool_call(
         ToolCallRequest(id="tc1", name="crash_tool", arguments={}),
-        max_tier=ToolSafetyTier.SAFE,
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(1),
         sender_id="u1",
@@ -198,7 +196,6 @@ async def test_tool_call_error_result_appends_recovery_template(monkeypatch, tmp
     loop.tools.execute = _blocked_execute  # type: ignore[assignment]
     result = await loop._execute_single_tool_call(
         ToolCallRequest(id="tc2", name="web_search", arguments={}),
-        max_tier=ToolSafetyTier.SAFE,
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(0),
         sender_id="u1",
@@ -234,7 +231,6 @@ async def test_tool_call_hook_blocks_repeated_identical_calls(monkeypatch, tmp_p
 
     first = await loop._execute_single_tool_call(
         ToolCallRequest(id="tc1", name="slow_tool", arguments={}),
-        max_tier=ToolSafetyTier.SAFE,
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(1),
         sender_id="u1",
@@ -243,7 +239,6 @@ async def test_tool_call_hook_blocks_repeated_identical_calls(monkeypatch, tmp_p
     )
     second = await loop._execute_single_tool_call(
         ToolCallRequest(id="tc2", name="slow_tool", arguments={}),
-        max_tier=ToolSafetyTier.SAFE,
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(1),
         sender_id="u1",
@@ -287,7 +282,7 @@ async def test_parallel_tool_lanes_isolate_device_calls(monkeypatch, tmp_path):
             ToolCallRequest(id="3", name="net_a", arguments={}),
             ToolCallRequest(id="4", name="net_b", arguments={}),
         ],
-        max_tier=ToolSafetyTier.SAFE,
+
         policy=loop._resolve_tool_policy(),
         retry_budget=RetryBudget.from_total(4),
         sender_id="u1",

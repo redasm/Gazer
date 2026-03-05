@@ -92,7 +92,7 @@ class FlowEngine:
         flow_name: str,
         args: Optional[Dict[str, Any]] = None,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> FlowResult:
         """Run a workflow from the beginning.
@@ -126,7 +126,7 @@ class FlowEngine:
             ctx,
             start_index=0,
             retry_budget=budget,
-            max_tier=max_tier,
+            sender_is_owner=sender_is_owner,
             policy=policy,
         )
 
@@ -134,7 +134,7 @@ class FlowEngine:
         self,
         flow_name: str,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> FlowResult:
         """Resume a workflow from the latest persisted checkpoint."""
@@ -158,7 +158,7 @@ class FlowEngine:
             ctx,
             start_index=start_index,
             retry_budget=budget,
-            max_tier=max_tier,
+            sender_is_owner=sender_is_owner,
             policy=policy,
         )
 
@@ -170,7 +170,7 @@ class FlowEngine:
         self,
         token: str,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> FlowResult:
         """Resume a workflow past an approval gate.
@@ -207,7 +207,7 @@ class FlowEngine:
             ctx,
             start_index=start_index,
             retry_budget=budget,
-            max_tier=max_tier,
+            sender_is_owner=sender_is_owner,
             policy=policy,
         )
 
@@ -240,7 +240,7 @@ class FlowEngine:
         start_index: int,
         retry_budget: RetryBudget,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
         confirmed: bool = False,
     ) -> FlowResult:
@@ -292,7 +292,7 @@ class FlowEngine:
                 ctx,
                 deadline,
                 retry_budget,
-                max_tier=max_tier,
+                sender_is_owner=sender_is_owner,
                 policy=policy,
             )
 
@@ -348,7 +348,7 @@ class FlowEngine:
         deadline: float,
         retry_budget: RetryBudget,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> StepResult:
         retries = max(0, int(step.retry_max or 0))
@@ -358,7 +358,7 @@ class FlowEngine:
                 step,
                 ctx,
                 deadline,
-                max_tier=max_tier,
+                sender_is_owner=sender_is_owner,
                 policy=policy,
             )
             if not result.error:
@@ -379,7 +379,7 @@ class FlowEngine:
         ctx: FlowContext,
         deadline: float,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> StepResult:
         if step.each:
@@ -387,14 +387,14 @@ class FlowEngine:
                 step,
                 ctx,
                 deadline,
-                max_tier=max_tier,
+                sender_is_owner=sender_is_owner,
                 policy=policy,
             )
         else:
             coro = self._execute_single_step(
                 step,
                 ctx,
-                max_tier=max_tier,
+                sender_is_owner=sender_is_owner,
                 policy=policy,
             )
 
@@ -413,7 +413,7 @@ class FlowEngine:
         step: FlowStep,
         ctx: FlowContext,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> StepResult:
         """Execute one tool or LLM-task step."""
@@ -426,7 +426,7 @@ class FlowEngine:
                 return await self._run_tool(
                     step.tool,
                     resolved_args,
-                    max_tier=max_tier,
+                    sender_is_owner=sender_is_owner,
                     policy=policy,
                 )
             else:
@@ -442,14 +442,14 @@ class FlowEngine:
         tool_name: str,
         params: Dict[str, Any],
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> StepResult:
         """Delegate to ToolRegistry."""
         result = await self._tools.execute(
             tool_name,
             params,
-            max_tier=max_tier,
+            sender_is_owner=sender_is_owner,
             policy=policy,
         )
         # ToolRegistry.execute always returns a string
@@ -486,7 +486,7 @@ class FlowEngine:
         ctx: FlowContext,
         deadline: float,
         *,
-        max_tier: Optional[Any] = None,
+        sender_is_owner: Optional[Any] = None,
         policy: Optional[Any] = None,
     ) -> StepResult:
         """Execute a step once per item in the ``each`` iterable."""
@@ -504,7 +504,7 @@ class FlowEngine:
             single = await self._execute_single_step(
                 step,
                 ctx,
-                max_tier=max_tier,
+                sender_is_owner=sender_is_owner,
                 policy=policy,
             )
             if single.error:

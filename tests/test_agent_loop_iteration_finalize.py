@@ -9,7 +9,7 @@ from agent.loop import AgentLoop
 from bus.events import InboundMessage
 from bus.queue import MessageBus
 from llm.base import LLMResponse, ToolCallRequest
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 
 class _FakeConfig:
@@ -69,8 +69,8 @@ class _NoopTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
+    def owner_only(self) -> bool:
+        return False
 
     @property
     def provider(self) -> str:
@@ -98,8 +98,8 @@ class _ConcurrencyTool(Tool):
         return {"type": "object", "properties": {}, "required": []}
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
+    def owner_only(self) -> bool:
+        return False
 
     @property
     def provider(self) -> str:
@@ -121,7 +121,6 @@ async def test_agent_loop_builds_final_response_after_iteration_limit(monkeypatc
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,
@@ -171,7 +170,6 @@ async def test_agent_loop_blocks_when_tool_calls_exceed_turn_limit(monkeypatch, 
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,
@@ -223,7 +221,6 @@ async def test_agent_loop_parallel_tool_execution_respects_config_limit(monkeypa
         _FakeConfig(
             {
                 "security": {
-                    "tool_max_tier": "safe",
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,

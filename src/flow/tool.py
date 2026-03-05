@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 logger = logging.getLogger("FlowRunTool")
 
@@ -66,13 +66,9 @@ class FlowRunTool(Tool):
             "required": ["action"],
         }
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
-
     async def execute(self, **kwargs: Any) -> str:
         action = kwargs.get("action", "list")
-        access_max_tier = kwargs.get("_access_max_tier")
+        access_sender_is_owner = kwargs.get("_access_sender_is_owner")
         access_policy = kwargs.get("_access_policy")
 
         try:
@@ -95,7 +91,7 @@ class FlowRunTool(Tool):
                 result = await self._engine.run(
                     flow_name,
                     args,
-                    max_tier=access_max_tier,
+                    sender_is_owner=access_sender_is_owner,
                     policy=access_policy,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)
@@ -106,7 +102,7 @@ class FlowRunTool(Tool):
                     return json.dumps({"error": "resume_token required for resume"})
                 result = await self._engine.resume(
                     token,
-                    max_tier=access_max_tier,
+                    sender_is_owner=access_sender_is_owner,
                     policy=access_policy,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)
@@ -117,7 +113,7 @@ class FlowRunTool(Tool):
                     return json.dumps({"error": "flow_name required for recover"})
                 result = await self._engine.resume_interrupted(
                     flow_name,
-                    max_tier=access_max_tier,
+                    sender_is_owner=access_sender_is_owner,
                     policy=access_policy,
                 )
                 return json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str)

@@ -57,7 +57,6 @@ from runtime.resilience import classify_error_message
 from security.owner import get_owner_manager
 from security.threat_scan import scan_directory as threat_scan_directory
 from soul.persona_runtime import PersonaRuntimeManager
-from tools.base import ToolSafetyTier
 from tools.registry import ToolPolicy, normalize_tool_policy
 from soul.evolution import get_evolution
 from devices.satellite_protocol import (

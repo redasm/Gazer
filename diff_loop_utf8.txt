@@ -1,0 +1,22 @@
+﻿diff --git a/src/agent/loop.py b/src/agent/loop.py
+index ac0e867..0f74743 100644
+--- a/src/agent/loop.py
++++ b/src/agent/loop.py
+@@ -27,7 +27,7 @@ from agent.tool_policy_pipeline import (
+ )
+ from agent.tool_call_hooks import ToolCallHookManager
+ from agent.context import ContextBuilder
+-from tools.base import CancellationToken, ToolSafetyTier
++from tools.base import CancellationToken
+ from tools.batching import ToolBatchPlan, ToolBatchPlanner, ToolBatchingTracker
+ from tools.planner import ToolPlanner, ToolPlannerPlan
+ from tools.media_marker import MEDIA_MARKER
+@@ -64,7 +64,7 @@ from agent.constants import (
+     DEFAULT_PARALLEL_TOOL_LANE_LIMITS, DEFAULT_RETRY_BUDGET_TOTAL,
+     DEFAULT_TURN_TIMEOUT_SECONDS, _LANG_DEFAULT, _CJK_RE,
+     FAST_BRAIN_PATTERNS,
+-    TRUSTED_LOCAL_COMMAND_CHANNELS, _TIER_MAP, _REPLAN_ERROR_HINTS,
++    TRUSTED_LOCAL_COMMAND_CHANNELS, _REPLAN_ERROR_HINTS,
+ )
+ 
+ from agent.constants import _LANG_MESSAGES

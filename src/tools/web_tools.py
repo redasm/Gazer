@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, quote_plus
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from runtime.config_manager import config
 
 logger = logging.getLogger("WebTools")
@@ -52,9 +52,6 @@ class WebSearchTool(WebToolBase):
     def name(self) -> str:
         return "web_search"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:
@@ -777,9 +774,6 @@ class WebReportTool(WebToolBase):
     def name(self) -> str:
         return "web_report"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:
@@ -1011,9 +1005,6 @@ class WebFetchTool(WebToolBase):
     def name(self) -> str:
         return "web_fetch"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.STANDARD
 
     @property
     def description(self) -> str:

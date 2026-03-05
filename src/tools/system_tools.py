@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 
 logger = logging.getLogger("SystemTools")
 
@@ -27,9 +27,6 @@ class GetTimeTool(SystemToolBase):
     def name(self) -> str:
         return "get_time"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:
@@ -51,9 +48,6 @@ class ImageAnalyzeTool(SystemToolBase):
     def name(self) -> str:
         return "image_analyze"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

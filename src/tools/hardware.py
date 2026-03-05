@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
-from tools.base import Tool, ToolSafetyTier
+from tools.base import Tool
 from hardware.drivers.base import BodyDriver
 
 if TYPE_CHECKING:
@@ -30,8 +30,8 @@ class HardwareControlTool(HardwareToolBase):
         return "hardware_control"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.PRIVILEGED
+    def owner_only(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:
@@ -106,9 +106,6 @@ class VisionTool(HardwareToolBase):
     def name(self) -> str:
         return "vision_query"
 
-    @property
-    def safety_tier(self) -> ToolSafetyTier:
-        return ToolSafetyTier.SAFE
 
     @property
     def description(self) -> str:

@@ -117,7 +117,10 @@ async def test_admin_api_orchestrator_sleep_wake_endpoints(monkeypatch, tmp_path
         return _Resp(f"ok:{msg.content}")
 
     monkeypatch.setattr(orch, "_get_or_create_loop", lambda _agent_id: _LoopStub(_handler))
-    original = admin_api.ORCHESTRATOR
+    
+    from tools.admin import state as admin_state
+    original_state_orch = admin_state.ORCHESTRATOR
+    admin_state.ORCHESTRATOR = orch
     admin_api.ORCHESTRATOR = orch
 
     try:
@@ -148,7 +151,8 @@ async def test_admin_api_orchestrator_sleep_wake_endpoints(monkeypatch, tmp_path
         assert wake_payload["status"] == "ok"
         result = await orch.wait_task(task_id, timeout_seconds=1.2)
     finally:
-        admin_api.ORCHESTRATOR = original
+        admin_state.ORCHESTRATOR = original_state_orch
+        admin_api.ORCHESTRATOR = original_state_orch
         orch.stop()
 
     assert result == "ok:api-task"

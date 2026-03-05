@@ -2,7 +2,6 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -91,17 +90,7 @@ class ShellOperations:
         )
 
 
-class ToolSafetyTier(str, Enum):
-    """Safety classification for tools, inspired by OpenClaw's allowlist/denylist model.
 
-    * ``SAFE``       -- read-only / informational tools (always allowed).
-    * ``STANDARD``   -- tools that modify the workspace but within the sandbox.
-    * ``PRIVILEGED`` -- tools that run arbitrary code, access hardware, or the network.
-    """
-
-    SAFE = "safe"
-    STANDARD = "standard"
-    PRIVILEGED = "privileged"
 
 
 class Tool(ABC):
@@ -145,23 +134,31 @@ class Tool(ABC):
         return "core"
 
     @property
-    def safety_tier(self) -> ToolSafetyTier:
-        """Safety classification for this tool (default: STANDARD).
-
-        Override in subclasses to indicate read-only (SAFE) or
-        elevated-privilege (PRIVILEGED) tools.
-        """
-        return ToolSafetyTier.STANDARD
-
-    @property
     def owner_only(self) -> bool:
-        """Whether this tool is restricted to owner senders.
+        """Whether this tool is restricted to owner senders only.
 
-        The default is ``False``. Registries may still treat certain
-        safety tiers (for example ``PRIVILEGED``) as owner-only by policy.
+        Override and return ``True`` in subclasses for tools that run
+        arbitrary code, access hardware, or perform privileged operations.
+        Non-owner senders will not see these tools.
         """
         return False
 
+    @property
+    def is_read_only(self) -> bool:
+        """Whether this tool is read-only / informational.
+
+        Override in subclasses. Used for policy hints but not access control.
+        """
+        return False
+
+    @property
+    def bypass_release_gate(self) -> bool:
+        """Whether this tool bypasses release gate enforcement.
+        
+        Override and return ``True`` for inherently safe tools (e.g. basic info gathering)
+        that should remain available even when the system is under an active release gate.
+        """
+        return False
 
 
 
