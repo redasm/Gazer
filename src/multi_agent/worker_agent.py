@@ -23,6 +23,7 @@ from multi_agent.dual_brain import DualBrain
 from multi_agent.models import (
     AgentMessage,
     MessageType,
+    MultiAgentExecutionContext,
     Task,
     TaskStatus,
     WorkerResult,
@@ -56,6 +57,7 @@ class WorkerAgent:
         blackboard: Blackboard,
         tool_registry: Any = None,
         config: WorkerConfig | None = None,
+        execution_context: MultiAgentExecutionContext | None = None,
     ) -> None:
         self.agent_id = agent_id
         self._brain = dual_brain
@@ -64,6 +66,7 @@ class WorkerAgent:
         self._bb = blackboard
         self._tools = tool_registry
         self._config = config or WorkerConfig()
+        self._execution_context = execution_context or MultiAgentExecutionContext()
         self._running = False
         self._current_task: Task | None = None
         self._idle = True
@@ -157,22 +160,19 @@ class WorkerAgent:
     # ------------------------------------------------------------------
 
     async def _claim_task(self) -> Task | None:
-        ready = self._graph.get_ready_tasks()
-        for task in ready:
-            if task.required_skills and not all(
-                skill in self._config.skills for skill in task.required_skills
-            ):
-                continue
-            if task.status in (TaskStatus.READY, TaskStatus.PENDING):
-                await self._graph.mark_running(task.task_id, self.agent_id)
-                logger.info("Worker %s claimed task %s (%s)", self.agent_id, task.task_id, task.name)
-                await self._bus.send(AgentMessage(
-                    sender_id=self.agent_id,
-                    msg_type=MessageType.BROADCAST,
-                    content=f"Starting task: {task.name}",
-                ))
-                return task
-        return None
+        task = await self._graph.claim_ready_task(
+            agent_id=self.agent_id,
+            worker_skills=self._config.skills,
+        )
+        if task is None:
+            return None
+        logger.info("Worker %s claimed task %s (%s)", self.agent_id, task.task_id, task.name)
+        await self._bus.send(AgentMessage(
+            sender_id=self.agent_id,
+            msg_type=MessageType.BROADCAST,
+            content=f"Starting task: {task.name}",
+        ))
+        return task
 
     # ------------------------------------------------------------------
     # Task execution
@@ -302,7 +302,10 @@ class WorkerAgent:
                     "reason": worker_result.need_planner_reason,
                 },
             ))
-            await self._graph.mark_failed(task.task_id, f"Escalated to planner: {worker_result.need_planner_reason}")
+            await self._graph.mark_waiting_planner(
+                task.task_id,
+                reason=worker_result.need_planner_reason,
+            )
             return
 
         if worker_result.spawn_subtasks and task.allow_subtask_spawn and worker_result.subtasks:
@@ -333,11 +336,20 @@ class WorkerAgent:
     # Tool execution
     # ------------------------------------------------------------------
 
+    def _tool_execution_kwargs(self) -> dict[str, Any]:
+        return {
+            "policy": self._execution_context.tool_policy,
+            "sender_id": self._execution_context.sender_id,
+            "channel": self._execution_context.channel,
+            "model_provider": self._execution_context.model_provider,
+            "model_name": self._execution_context.model_name,
+        }
+
     def _get_tool_definitions(self) -> list[dict[str, Any]]:
         if self._tools is None:
             return []
         try:
-            return self._tools.get_definitions()
+            return self._tools.get_definitions(**self._tool_execution_kwargs())
         except Exception:
             return []
 
@@ -345,7 +357,7 @@ class WorkerAgent:
         if self._tools is None:
             return f"Error: no tool registry available (tried to call {name})"
         try:
-            return await self._tools.execute(name, arguments)
+            return await self._tools.execute(name, arguments, **self._tool_execution_kwargs())
         except Exception as exc:
             return f"Tool '{name}' failed: {exc}"
 

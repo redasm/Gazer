@@ -80,20 +80,6 @@ function App() {
     setToast({ message, type });
   }, []);
 
-  const bootstrapLegacyToken = useCallback(async () => {
-    // Legacy migration: old UI versions stored admin_token in localStorage.
-    delete axios.defaults.headers.common.Authorization;
-    const legacyToken = (localStorage.getItem('admin_token') || '').trim();
-    if (!legacyToken) return;
-    try {
-      await axios.post(`${API_BASE}/auth/session`, { token: legacyToken });
-    } catch (err) {
-      console.warn('Failed to migrate legacy admin token to cookie session.', err);
-    } finally {
-      localStorage.removeItem('admin_token');
-    }
-  }, []);
-
   const requestAdminToken = useCallback(async () => {
     const input = window.prompt('Enter admin token (from config/owner.json):');
     const token = (input || '').trim();
@@ -177,9 +163,8 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-        await bootstrapLegacyToken();
         if (!cancelled) {
-        await fetchConfig();
+          await fetchConfig();
         }
     })();
 
@@ -195,7 +180,7 @@ function App() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [fetchConfig, bootstrapLegacyToken]);
+  }, [fetchConfig]);
 
   return (
     <BrowserRouter>

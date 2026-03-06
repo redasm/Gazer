@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
+from multi_agent.models import MultiAgentExecutionContext
 from multi_agent.task_graph import TaskGraph
 from multi_agent.worker_agent import WorkerAgent, WorkerConfig
 
@@ -42,6 +43,7 @@ class AgentPool:
         config: PoolConfig | None = None,
         tool_registry: Any = None,
         worker_config: WorkerConfig | None = None,
+        execution_context: MultiAgentExecutionContext | None = None,
     ) -> None:
         self._brain = dual_brain
         self._bus = bus
@@ -50,6 +52,7 @@ class AgentPool:
         self._config = config or PoolConfig()
         self._tools = tool_registry
         self._worker_config = worker_config or WorkerConfig()
+        self._execution_context = execution_context or MultiAgentExecutionContext()
 
         self._workers: dict[str, WorkerAgent] = {}
         self._worker_seq = 0
@@ -168,6 +171,7 @@ class AgentPool:
             blackboard=self._bb,
             tool_registry=self._tools,
             config=self._worker_config,
+            execution_context=self._execution_context,
         )
         self._workers[agent_id] = worker
         await worker.start()

@@ -30,6 +30,7 @@ from runtime.config_manager import config
 from runtime.provider_registry import get_provider_registry
 from security.owner import get_owner_manager
 from soul.models import ModelRegistry
+from multi_agent.models import MultiAgentExecutionContext
 
 logger = logging.getLogger("GazerAdapter")
 
@@ -44,6 +45,33 @@ FAST_BRAIN_PATTERNS = {
 }
 MEMORY_TURN_HEALTH_REPORT = Path("data/reports/memory_turn_health.jsonl")
 TOOL_PERSIST_REPORT = Path("data/reports/tool_result_persistence.jsonl")
+
+
+class _MultiAgentWorkerBudget:
+    """Process-local slot budget for concurrent multi-agent workers."""
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = max(1, int(capacity or 1))
+        self._available = self.capacity
+        self._condition = asyncio.Condition()
+
+    @property
+    def in_use(self) -> int:
+        return self.capacity - self._available
+
+    async def acquire(self, slots: int) -> int:
+        requested = max(1, min(int(slots or 1), self.capacity))
+        async with self._condition:
+            while self._available < requested:
+                await self._condition.wait()
+            self._available -= requested
+            return requested
+
+    async def release(self, slots: int) -> None:
+        released = max(1, min(int(slots or 1), self.capacity))
+        async with self._condition:
+            self._available = min(self.capacity, self._available + released)
+            self._condition.notify_all()
 
 
 class GazerContextBuilder(ContextBuilder):
@@ -331,6 +359,7 @@ class GazerAgent:
         
         # Dispatch task will be started in start()
         self._dispatch_task = None
+        self._multi_agent_worker_budget: _MultiAgentWorkerBudget | None = None
 
         # Track response futures: { request_id: Future }
         # Simplified: We just track by chat_id since we are single user for now
@@ -918,7 +947,12 @@ class GazerAgent:
         finally:
             self._response_futures.pop(chat_id, None)
 
-    async def process_multi_agent(self, goal: str, max_workers: int | None = None) -> str:
+    async def process_multi_agent(
+        self,
+        goal: str,
+        max_workers: int | None = None,
+        execution_context: MultiAgentExecutionContext | None = None,
+    ) -> str:
         """Execute a goal using the multi-agent collaboration system.
 
         Instantiates a fresh MultiAgentRuntime per invocation, keeping
@@ -929,8 +963,40 @@ class GazerAgent:
         ma_cfg = self._get_multi_agent_config()
         if max_workers is None:
             max_workers = ma_cfg["max_workers"]
-        runtime = MultiAgentRuntime(self, max_agents=max_workers)
-        return await runtime.execute(goal)
+        requested_workers = max(1, min(int(max_workers or 1), ma_cfg["max_workers"]))
+        budget = self._get_multi_agent_worker_budget(total_slots=ma_cfg["max_workers"])
+        acquired_workers = await budget.acquire(requested_workers)
+        runtime = MultiAgentRuntime(
+            self,
+            max_agents=acquired_workers,
+            execution_context=execution_context,
+        )
+        try:
+            logger.info(
+                "Multi-agent budget acquired: workers=%d/%d",
+                acquired_workers,
+                ma_cfg["max_workers"],
+            )
+            return await runtime.execute(goal)
+        finally:
+            await budget.release(acquired_workers)
+            logger.info(
+                "Multi-agent budget released: workers=%d/%d",
+                acquired_workers,
+                ma_cfg["max_workers"],
+            )
+
+    def _get_multi_agent_worker_budget(self, total_slots: int) -> _MultiAgentWorkerBudget:
+        desired_capacity = max(1, int(total_slots or 1))
+        budget = getattr(self, "_multi_agent_worker_budget", None)
+        if budget is None:
+            budget = _MultiAgentWorkerBudget(desired_capacity)
+            self._multi_agent_worker_budget = budget
+            return budget
+        if budget.capacity != desired_capacity and budget.in_use == 0:
+            budget = _MultiAgentWorkerBudget(desired_capacity)
+            self._multi_agent_worker_budget = budget
+        return budget
 
     def _should_auto_route_inbound_message(self, msg: InboundMessage) -> bool:
         """Return True when an inbound bus message should use auto multi-agent routing."""
@@ -966,7 +1032,11 @@ class GazerAgent:
             logger.debug("TaskComplexityAssessor failed, falling back to single agent", exc_info=True)
             return None
 
-    async def _maybe_auto_route_inbound_message(self, msg: InboundMessage) -> str | None:
+    async def _maybe_auto_route_inbound_message(
+        self,
+        msg: InboundMessage,
+        execution_context: MultiAgentExecutionContext,
+    ) -> str | None:
         """Auto-route external inbound messages to the multi-agent runtime when appropriate."""
         if not self._should_auto_route_inbound_message(msg):
             return None
@@ -980,7 +1050,11 @@ class GazerAgent:
             msg.channel,
             workers,
         )
-        return await self.process_multi_agent(msg.content, max_workers=workers)
+        return await self.process_multi_agent(
+            msg.content,
+            max_workers=workers,
+            execution_context=execution_context,
+        )
 
     def _get_multi_agent_config(self) -> dict:
         """Read multi_agent settings from config, with safe defaults."""
@@ -989,7 +1063,12 @@ class GazerAgent:
             "max_workers": int(config.get("multi_agent.max_workers", 5) or 5),
         }
 
-    async def process_auto(self, content: str, sender: str = "User") -> str:
+    async def process_auto(
+        self,
+        content: str,
+        sender: str = "User",
+        execution_context: MultiAgentExecutionContext | None = None,
+    ) -> str:
         """Unified entry point with automatic single/multi-agent routing.
 
         Uses ``TaskComplexityAssessor`` (fast brain, four-dimension scoring)
@@ -999,7 +1078,11 @@ class GazerAgent:
         workers = await self._assess_multi_agent_workers(content)
         if workers is not None:
             logger.info("Auto-route: multi-agent (workers=%d)", workers)
-            return await self.process_multi_agent(content, max_workers=workers)
+            return await self.process_multi_agent(
+                content,
+                max_workers=workers,
+                execution_context=execution_context,
+            )
 
         return await self.process_message(content, sender=sender)
 

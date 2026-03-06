@@ -350,18 +350,18 @@ class PlannerAgent:
             hint=HINT_DEEP,
         )
 
-        try:
-            action_data = json.loads(raw.strip()) if raw.strip().startswith("{") else {"action": "fail"}
-        except json.JSONDecodeError:
+        action_data = self._parse_plan_json(raw)
+        if not isinstance(action_data, dict):
             action_data = {"action": "fail"}
 
         action = action_data.get("action", "fail")
 
         if action == "revise":
-            task.instruction = str(action_data.get("details", task.instruction))
-            task.status = TaskStatus.PENDING
-            task.assigned_to = None
-            task.retry_count = 0
+            await self._graph.requeue_task(
+                task_id,
+                instruction=str(action_data.get("details", task.instruction)),
+                clear_retry_count=True,
+            )
         elif action == "split":
             subtask_defs = action_data.get("details", [])
             if isinstance(subtask_defs, list) and subtask_defs:
@@ -377,8 +377,10 @@ class PlannerAgent:
                 ]
                 if subtasks:
                     await self._graph.add_subtasks(subtasks, task_id, replace_parent=True)
+                    return
+            await self._graph.mark_failed_terminal(task_id, "Planner returned no valid subtasks")
         else:
-            await self._graph.mark_failed(task_id, f"Planner decided to fail: {reason}")
+            await self._graph.mark_failed_terminal(task_id, f"Planner decided to fail: {reason}")
 
     async def _handle_worker_question(self, msg: AgentMessage) -> None:
         reply_text = await self._brain.generate(

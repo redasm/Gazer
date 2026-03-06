@@ -35,6 +35,7 @@ from tools.registry import ToolRegistry, ToolPolicy, normalize_tool_policy
 from agent.session_store import SessionStore
 from agent.trajectory import TrajectoryStore
 from eval.benchmark import EvalBenchmarkManager
+from multi_agent.models import MultiAgentExecutionContext
 from runtime.resilience import RetryBudget, classify_error_message
 from runtime.rate_limiter import RateLimiter
 from security.owner import get_owner_manager
@@ -234,7 +235,9 @@ class AgentLoop(
         slow_provider_resolver: Optional[Callable[[InboundMessage, LLMProvider], LLMProvider]] = None,
         persist_turn_callback: Optional[Callable[[InboundMessage, str], Any]] = None,
         turn_hooks: Optional[TurnHookManager] = None,
-        auto_route_turn_callback: Optional[Callable[[InboundMessage], Awaitable[Optional[str]]]] = None,
+        auto_route_turn_callback: Optional[
+            Callable[[InboundMessage, MultiAgentExecutionContext], Awaitable[Optional[str]]]
+        ] = None,
 
     ):
         self.bus = bus
@@ -479,7 +482,14 @@ class AgentLoop(
             return None
 
         try:
-            routed_content = await callback(msg)
+            execution_context = MultiAgentExecutionContext(
+                tool_policy=self._resolve_tool_policy(),
+                sender_id=str(msg.sender_id or "").strip(),
+                channel=str(msg.channel or "").strip(),
+                model_provider=self._tool_policy_model_provider,
+                model_name=self._tool_policy_model_name,
+            )
+            routed_content = await callback(msg, execution_context)
         except Exception:
             logger.warning("Auto-route callback failed; continuing with single-agent turn", exc_info=True)
             return None

@@ -8,9 +8,10 @@ import pytest
 
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
-from multi_agent.models import Task, TaskPriority, TaskStatus, WorkerResult
+from multi_agent.models import MultiAgentExecutionContext, Task, TaskPriority, TaskStatus, WorkerResult
 from multi_agent.task_graph import TaskGraph
 from multi_agent.worker_agent import WorkerAgent, WorkerConfig
+from tools.registry import ToolPolicy
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +96,55 @@ class TestWorkStealing:
         await bus.register_agent(worker.agent_id)
         claimed = await worker._claim_task()
         assert claimed is None
+
+    async def test_concurrent_claim_allows_only_one_worker(
+        self,
+        dual_brain: DualBrain,
+        graph: TaskGraph,
+        bus: AgentMessageBus,
+        bb: Blackboard,
+    ):
+        await bus.register_agent("w-1")
+        await bus.register_agent("w-2")
+        worker1 = WorkerAgent(
+            agent_id="w-1",
+            dual_brain=dual_brain,
+            task_graph=graph,
+            bus=bus,
+            blackboard=bb,
+            config=WorkerConfig(max_iterations=3, max_error_recovery=1),
+        )
+        worker2 = WorkerAgent(
+            agent_id="w-2",
+            dual_brain=dual_brain,
+            task_graph=graph,
+            bus=bus,
+            blackboard=bb,
+            config=WorkerConfig(max_iterations=3, max_error_recovery=1),
+        )
+        await graph.add_task(Task(task_id="t1", name="race"))
+
+        original_mark_running = graph.mark_running
+        barrier = asyncio.Event()
+        waiting = 0
+
+        async def delayed_mark_running(task_id: str, agent_id: str) -> None:
+            nonlocal waiting
+            waiting += 1
+            if waiting >= 2:
+                barrier.set()
+            await barrier.wait()
+            await original_mark_running(task_id, agent_id)
+
+        with patch.object(graph, "mark_running", side_effect=delayed_mark_running):
+            claimed1, claimed2 = await asyncio.gather(
+                worker1._claim_task(),
+                worker2._claim_task(),
+            )
+
+        claimed = [task for task in (claimed1, claimed2) if task is not None]
+        assert len(claimed) == 1
+        assert claimed[0].task_id == "t1"
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +251,87 @@ class TestPromptBuilding:
         prompt = WorkerAgent._build_user_prompt(t, dep_results)
         assert "find papers" in prompt
         assert "prior findings" in prompt
+
+
+class _ToolRegistrySpy:
+    def __init__(self):
+        self.definition_kwargs = None
+        self.execute_kwargs = None
+
+    def get_definitions(self, **kwargs):
+        self.definition_kwargs = kwargs
+        return [{"name": "safe_tool"}]
+
+    async def execute(self, name, params, **kwargs):
+        self.execute_kwargs = {"name": name, "params": params, **kwargs}
+        return f"ok:{name}"
+
+
+@pytest.mark.asyncio
+class TestToolPolicyContext:
+    async def test_worker_passes_execution_context_to_tool_registry(
+        self,
+        dual_brain: DualBrain,
+        graph: TaskGraph,
+        bus: AgentMessageBus,
+        bb: Blackboard,
+    ):
+        registry = _ToolRegistrySpy()
+        context = MultiAgentExecutionContext(
+            tool_policy=ToolPolicy(allow_names={"safe_tool"}),
+            sender_id="owner-1",
+            channel="web",
+            model_provider="openai",
+            model_name="gpt-4o-mini",
+        )
+        worker = WorkerAgent(
+            agent_id="w-policy",
+            dual_brain=dual_brain,
+            task_graph=graph,
+            bus=bus,
+            blackboard=bb,
+            tool_registry=registry,
+            execution_context=context,
+            config=WorkerConfig(max_iterations=3, max_error_recovery=1),
+        )
+
+        definitions = worker._get_tool_definitions()
+        result = await worker._execute_tool("safe_tool", {"value": 1})
+
+        assert definitions == [{"name": "safe_tool"}]
+        assert result == "ok:safe_tool"
+        assert registry.definition_kwargs["policy"] == context.tool_policy
+        assert registry.definition_kwargs["sender_id"] == "owner-1"
+        assert registry.definition_kwargs["channel"] == "web"
+        assert registry.execute_kwargs["policy"] == context.tool_policy
+        assert registry.execute_kwargs["sender_id"] == "owner-1"
+        assert registry.execute_kwargs["channel"] == "web"
+
+    async def test_need_planner_marks_task_waiting_for_planner(
+        self,
+        worker: WorkerAgent,
+        graph: TaskGraph,
+        bus: AgentMessageBus,
+    ):
+        await bus.register_agent(worker.agent_id)
+        await bus.register_agent("planner")
+        task = Task(task_id="t-need-planner", name="stuck")
+        await graph.add_task(task)
+        await graph.mark_running(task.task_id, worker.agent_id)
+
+        await worker._complete_task(
+            task,
+            json.dumps(
+                {
+                    "need_planner": True,
+                    "need_planner_reason": "requires decomposition",
+                }
+            ),
+        )
+
+        updated = graph.get_task(task.task_id)
+        assert updated.status == TaskStatus.WAITING_PLANNER
+        assert updated.retry_count == 0
 
 
 # ---------------------------------------------------------------------------

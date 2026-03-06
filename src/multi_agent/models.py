@@ -10,7 +10,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tools.registry import ToolPolicy
 
 
 # ------------------------------------------------------------------
@@ -21,6 +24,7 @@ class TaskStatus(str, Enum):
     PENDING = "pending"
     READY = "ready"
     RUNNING = "running"
+    WAITING_PLANNER = "waiting_planner"
     DONE = "done"
     FAILED = "failed"
     BLOCKED = "blocked"
@@ -38,6 +42,17 @@ class TaskComplexity(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+@dataclass
+class MultiAgentExecutionContext:
+    """Per-session execution context propagated from the parent agent turn."""
+
+    tool_policy: "ToolPolicy | None" = None
+    sender_id: str = ""
+    channel: str = ""
+    model_provider: str = ""
+    model_name: str = ""
 
 
 # ------------------------------------------------------------------

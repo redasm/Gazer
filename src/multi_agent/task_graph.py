@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Callable, Coroutine
 
 from multi_agent.models import Task, TaskPriority, TaskStatus, _short_uuid
@@ -183,6 +184,42 @@ class TaskGraph:
         self._change_event.set()
         await self._notify_watchers(task_id, old, TaskStatus.RUNNING)
 
+    async def claim_ready_task(
+        self,
+        *,
+        agent_id: str,
+        worker_skills: list[str] | None = None,
+    ) -> Task | None:
+        """Atomically claim the highest-priority ready task for a worker."""
+        worker_skills = worker_skills or []
+        claimed: Task | None = None
+        old_status: TaskStatus | None = None
+        async with self._lock:
+            completed = self._completed_ids()
+            ready_tasks = [
+                task
+                for task in self._tasks.values()
+                if task.status == TaskStatus.READY
+                or (task.status == TaskStatus.PENDING and task.is_ready(completed))
+            ]
+            ready_tasks.sort(key=lambda task: (task.priority.value, task.created_at))
+            for task in ready_tasks:
+                if task.required_skills and not all(
+                    skill in worker_skills for skill in task.required_skills
+                ):
+                    continue
+                old_status = task.status
+                task.status = TaskStatus.RUNNING
+                task.assigned_to = agent_id
+                task.started_at = time.time()
+                claimed = task
+                break
+        if claimed is None or old_status is None:
+            return None
+        self._change_event.set()
+        await self._notify_watchers(claimed.task_id, old_status, TaskStatus.RUNNING)
+        return claimed
+
     async def mark_done(
         self,
         task_id: str,
@@ -205,6 +242,60 @@ class TaskGraph:
         self._change_event.set()
         await self._notify_watchers(task_id, old, TaskStatus.DONE)
         logger.info("Task %s (%s) DONE", task_id, task.name)
+
+    async def mark_waiting_planner(self, task_id: str, reason: str = "") -> None:
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise ValueError(f"Unknown task: {task_id}")
+            old = task.status
+            task.status = TaskStatus.WAITING_PLANNER
+            task.assigned_to = None
+            task.finished_at = time.time()
+            if reason:
+                task.result = f"ESCALATED: {reason}"
+        self._change_event.set()
+        await self._notify_watchers(task_id, old, TaskStatus.WAITING_PLANNER)
+
+    async def requeue_task(
+        self,
+        task_id: str,
+        *,
+        instruction: str | None = None,
+        clear_retry_count: bool = False,
+    ) -> None:
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise ValueError(f"Unknown task: {task_id}")
+            old = task.status
+            if instruction is not None:
+                task.instruction = instruction
+            task.status = TaskStatus.PENDING
+            task.assigned_to = None
+            task.started_at = None
+            task.finished_at = None
+            if clear_retry_count:
+                task.retry_count = 0
+            self._promote_pending()
+            new_status = task.status
+        self._change_event.set()
+        await self._notify_watchers(task_id, old, new_status)
+
+    async def mark_failed_terminal(self, task_id: str, error: str) -> None:
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise ValueError(f"Unknown task: {task_id}")
+            old = task.status
+            task.status = TaskStatus.FAILED
+            task.assigned_to = None
+            task.finished_at = time.time()
+            task.result = f"FAILED: {error}"
+            self._cascade_block(task_id)
+        self._change_event.set()
+        await self._notify_watchers(task_id, old, TaskStatus.FAILED)
+        logger.error("Task %s permanently FAILED: %s", task_id, error)
 
     async def mark_failed(self, task_id: str, error: str) -> bool:
         """Mark a task as failed. Returns True if the task will be retried."""

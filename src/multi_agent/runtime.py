@@ -21,6 +21,7 @@ from typing import Any, Optional
 from multi_agent.agent_pool import AgentPool, PoolConfig
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
+from multi_agent.models import MultiAgentExecutionContext
 from multi_agent.planner import PlannerAgent
 from multi_agent.task_graph import TaskGraph
 
@@ -49,6 +50,7 @@ class MultiAgentRuntime:
         self,
         agent_core: Any,
         max_agents: int = 5,
+        execution_context: MultiAgentExecutionContext | None = None,
     ) -> None:
         session_id = uuid.uuid4().hex[:8]
 
@@ -80,6 +82,7 @@ class MultiAgentRuntime:
             task_graph=self._graph,
             config=PoolConfig(max_agents=max_agents),
             tool_registry=tool_registry,
+            execution_context=execution_context,
         )
         self._planner = PlannerAgent(
             dual_brain=self._brain,

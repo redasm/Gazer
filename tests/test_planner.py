@@ -176,3 +176,47 @@ class TestEmotionVector:
             emotion_vector={"excitement": 0.8, "frustration": 0.1, "confidence": 0.9},
         )
         assert p.emotion_vector["excitement"] == 0.8
+
+
+@pytest.mark.asyncio
+class TestEscalationHandling:
+    async def test_revise_accepts_fenced_json_and_requeues_task(
+        self,
+        planner: PlannerAgent,
+        graph: TaskGraph,
+    ):
+        task = Task(task_id="t-revise", name="research", instruction="old plan")
+        await graph.add_task(task)
+        task.status = TaskStatus.WAITING_PLANNER
+        task.assigned_to = "worker-1"
+        task.retry_count = 2
+        planner._brain.generate = AsyncMock(
+            return_value='```json\n{"action": "revise", "details": "new plan"}\n```'
+        )
+
+        await planner._handle_escalation(
+            MagicMock(sender_id="worker-1", content={"task_id": task.task_id, "reason": "needs clarification"})
+        )
+
+        updated = graph.get_task(task.task_id)
+        assert updated.instruction == "new plan"
+        assert updated.assigned_to is None
+        assert updated.retry_count == 0
+        assert updated.status == TaskStatus.READY
+
+    async def test_fail_action_marks_task_failed_without_retry(
+        self,
+        planner: PlannerAgent,
+        graph: TaskGraph,
+    ):
+        task = Task(task_id="t-fail", name="blocked", max_retries=3)
+        await graph.add_task(task)
+        task.status = TaskStatus.WAITING_PLANNER
+        planner._brain.generate = AsyncMock(return_value='{"action": "fail"}')
+
+        await planner._handle_escalation(
+            MagicMock(sender_id="worker-1", content={"task_id": task.task_id, "reason": "irrecoverable"})
+        )
+
+        updated = graph.get_task(task.task_id)
+        assert updated.status == TaskStatus.FAILED
