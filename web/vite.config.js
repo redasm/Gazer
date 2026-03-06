@@ -4,6 +4,28 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Prevent the browser from pinning stale optimized deps across dev-server restarts.
+  server: {
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  },
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    force: true,
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-router-dom',
+      'axios',
+      'lucide-react',
+    ],
+  },
   build: {
     chunkSizeWarningLimit: 1500,
     rollupOptions: {

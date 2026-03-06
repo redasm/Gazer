@@ -11,7 +11,9 @@ import pytest
 from starlette.requests import Request
 from fastapi import HTTPException
 
+import agent.loop_mixins.planning as planning_module
 from tools.admin import api_facade as admin_api
+from tools.admin import auth as admin_auth
 import runtime.config_manager as config_manager
 from agent.loop import AgentLoop
 from bus.events import InboundMessage
@@ -21,6 +23,15 @@ from llm.base import LLMResponse, ToolCallRequest
 from tools.base import Tool
 from tools.coding import ExecTool
 from tools.registry import ToolRegistry
+
+
+@pytest.fixture(autouse=True)
+def _disable_internal_planning(monkeypatch):
+    monkeypatch.setattr(
+        planning_module,
+        "INTERNAL_PLANNING_POLICY",
+        {"mode": "off", "auto": {}},
+    )
 
 
 def _make_request(
@@ -287,6 +298,21 @@ async def test_verify_admin_token_blocks_disallowed_origin(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await admin_api.verify_admin_token(request)
     assert exc.value.status_code == 403
+
+
+def test_default_cors_origins_allow_vite_preview_port(monkeypatch):
+    assert "http://localhost:4173" in admin_auth._DEFAULT_CORS_ORIGINS
+    assert "http://127.0.0.1:4173" in admin_auth._DEFAULT_CORS_ORIGINS
+
+    monkeypatch.setattr(admin_auth, "cors_origins", list(admin_auth._DEFAULT_CORS_ORIGINS))
+    monkeypatch.setattr(
+        admin_auth,
+        "config",
+        SimpleNamespace(get=lambda key, default=None: {"api.cors_strict_mode": True}.get(key, default)),
+    )
+
+    assert admin_auth._is_allowed_origin("http://localhost:4173") is True
+    assert admin_auth._is_allowed_origin("http://127.0.0.1:4173") is True
 
 
 @pytest.mark.asyncio
@@ -584,6 +610,30 @@ async def test_update_config_blocks_loopback_auth_bypass_toggle(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await admin_api.update_config({"api": {"allow_loopback_without_token": True}})
+    assert exc.value.status_code == 403
+    assert fake_cfg.set_many_calls == []
+
+
+@pytest.mark.asyncio
+async def test_update_config_blocks_internal_planning_namespace(monkeypatch):
+    fake_cfg = _FakeConfig(
+        {
+            "agents": {
+                "defaults": {
+                    "planning": {
+                        "mode": "auto",
+                        "auto": {
+                            "min_message_chars": 220,
+                        },
+                    }
+                }
+            }
+        }
+    )
+    monkeypatch.setattr(admin_api, "config", fake_cfg)
+
+    with pytest.raises(HTTPException) as exc:
+        await admin_api.update_config({"agents": {"defaults": {"planning": {"mode": "always"}}}})
     assert exc.value.status_code == 403
     assert fake_cfg.set_many_calls == []
 

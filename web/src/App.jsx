@@ -22,6 +22,7 @@ const Canvas = React.lazy(() => import('./pages/Canvas'));
 const ToolPolicy = React.lazy(() => import('./pages/ToolPolicy'));
 const LlmRouter = React.lazy(() => import('./pages/LlmRouter'));
 const ModelProviders = React.lazy(() => import('./pages/ModelProviders'));
+const AgentKanban = React.lazy(() => import('./pages/AgentKanban'));
 const PolicyAudit = React.lazy(() => import('./pages/PolicyAudit'));
 const ReleaseGate = React.lazy(() => import('./pages/ReleaseGate'));
 const OptimizationTasks = React.lazy(() => import('./pages/OptimizationTasks'));
@@ -212,6 +213,17 @@ function App() {
           } />
           <Route path="evolution" element={<Suspense fallback={<PageFallback />}><Evolution t={t} /></Suspense>} />
           <Route path="chat" element={<Suspense fallback={<PageFallback />}><Chat t={t} /></Suspense>} />
+          <Route path="multi-agent" element={
+            <Suspense fallback={<PageFallback />}>
+              <AgentKanban
+                config={config}
+                setConfig={setConfig}
+                saveConfig={saveConfig}
+                fetchConfig={fetchConfig}
+                t={t}
+              />
+            </Suspense>
+          } />
           <Route path="skills" element={<Suspense fallback={<PageFallback />}><Skills t={t} /></Suspense>} />
           <Route path="memory" element={<Suspense fallback={<PageFallback />}><MemoryGalaxy t={t} /></Suspense>} />
           <Route path="logs" element={<Suspense fallback={<PageFallback />}><Logs t={t} /></Suspense>} />

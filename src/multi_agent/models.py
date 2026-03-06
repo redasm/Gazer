@@ -53,6 +53,7 @@ class MultiAgentExecutionContext:
     channel: str = ""
     model_provider: str = ""
     model_name: str = ""
+    session_key: str = ""
 
 
 # ------------------------------------------------------------------

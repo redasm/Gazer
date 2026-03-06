@@ -34,6 +34,7 @@ const Layout = ({ lang, setLang, status }) => {
             label: t.navGroupChat || 'Chat',
             items: [
                 { path: '/chat', icon: <MessageSquare size={18} />, label: t.chat },
+                { path: '/multi-agent', icon: <Activity size={18} />, label: t.agentKanbanTitle || 'Multi-Agent' },
             ],
         },
         {

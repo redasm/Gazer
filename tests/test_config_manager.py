@@ -3,10 +3,21 @@
 import os
 import yaml
 import pytest
-from runtime.config_manager import ConfigManager, DEFAULT_CONFIG, is_sensitive_config_path
+from runtime.config_manager import (
+    ConfigManager,
+    DEFAULT_CONFIG,
+    is_internal_admin_config_path,
+    is_sensitive_config_path,
+)
 
 
 class TestConfigManager:
+    def test_default_config_omits_internal_planning_policy(self):
+        defaults = DEFAULT_CONFIG.get("agents", {}).get("defaults", {})
+
+        assert isinstance(defaults, dict)
+        assert "planning" not in defaults
+
     def test_creates_default_config(self, tmp_config_file):
         """Should create default config file if it doesn't exist."""
         cm = ConfigManager(config_path=tmp_config_file)
@@ -308,3 +319,19 @@ class TestConfigManager:
         personality = safe.get("personality", {})
         assert isinstance(personality, dict)
         assert personality.get("system_prompt") == "safe prompt from soul"
+
+    def test_to_safe_dict_omits_internal_planning_policy(self, tmp_config_file):
+        cm = ConfigManager(config_path=tmp_config_file)
+        cm.set("agents.defaults.planning.mode", "always")
+        cm.set("agents.defaults.planning.auto.min_message_chars", 999)
+
+        safe = cm.to_safe_dict()
+        defaults = safe.get("agents", {}).get("defaults", {})
+
+        assert isinstance(defaults, dict)
+        assert "planning" not in defaults
+
+    def test_is_internal_admin_config_path_matches_nested_planning_fields(self):
+        assert is_internal_admin_config_path("agents.defaults.planning") is True
+        assert is_internal_admin_config_path("agents.defaults.planning.auto.min_message_chars") is True
+        assert is_internal_admin_config_path("agents.defaults.model.primary") is False

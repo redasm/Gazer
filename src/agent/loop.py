@@ -488,6 +488,7 @@ class AgentLoop(
                 channel=str(msg.channel or "").strip(),
                 model_provider=self._tool_policy_model_provider,
                 model_name=self._tool_policy_model_name,
+                session_key=f"{session_key}:{trajectory_id}",
             )
             routed_content = await callback(msg, execution_context)
         except Exception:

@@ -486,8 +486,10 @@ DEFAULT_CONFIG = {
         # Never use "*" wildcard in production
         "cors_origins": [
             "http://localhost:5173",
+            "http://localhost:4173",
             "http://localhost:8080",
             "http://127.0.0.1:5173",
+            "http://127.0.0.1:4173",
             "http://127.0.0.1:8080",
         ],
         # Auto-detected by admin_api when null.
@@ -699,15 +701,6 @@ DEFAULT_CONFIG = {
             "workspace": ".",
             "compaction": {
                 "mode": "safeguard",
-            },
-            "planning": {
-                "mode": "auto",  # always | auto | off
-                "auto": {
-                    "min_message_chars": 220,
-                    "min_history_messages": 8,
-                    "min_line_breaks": 2,
-                    "min_list_lines": 2,
-                },
             },
             "maxConcurrent": 4,
             "subagents": {

@@ -6,11 +6,11 @@ Contains 3 methods.
 
 from __future__ import annotations
 
+import copy
 from agent.constants import *  # noqa: F403
 import re
 from runtime.resilience import RetryBudget
 import logging
-import time
 logger = logging.getLogger('AgentLoop')
 
 from typing import TYPE_CHECKING
@@ -19,23 +19,25 @@ if TYPE_CHECKING:
     pass  # Add type imports as needed
 
 
+# Internal-only single-agent planning policy.
+# If you want to tune planning behavior, edit this constant directly.
+INTERNAL_PLANNING_POLICY: Dict[str, Any] = {
+    "mode": "auto",  # always | auto | off
+    "auto": {
+        "min_message_chars": 220,
+        "min_history_messages": 8,
+        "min_line_breaks": 2,
+        "min_list_lines": 2,
+    },
+}
+
+
 class PlanningMixin:
     """Mixin providing planning functionality."""
 
     @staticmethod
     def _planning_policy() -> Dict[str, Any]:
-        from runtime.config_manager import config as _cfg
-
-        raw = _cfg.get("agents.defaults.planning", None)
-        if raw is None:
-            # For partial/test configs that do not define planning, keep planning disabled.
-            return {
-                "mode": "off",
-                "min_message_chars": 220,
-                "min_history_messages": 8,
-                "min_line_breaks": 2,
-                "min_list_lines": 2,
-            }
+        raw = copy.deepcopy(INTERNAL_PLANNING_POLICY)
         if not isinstance(raw, dict):
             raw = {}
         mode = str(raw.get("mode", "auto") or "auto").strip().lower()

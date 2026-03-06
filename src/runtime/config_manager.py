@@ -32,6 +32,10 @@ _SENSITIVE_KEY_PATTERNS: List[str] = [
     "plugins.signature.trusted_keys.*",
 ]
 
+_INTERNAL_ADMIN_CONFIG_PREFIXES: List[str] = [
+    "agents.defaults.planning",
+]
+
 
 def _normalize_path(path: str) -> List[str]:
     """Normalize a dot path into lowercase segments."""
@@ -82,6 +86,18 @@ def is_sensitive_config_path(path: str) -> bool:
         return False
     for pattern in _SENSITIVE_KEY_PATTERNS:
         if _match_pattern(pattern, normalized):
+            return True
+    return False
+
+
+def is_internal_admin_config_path(path: str) -> bool:
+    """Return True when *path* is internal-only for the admin web config API."""
+    normalized = ".".join(_normalize_path(path))
+    if not normalized:
+        return False
+    for prefix in _INTERNAL_ADMIN_CONFIG_PREFIXES:
+        normalized_prefix = ".".join(_normalize_path(prefix))
+        if normalized == normalized_prefix or normalized.startswith(f"{normalized_prefix}."):
             return True
     return False
 
@@ -604,19 +620,11 @@ class ConfigManager:
                     "models",
                     "workspace",
                     "compaction",
-                    "planning",
                     "maxConcurrent",
                     "subagents",
                 ],
                 "agents.defaults.model": ["primary", "fallbacks"],
                 "agents.defaults.compaction": ["mode"],
-                "agents.defaults.planning": ["mode", "auto"],
-                "agents.defaults.planning.auto": [
-                    "min_message_chars",
-                    "min_history_messages",
-                    "min_line_breaks",
-                    "min_list_lines",
-                ],
                 "agents.defaults.subagents": ["maxConcurrent"],
             }
             preferred = preferred_orders.get(path, [])
@@ -680,7 +688,32 @@ class ConfigManager:
             personality = {}
             safe["personality"] = personality
         personality["system_prompt"] = soul_prompt
+        for prefix in _INTERNAL_ADMIN_CONFIG_PREFIXES:
+            self._delete_path(safe, prefix)
         return safe
+
+    def _delete_path(self, data: Dict[str, Any], path: str) -> None:
+        """Delete a nested dot-path from *data* when present."""
+        parts = _normalize_path(path)
+        if not parts:
+            return
+        current: Any = data
+        parents: List[tuple[Dict[str, Any], str]] = []
+        for part in parts[:-1]:
+            if not isinstance(current, dict) or part not in current:
+                return
+            parents.append((current, part))
+            current = current[part]
+        leaf = parts[-1]
+        if not isinstance(current, dict) or leaf not in current:
+            return
+        del current[leaf]
+        for parent, key in reversed(parents):
+            child = parent.get(key)
+            if isinstance(child, dict) and not child:
+                del parent[key]
+            else:
+                break
 
     def _mask_sensitive(
         self, data: Dict[str, Any], path: str = ""

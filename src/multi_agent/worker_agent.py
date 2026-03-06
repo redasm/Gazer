@@ -20,6 +20,7 @@ from typing import Any, Optional
 from multi_agent.brain_router import HINT_DEEP, HINT_DEFAULT, HINT_FAST, BrainHint
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
+from multi_agent.monitor import monitor_hub, should_forward_monitor_events
 from multi_agent.models import (
     AgentMessage,
     MessageType,
@@ -67,6 +68,7 @@ class WorkerAgent:
         self._tools = tool_registry
         self._config = config or WorkerConfig()
         self._execution_context = execution_context or MultiAgentExecutionContext()
+        self._session_key = self._execution_context.session_key
         self._running = False
         self._current_task: Task | None = None
         self._idle = True
@@ -172,6 +174,7 @@ class WorkerAgent:
             msg_type=MessageType.BROADCAST,
             content=f"Starting task: {task.name}",
         ))
+        await self._emit_log("start", f"Starting task: {task.name}", task_id=task.task_id)
         return task
 
     # ------------------------------------------------------------------
@@ -197,6 +200,7 @@ class WorkerAgent:
         tool_defs = self._get_tool_definitions()
         iteration = 0
         error_recovery_count = 0
+        tool_call_count = 0
 
         while iteration < self._config.max_iterations:
             iteration += 1
@@ -233,6 +237,7 @@ class WorkerAgent:
                     )
                     continue
                 await self._graph.mark_failed(task.task_id, str(exc))
+                await self._emit_log("error", f"Task failed: {exc}", task_id=task.task_id)
                 return
 
             if response.has_tool_calls:
@@ -248,6 +253,16 @@ class WorkerAgent:
                 })
 
                 for tc in response.tool_calls:
+                    tool_call_count += 1
+                    await monitor_hub.task_tool_call(
+                        session_key=self._session_key,
+                        task_id=task.task_id,
+                        agent_id=self.agent_id,
+                        tool_name=tc.name,
+                        tool_call_index=tool_call_count,
+                        forward_ipc=should_forward_monitor_events(),
+                    )
+                    await self._emit_log("tool", f"{tc.name}()", task_id=task.task_id)
                     result = await self._execute_tool(tc.name, tc.arguments)
                     messages.append({
                         "role": "tool",
@@ -276,6 +291,7 @@ class WorkerAgent:
 
         logger.warning("Worker %s exhausted iterations for task %s", self.agent_id, task.task_id)
         await self._graph.mark_failed(task.task_id, "Max iterations reached")
+        await self._emit_log("error", "Task failed: max iterations reached", task_id=task.task_id)
 
     async def _execute_aggregation(self, task: Task) -> None:
         """Auto-complete aggregation nodes once all deps are done."""
@@ -306,6 +322,11 @@ class WorkerAgent:
                 task.task_id,
                 reason=worker_result.need_planner_reason,
             )
+            await self._emit_log(
+                "system",
+                f"Escalated to planner: {worker_result.need_planner_reason}",
+                task_id=task.task_id,
+            )
             return
 
         if worker_result.spawn_subtasks and task.allow_subtask_spawn and worker_result.subtasks:
@@ -318,6 +339,18 @@ class WorkerAgent:
                     priority=task.priority,
                 ))
             await self._graph.add_subtasks(subtasks, task.task_id, replace_parent=True)
+            for subtask in subtasks:
+                await monitor_hub.task_created(
+                    session_key=self._session_key,
+                    task_id=subtask.task_id,
+                    title=subtask.name,
+                    description=subtask.description,
+                    agent_id=self.agent_id,
+                    depends=subtask.depends_on,
+                    priority=subtask.priority.name.lower(),
+                    forward_ipc=should_forward_monitor_events(),
+                )
+            await self._emit_log("system", f"Spawned {len(subtasks)} subtasks", task_id=task.task_id)
             return
 
         ref = await self._bb.write(
@@ -331,6 +364,10 @@ class WorkerAgent:
             artifacts=worker_result.artifacts,
             result_ref=ref,
         )
+        preview = (worker_result.result or "").strip()
+        if len(preview) > 140:
+            preview = f"{preview[:137]}..."
+        await self._emit_log("complete", preview or "Task completed", task_id=task.task_id)
 
     # ------------------------------------------------------------------
     # Tool execution
@@ -360,6 +397,18 @@ class WorkerAgent:
             return await self._tools.execute(name, arguments, **self._tool_execution_kwargs())
         except Exception as exc:
             return f"Tool '{name}' failed: {exc}"
+
+    async def _emit_log(self, log_type: str, message: str, *, task_id: str) -> None:
+        if not self._session_key:
+            return
+        await monitor_hub.log_entry(
+            session_key=self._session_key,
+            task_id=task_id,
+            agent_id=self.agent_id,
+            type=log_type,
+            message=message,
+            forward_ipc=should_forward_monitor_events(),
+        )
 
     # ------------------------------------------------------------------
     # Interleaved thinking: evaluate result quality

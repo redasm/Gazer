@@ -8,6 +8,7 @@ import pytest
 from multi_agent.agent_pool import AgentPool, PoolConfig
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
+from multi_agent.monitor import monitor_hub
 from multi_agent.models import Task, TaskPriority, TaskStatus
 from multi_agent.planner import PlannerAgent
 from multi_agent.task_graph import TaskGraph
@@ -63,6 +64,7 @@ def planner(brain, graph, pool, bus, bb):
         pool=pool,
         bus=bus,
         blackboard=bb,
+        session_key="sess-plan",
     )
 
 
@@ -104,6 +106,27 @@ class TestPlanParsing:
 
 @pytest.mark.asyncio
 class TestBuildTaskGraph:
+    async def test_build_from_plan_populates_monitor_snapshot(self, planner: PlannerAgent):
+        await monitor_hub.reset()
+        await monitor_hub.begin_session("sess-plan", "research plan")
+        plan = {
+            "summary": "research plan",
+            "tasks": [
+                {
+                    "name": "search",
+                    "description": "search papers",
+                    "depends_on": [],
+                    "priority": "high",
+                }
+            ],
+        }
+
+        await planner._build_task_graph(plan)
+
+        snapshot = await monitor_hub.build_session_init_payload("sess-plan")
+        assert snapshot["tasks"][0]["title"] == "search"
+        assert snapshot["tasks"][0]["status"] == "queued"
+
     async def test_build_from_plan(self, planner: PlannerAgent, graph: TaskGraph):
         plan = {
             "summary": "research plan",

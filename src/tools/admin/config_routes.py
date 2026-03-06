@@ -51,9 +51,13 @@ except ImportError:
     normalize_tool_policy = None  # type: ignore
 
 try:
-    from runtime.config_manager import is_sensitive_config_path
+    from runtime.config_manager import (
+        is_internal_admin_config_path,
+        is_sensitive_config_path,
+    )
 except ImportError:
     is_sensitive_config_path = None  # type: ignore
+    is_internal_admin_config_path = None  # type: ignore
 
 # Security-critical config keys that cannot be changed via the web API
 _PROTECTED_NAMESPACES = {
@@ -68,6 +72,10 @@ _PROTECTED_NAMESPACES = {
     "api.allow_admin_bearer_token",
     "api.export_allowed_dirs",
     "api.allow_audit_buffer_clear",
+}
+
+_INTERNAL_CONFIG_PREFIXES = {
+    "agents.defaults.planning",
 }
 
 
@@ -695,6 +703,15 @@ async def update_config(new_config: Dict[str, Any]):
                 status_code=403,
                 detail=f"Cannot modify protected config key '{changed_key}' via this endpoint. "
                        f"Edit config/settings.yaml directly.",
+            )
+        if (
+            changed_key in _INTERNAL_CONFIG_PREFIXES
+            or any(changed_key.startswith(f"{prefix}.") for prefix in _INTERNAL_CONFIG_PREFIXES)
+            or (callable(is_internal_admin_config_path) and is_internal_admin_config_path(changed_key))
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot modify internal config key '{changed_key}' via this endpoint.",
             )
 
     if changed_updates:

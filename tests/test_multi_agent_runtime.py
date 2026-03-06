@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from multi_agent.monitor import monitor_hub
 from multi_agent.runtime import AgentMode, MultiAgentRuntime
 
 
@@ -125,3 +126,48 @@ class TestRuntimeExecution:
             assert len(result) > 0
         except asyncio.TimeoutError:
             pytest.skip("Full pipeline timed out in test environment")
+
+    async def test_execute_populates_monitor_with_task_updates(self, mock_agent_core):
+        await monitor_hub.reset()
+        plan_json = json.dumps({
+            "summary": "simple plan",
+            "complexity": "simple",
+            "tasks": [
+                {
+                    "name": "task1",
+                    "description": "do something",
+                    "instruction": "just do it",
+                    "objective": "complete the task",
+                    "output_format": "text",
+                    "tool_guidance": "none",
+                    "boundaries": "none",
+                    "depends_on": [],
+                    "priority": "normal",
+                    "required_skills": [],
+                    "allow_subtask_spawn": False,
+                }
+            ],
+        })
+
+        provider = mock_agent_core.provider
+        provider.chat = AsyncMock(
+            side_effect=[
+                _make_llm_response(plan_json),
+                _make_llm_response('{"result": "task completed"}'),
+                _make_llm_response("final synthesis"),
+            ]
+        )
+
+        runtime = MultiAgentRuntime(mock_agent_core, max_agents=1)
+        execute_task = asyncio.create_task(runtime.execute("do something simple"))
+        done, pending = await asyncio.wait({execute_task}, timeout=20.0)
+        for task in pending:
+            task.cancel()
+        assert execute_task in done
+        await execute_task
+
+        snapshot = await monitor_hub.build_session_init_payload()
+        assert snapshot["session_label"] == "do something simple"
+        assert snapshot["tasks"][0]["status"] == "completed"
+        assert snapshot["tasks"][0]["result_summary"] == "task completed"
+        assert any(entry["type"] == "start" for entry in snapshot["logs"])

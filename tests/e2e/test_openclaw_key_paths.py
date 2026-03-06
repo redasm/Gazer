@@ -6,6 +6,7 @@ import pytest
 
 pytest.importorskip("litellm")
 
+import agent.loop_mixins.planning as planning_module
 import llm.litellm_provider as litellm_provider_module
 import runtime.config_manager as config_manager
 from agent.loop import AgentLoop
@@ -16,6 +17,15 @@ from devices.registry import DeviceRegistry
 from llm.litellm_provider import LiteLLMProvider
 from tools.device_tools import NodeInvokeTool
 from tools.media_marker import MEDIA_MARKER
+
+
+@pytest.fixture(autouse=True)
+def _disable_internal_planning(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        planning_module,
+        "INTERNAL_PLANNING_POLICY",
+        {"mode": "off", "auto": {}},
+    )
 
 
 class _FakeConfig:
@@ -122,11 +132,6 @@ async def test_e2e_html_502_error_surfaces_to_dialog(monkeypatch: pytest.MonkeyP
                     "tool_groups": {},
                     "llm_max_retries": 0,
                     "llm_retry_backoff_seconds": 0.0,
-                },
-                "agents": {
-                    "defaults": {
-                        "planning": {"mode": "off"},
-                    }
                 },
             }
         ),

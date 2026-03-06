@@ -313,9 +313,6 @@ const TabModel = ({ config, modelProviders, handleUpdate, inputClass, labelClass
     const providerNames = Object.keys(modelProviders || {}).sort();
     // Embedding config logic removed
     const modelDefaults = config.agents?.defaults?.model || {};
-    const planningCfg = config.agents?.defaults?.planning || {};
-    const planningAuto = planningCfg?.auto || {};
-    const planningMode = String(planningCfg?.mode || 'auto');
     const primaryRef =
         typeof modelDefaults === "string"
             ? modelDefaults.trim()
@@ -456,123 +453,6 @@ const TabModel = ({ config, modelProviders, handleUpdate, inputClass, labelClass
                     </div>
                 </div>
 
-            </section>
-
-            <section className={sectionClass}>
-                <SectionHeader icon={<Brain size={20} />} color="#60a5fa" title={t.planningPolicy || 'Planning Policy'} />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className={labelClass}>{t.mode || 'Mode'}</label>
-                        <select
-                            className={inputClass}
-                            value={planningMode}
-                            onChange={(e) => handleUpdate("agents.defaults.planning.mode", e.target.value)}
-                        >
-                            <option value="auto">auto</option>
-                            <option value="always">always</option>
-                            <option value="off">off</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.minMessageChars || 'min_message_chars'}</label>
-                        <input
-                            type="number"
-                            min="1"
-                            className={inputClass}
-                            value={planningAuto?.min_message_chars ?? 220}
-                            onChange={(e) =>
-                                handleUpdate(
-                                    "agents.defaults.planning.auto.min_message_chars",
-                                    Math.max(1, parseInt(e.target.value, 10) || 1),
-                                )
-                            }
-                        />
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.minHistoryMessages || 'min_history_messages'}</label>
-                        <input
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={planningAuto?.min_history_messages ?? 8}
-                            onChange={(e) =>
-                                handleUpdate(
-                                    "agents.defaults.planning.auto.min_history_messages",
-                                    Math.max(0, parseInt(e.target.value, 10) || 0),
-                                )
-                            }
-                        />
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.minLineBreaks || 'min_line_breaks'}</label>
-                        <input
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={planningAuto?.min_line_breaks ?? 2}
-                            onChange={(e) =>
-                                handleUpdate(
-                                    "agents.defaults.planning.auto.min_line_breaks",
-                                    Math.max(0, parseInt(e.target.value, 10) || 0),
-                                )
-                            }
-                        />
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.minListLines || 'min_list_lines'}</label>
-                        <input
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={planningAuto?.min_list_lines ?? 2}
-                            onChange={(e) =>
-                                handleUpdate(
-                                    "agents.defaults.planning.auto.min_list_lines",
-                                    Math.max(0, parseInt(e.target.value, 10) || 0),
-                                )
-                            }
-                        />
-                    </div>
-                </div>
-            </section>
-
-            {/* Smart Collaboration */}
-            <section className={sectionClass}>
-                <SectionHeader
-                    icon={<Zap size={20} />}
-                    color="#f59e0b"
-                    title={t.smartCollab || 'Smart Collaboration'}
-                    desc={t.smartCollabDesc || 'When enabled, the system automatically detects complex tasks and dispatches them to multiple worker agents in parallel. Simple tasks still use the single-agent path.'}
-                />
-                <ToggleRow
-                    label={t.smartCollabEnabled || 'Enable Smart Collaboration'}
-                    hint={t.smartCollabEnabledHint || 'System auto-scores task complexity (fast brain, <200ms) and only activates multi-agent when beneficial'}
-                    checked={config.multi_agent?.allow_multi || false}
-                    onChange={(v) => handleUpdate("multi_agent.allow_multi", v)}
-                />
-                {config.multi_agent?.allow_multi && (
-                    <div className="space-y-4 mt-2">
-                        <div>
-                            <label className={labelClass}>{t.smartCollabMaxWorkers || 'Max Workers'}</label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="20"
-                                className={inputClass}
-                                value={config.multi_agent?.max_workers ?? 5}
-                                onChange={(e) =>
-                                    handleUpdate(
-                                        "multi_agent.max_workers",
-                                        Math.min(20, Math.max(1, parseInt(e.target.value, 10) || 1)),
-                                    )
-                                }
-                            />
-                            <span style={{ color: '#6b7a8d', fontSize: 12, marginTop: 4, display: 'block' }}>
-                                {t.smartCollabMaxWorkersHint || 'Upper bound for concurrent workers. The system decides actual count per task (usually 2-4). Higher = more parallelism but more token cost.'}
-                            </span>
-                        </div>
-                    </div>
-                )}
             </section>
         </div>
     );
@@ -1194,37 +1074,6 @@ const TabMemory = ({ config, handleUpdate, inputClass, labelClass, sectionClass,
                                 onChange={(v) => handleUpdate("memory.tool_result_persistence.persist_on_error", v)}
                             />
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <label className={labelClass}>{t.memoryToolPersistenceMinChars || 'Min result chars'}</label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    className={inputClass}
-                                    value={toolPersistence.min_result_chars ?? 16}
-                                    onChange={(e) => {
-                                        const parsed = parseInt(e.target.value, 10);
-                                        const value = Number.isFinite(parsed) ? Math.max(1, parsed) : 16;
-                                        handleUpdate("memory.tool_result_persistence.min_result_chars", value);
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label className={labelClass}>{t.memoryToolPersistenceMaxChars || 'Max result chars'}</label>
-                                <input
-                                    type="number"
-                                    min="80"
-                                    className={inputClass}
-                                    value={toolPersistence.max_result_chars ?? 1200}
-                                    onChange={(e) => {
-                                        const parsed = parseInt(e.target.value, 10);
-                                        const value = Number.isFinite(parsed) ? Math.max(80, parsed) : 1200;
-                                        handleUpdate("memory.tool_result_persistence.max_result_chars", value);
-                                    }}
-                                />
-                            </div>
-                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginTop: 8 }}>
@@ -1652,36 +1501,6 @@ const TabPersona = ({ config, handleUpdate, inputClass, labelClass, sectionClass
                             onChange={(v) => handleUpdate("personality.evolution.auto_optimize.enabled", v)}
                         />
                     </div>
-                    <div>
-                        <label className={labelClass}>{t.autoMinTotal || 'Min feedback total'}</label>
-                        <input
-                            type="number"
-                            min="1"
-                            className={inputClass}
-                            value={config.personality?.evolution?.auto_optimize?.min_feedback_total ?? 6}
-                            onChange={(e) => handleUpdate("personality.evolution.auto_optimize.min_feedback_total", Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        />
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.autoMinActionable || 'Min actionable feedback'}</label>
-                        <input
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={config.personality?.evolution?.auto_optimize?.min_actionable_feedback ?? 3}
-                            onChange={(e) => handleUpdate("personality.evolution.auto_optimize.min_actionable_feedback", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        />
-                    </div>
-                    <div>
-                        <label className={labelClass}>{t.autoCooldownSeconds || 'Cooldown seconds'}</label>
-                        <input
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={config.personality?.evolution?.auto_optimize?.cooldown_seconds ?? 1800}
-                            onChange={(e) => handleUpdate("personality.evolution.auto_optimize.cooldown_seconds", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        />
-                    </div>
                 </div>
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                     <h5 style={{ margin: 0, marginBottom: 10, color: '#c4b5fd', fontSize: 13, fontWeight: 700 }}>
@@ -1703,40 +1522,6 @@ const TabPersona = ({ config, handleUpdate, inputClass, labelClass, sectionClass
                                 label={t.publishGateRespectRelease || 'Respect release gate'}
                                 checked={Boolean(config.personality?.evolution?.publish_gate?.respect_release_gate ?? true)}
                                 onChange={(v) => handleUpdate("personality.evolution.publish_gate.respect_release_gate", v)}
-                            />
-                        </div>
-                        <div>
-                            <label className={labelClass}>{t.publishGateMinSimilarity || 'Min similarity (0-1)'}</label>
-                            <input
-                                type="number"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                className={inputClass}
-                                value={config.personality?.evolution?.publish_gate?.min_similarity ?? 0.45}
-                                onChange={(e) => handleUpdate("personality.evolution.publish_gate.min_similarity", Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)))}
-                            />
-                        </div>
-                        <div>
-                            <label className={labelClass}>{t.publishGateMinLenRatio || 'Min length ratio'}</label>
-                            <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                className={inputClass}
-                                value={config.personality?.evolution?.publish_gate?.min_length_ratio ?? 0.5}
-                                onChange={(e) => handleUpdate("personality.evolution.publish_gate.min_length_ratio", Math.max(0.1, parseFloat(e.target.value) || 0.1))}
-                            />
-                        </div>
-                        <div>
-                            <label className={labelClass}>{t.publishGateMaxLenRatio || 'Max length ratio'}</label>
-                            <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                className={inputClass}
-                                value={config.personality?.evolution?.publish_gate?.max_length_ratio ?? 2.0}
-                                onChange={(e) => handleUpdate("personality.evolution.publish_gate.max_length_ratio", Math.max(0.1, parseFloat(e.target.value) || 0.1))}
                             />
                         </div>
                     </div>

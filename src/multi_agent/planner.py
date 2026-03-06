@@ -21,6 +21,7 @@ from multi_agent.agent_pool import AgentPool, PoolConfig
 from multi_agent.brain_router import HINT_DEEP, HINT_FAST, BrainHint
 from multi_agent.communication import AgentMessageBus, Blackboard
 from multi_agent.dual_brain import DualBrain
+from multi_agent.monitor import monitor_hub, should_forward_monitor_events
 from multi_agent.models import (
     AgentMessage,
     MessageType,
@@ -90,6 +91,7 @@ class PlannerAgent:
         blackboard: Blackboard,
         memory_manager: Any = None,
         emotion_vector: dict[str, float] | None = None,
+        session_key: str = "",
     ) -> None:
         self._brain = dual_brain
         self._graph = task_graph
@@ -105,6 +107,7 @@ class PlannerAgent:
         self._user_goal = ""
         self._plan_summary = ""
         self._start_time = 0.0
+        self._session_key = str(session_key or "").strip()
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -138,9 +141,9 @@ class PlannerAgent:
             await monitor
             msg_loop.cancel()
             try:
-                await msg_loop
-            except asyncio.CancelledError:
-                pass
+                await asyncio.wait_for(msg_loop, timeout=_MESSAGE_POLL_INTERVAL + 1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                logger.debug("Planner message loop did not exit cleanly after cancellation", exc_info=True)
         finally:
             await self._pool.stop()
             await self._bus.unregister_agent(_PLANNER_AGENT_ID)
@@ -278,6 +281,19 @@ class PlannerAgent:
 
         if resolved:
             await self._graph.add_tasks(resolved)
+            if self._session_key:
+                forward_ipc = should_forward_monitor_events()
+                for task in resolved:
+                    await monitor_hub.task_created(
+                        session_key=self._session_key,
+                        task_id=task.task_id,
+                        title=task.name,
+                        description=task.description,
+                        agent_id="planner",
+                        depends=task.depends_on,
+                        priority=task.priority.name.lower(),
+                        forward_ipc=forward_ipc,
+                    )
 
     # ------------------------------------------------------------------
     # Step 4a: Monitor loop
@@ -377,6 +393,19 @@ class PlannerAgent:
                 ]
                 if subtasks:
                     await self._graph.add_subtasks(subtasks, task_id, replace_parent=True)
+                    if self._session_key:
+                        forward_ipc = should_forward_monitor_events()
+                        for subtask in subtasks:
+                            await monitor_hub.task_created(
+                                session_key=self._session_key,
+                                task_id=subtask.task_id,
+                                title=subtask.name,
+                                description=subtask.description,
+                                agent_id=_PLANNER_AGENT_ID,
+                                depends=subtask.depends_on,
+                                priority=subtask.priority.name.lower(),
+                                forward_ipc=forward_ipc,
+                            )
                     return
             await self._graph.mark_failed_terminal(task_id, "Planner returned no valid subtasks")
         else:

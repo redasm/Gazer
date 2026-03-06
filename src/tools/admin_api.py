@@ -167,6 +167,12 @@ async def _broadcast_output_worker():
                             "message": entry.get("message", ""),
                             "level": entry.get("level"),
                         })
+                elif isinstance(msg, dict) and msg.get("type") == "multi_agent_monitor_event":
+                    from multi_agent.monitor import monitor_hub
+
+                    entry = msg.get("entry", {})
+                    if isinstance(entry, dict):
+                        await monitor_hub.apply_remote_event(entry)
                 else:
                     msg_type = msg.get("type") if isinstance(msg, dict) else None
                     if msg_type in {"chat_stream", "chat_end", "chat_response", "tool_call_event"} and isinstance(msg, dict):

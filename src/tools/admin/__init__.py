@@ -8,7 +8,7 @@ from tools.admin import (
     evolution, plugins, config_routes, deployment, policy,
     memory, workflows, mcp_routes, logs,
     observability, debug, satellite, system,
-    whatsapp_webhook, channel_webhooks,
+    whatsapp_webhook, channel_webhooks, multi_agent_monitor,
 )
 
 
@@ -24,6 +24,7 @@ ROUTERS = [
     (_get_router(cron), "", ["cron"]),
     (_get_router(skills), "", ["skills"]),
     (_get_router(websockets), "", ["websockets"]),
+    (_get_router(multi_agent_monitor), "", ["multi-agent-monitor"]),
     (_get_router(evolution), "", ["evolution"]),
     (_get_router(plugins), "", ["plugins"]),
     (_get_router(config_routes), "", ["config"]),
