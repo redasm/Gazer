@@ -39,7 +39,6 @@ CRON_SCHEDULER: Optional["CronScheduler"] = None
 _LOCAL_CRON_SCHEDULER_ACTIVE: bool = False
 TOOL_REGISTRY: Optional[Any] = None
 LLM_ROUTER: Optional[Any] = None
-ORCHESTRATOR: Optional[Any] = None
 PROMPT_CACHE_TRACKER: Optional[Any] = None
 TOOL_BATCHING_TRACKER: Optional[Any] = None
 TRAJECTORY_STORE: Optional[Any] = None
@@ -99,10 +98,6 @@ def get_tool_batching_tracker():
 def get_tool_registry():
     ctx = get_app_context()
     return ctx.tool_registry if (ctx and ctx.tool_registry is not None) else TOOL_REGISTRY
-
-def get_orchestrator():
-    ctx = get_app_context()
-    return ctx.orchestrator if (ctx and ctx.orchestrator is not None) else ORCHESTRATOR
 
 def get_canvas_state():
     ctx = get_app_context()

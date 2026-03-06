@@ -41,7 +41,6 @@ from tools.admin.strategy_helpers import (
     _enqueue_chat_message,
     _get_release_gate_health_thresholds,
     _persona_runtime_thresholds,
-    _require_orchestrator,
 )
 from tools.admin.training_helpers import (
     _build_resume_payload,
@@ -540,79 +539,6 @@ async def replay_execute_trajectory(run_id: str, data: Dict[str, Any]):
 async def list_task_runs(limit: int = 50, status: Optional[str] = None, kind: Optional[str] = None):
     items = TASK_RUN_STORE.list(limit=max(1, min(limit, 500)), status=status, kind=kind)
     return {"status": "ok", "items": items, "total": len(items)}
-
-@app.get("/debug/orchestrator/status", dependencies=[Depends(verify_admin_token)])
-async def get_orchestrator_status():
-    orchestrator = _require_orchestrator()
-    return {"status": "ok", "orchestrator": orchestrator.get_status()}
-
-@app.get("/debug/orchestrator/tasks", dependencies=[Depends(verify_admin_token)])
-async def list_orchestrator_tasks(limit: int = 50, status: Optional[str] = None):
-    orchestrator = _require_orchestrator()
-    safe_limit = max(1, min(int(limit), 500))
-    items = orchestrator.list_task_runs(limit=safe_limit, status=status)
-    return {"status": "ok", "items": items, "total": len(items)}
-
-@app.get("/debug/orchestrator/tasks/{task_id}", dependencies=[Depends(verify_admin_token)])
-async def get_orchestrator_task(task_id: str):
-    orchestrator = _require_orchestrator()
-    payload = orchestrator.get_task(task_id)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="Orchestrator task not found")
-    return {"status": "ok", "task": payload}
-
-@app.post("/debug/orchestrator/tasks/{task_id}/sleep", dependencies=[Depends(verify_admin_token)])
-async def sleep_orchestrator_task(task_id: str, data: Optional[Dict[str, Any]] = None):
-    orchestrator = _require_orchestrator()
-    payload = data if isinstance(data, dict) else {}
-    delay_seconds = payload.get("delay_seconds")
-    wake_events_raw = payload.get("wake_events")
-    wake_events = wake_events_raw if isinstance(wake_events_raw, list) else None
-    reason = str(payload.get("reason", "manual_sleep") or "manual_sleep")
-
-    task = orchestrator.get_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Orchestrator task not found")
-
-    ok = orchestrator.sleep_task(
-        task_id,
-        delay_seconds=delay_seconds,
-        wake_events=wake_events,
-        reason=reason,
-    )
-    if not ok:
-        raise HTTPException(status_code=409, detail="Task cannot enter sleeping state")
-    return {"status": "ok", "task": orchestrator.get_task(task_id)}
-
-@app.post("/debug/orchestrator/tasks/{task_id}/wake", dependencies=[Depends(verify_admin_token)])
-async def wake_orchestrator_task(task_id: str, data: Optional[Dict[str, Any]] = None):
-    orchestrator = _require_orchestrator()
-    payload = data if isinstance(data, dict) else {}
-    reason = str(payload.get("reason", "manual_wake") or "manual_wake")
-
-    task = orchestrator.get_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Orchestrator task not found")
-
-    ok = orchestrator.wake_task(task_id, reason=reason)
-    if not ok:
-        raise HTTPException(status_code=409, detail="Task cannot be woken")
-    return {"status": "ok", "task": orchestrator.get_task(task_id)}
-
-@app.post("/debug/orchestrator/events/wake", dependencies=[Depends(verify_admin_token)])
-async def wake_orchestrator_event(data: Optional[Dict[str, Any]] = None):
-    orchestrator = _require_orchestrator()
-    payload = data if isinstance(data, dict) else {}
-    event_key = str(payload.get("event", "") or "").strip()
-    if not event_key:
-        raise HTTPException(status_code=400, detail="event is required")
-    awakened = orchestrator.emit_wake_event(event_key)
-    return {
-        "status": "ok",
-        "event": event_key,
-        "awakened": int(awakened),
-        "orchestrator": orchestrator.get_status(),
-    }
 
 @app.get("/debug/task-runs/{task_id}", dependencies=[Depends(verify_admin_token)])
 async def get_task_run(task_id: str):

@@ -351,57 +351,6 @@ def _redact(d: dict, prefix: str) -> None:
         elif isinstance(val, str) and any(s in key.lower() for s in ("key", "token", "secret", "password")):
             d[key] = "***"
 
-
-# ── gazer agent ──────────────────────────────────────────────────────────
-
-@cli.group()
-def agent() -> None:
-    """Multi-agent management."""
-    pass
-
-
-@agent.command("list")
-def agent_list() -> None:
-    """List registered agents."""
-    from runtime.config_manager import config
-    agents_cfg = config.get("agents.list", []) or []
-    if not agents_cfg:
-        click.echo("No agents configured.")
-        return
-    click.echo(click.style(f"Configured agents ({len(agents_cfg)}):", bold=True))
-    for a in agents_cfg:
-        aid = a.get("id", "?")
-        name = a.get("name", aid)
-        model = a.get("model", "default")
-        click.echo(f"  {aid:20s}  {name:30s}  model={model}")
-
-
-@agent.command("status")
-@click.argument("agent_id")
-def agent_status(agent_id: str) -> None:
-    """Show agent config and bindings."""
-    from runtime.config_manager import config
-    agents_cfg = config.get("agents.list", []) or []
-    found = None
-    for a in agents_cfg:
-        if a.get("id") == agent_id:
-            found = a
-            break
-    if not found:
-        click.echo(click.style(f"Agent '{agent_id}' not found.", fg="yellow"))
-        return
-    import yaml as _yaml
-    click.echo(click.style(f"Agent: {agent_id}", bold=True))
-    click.echo(_yaml.dump(found, allow_unicode=True, default_flow_style=False))
-    # Show bindings
-    bindings = config.get("agents.bindings", []) or []
-    agent_bindings = [b for b in bindings if b.get("agent_id") == agent_id]
-    if agent_bindings:
-        click.echo(click.style("Bindings:", bold=True))
-        for b in agent_bindings:
-            click.echo(f"  {b.get('channel', '*')}:{b.get('chat_id', '*')} from {b.get('sender_id', '*')}")
-
-
 # ── gazer plugin ───────────────────────────────────────────────────────────
 
 @cli.group()

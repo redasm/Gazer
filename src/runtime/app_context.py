@@ -34,7 +34,6 @@ class AppContext:
 
     # --- Core services (always populated after brain.start) ---
     llm_router: Any = None
-    orchestrator: Any = None
     tool_registry: Any = None
     usage_tracker: Any = None
     trajectory_store: Any = None

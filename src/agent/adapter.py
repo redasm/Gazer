@@ -319,6 +319,7 @@ class GazerAgent:
             slow_provider_resolver=self._resolve_slow_provider_for_message,
             persist_turn_callback=self._persist_turn_memory,
             turn_hooks=self.turn_hooks,
+            auto_route_turn_callback=self._maybe_auto_route_inbound_message,
         )
         self.personality = GazerPersonality(
             memory_manager=self.memory_manager,
@@ -459,7 +460,6 @@ class GazerAgent:
                 "git_push",
                 "email_send",
                 "hardware_control",
-                "delegate_task",
             ],
         )
         allow = {str(item).strip().lower() for item in allow_tools if str(item).strip()}
@@ -932,6 +932,56 @@ class GazerAgent:
         runtime = MultiAgentRuntime(self, max_agents=max_workers)
         return await runtime.execute(goal)
 
+    def _should_auto_route_inbound_message(self, msg: InboundMessage) -> bool:
+        """Return True when an inbound bus message should use auto multi-agent routing."""
+        if msg.channel == "gazer":
+            return False
+        ma_cfg = self._get_multi_agent_config()
+        return bool(ma_cfg["allow_multi"] and self._fast_provider is not None)
+
+    async def _assess_multi_agent_workers(self, content: str) -> int | None:
+        """Return the suggested worker count for multi-agent execution, or None."""
+        ma_cfg = self._get_multi_agent_config()
+        if not ma_cfg["allow_multi"] or self._fast_provider is None:
+            return None
+
+        try:
+            from multi_agent.brain_router import DualBrainRouter
+            from multi_agent.assessor import TaskComplexityAssessor
+
+            router = DualBrainRouter(
+                slow_provider=self.provider,
+                fast_provider=self._fast_provider,
+                fast_model=self._fast_model,
+            )
+            assessor = TaskComplexityAssessor(
+                router=router,
+                max_workers_limit=ma_cfg["max_workers"],
+            )
+            result = await assessor.assess(content)
+            if not result.use_multi_agent:
+                return None
+            return min(result.worker_hint, ma_cfg["max_workers"])
+        except Exception:
+            logger.debug("TaskComplexityAssessor failed, falling back to single agent", exc_info=True)
+            return None
+
+    async def _maybe_auto_route_inbound_message(self, msg: InboundMessage) -> str | None:
+        """Auto-route external inbound messages to the multi-agent runtime when appropriate."""
+        if not self._should_auto_route_inbound_message(msg):
+            return None
+
+        workers = await self._assess_multi_agent_workers(msg.content)
+        if workers is None:
+            return None
+
+        logger.info(
+            "Auto-route inbound: multi-agent (channel=%s, score_workers=%d)",
+            msg.channel,
+            workers,
+        )
+        return await self.process_multi_agent(msg.content, max_workers=workers)
+
     def _get_multi_agent_config(self) -> dict:
         """Read multi_agent settings from config, with safe defaults."""
         return {
@@ -946,32 +996,10 @@ class GazerAgent:
         to decide whether to dispatch to multi-agent execution.  The assessor
         also provides a ``worker_hint`` that caps the pool size per task.
         """
-        ma_cfg = self._get_multi_agent_config()
-
-        if ma_cfg["allow_multi"] and self._fast_provider is not None:
-            try:
-                from multi_agent.brain_router import DualBrainRouter
-                from multi_agent.assessor import TaskComplexityAssessor
-
-                router = DualBrainRouter(
-                    slow_provider=self.provider,
-                    fast_provider=self._fast_provider,
-                    fast_model=self._fast_model,
-                )
-                assessor = TaskComplexityAssessor(
-                    router=router,
-                    max_workers_limit=ma_cfg["max_workers"],
-                )
-                result = await assessor.assess(content)
-                if result.use_multi_agent:
-                    workers = min(result.worker_hint, ma_cfg["max_workers"])
-                    logger.info(
-                        "Auto-route: multi-agent (score=%d, workers=%d)",
-                        result.score, workers,
-                    )
-                    return await self.process_multi_agent(content, max_workers=workers)
-            except Exception:
-                logger.debug("TaskComplexityAssessor failed, falling back to single agent", exc_info=True)
+        workers = await self._assess_multi_agent_workers(content)
+        if workers is not None:
+            logger.info("Auto-route: multi-agent (workers=%d)", workers)
+            return await self.process_multi_agent(content, max_workers=workers)
 
         return await self.process_message(content, sender=sender)
 

@@ -4,7 +4,7 @@ Shared state (globals injected by ``brain.py``) lives in ``_shared.py``.
 """
 
 from tools.admin import (
-    auth, git, cron, skills, websockets, gateway, agents,
+    auth, git, cron, skills, websockets, gateway,
     evolution, plugins, config_routes, deployment, policy,
     memory, workflows, mcp_routes, logs,
     observability, debug, satellite, system,
@@ -38,7 +38,6 @@ ROUTERS = [
     (_get_router(satellite), "", ["satellite"]),
     (_get_router(system), "", ["system"]),
     (_get_router(gateway), "", ["gateway"]),
-    (_get_router(agents), "", ["agents"]),
     (_get_router(whatsapp_webhook), "", ["whatsapp"]),
     (_get_router(channel_webhooks), "", ["channel-webhooks"]),
 ]

@@ -22,7 +22,6 @@ from ._shared import (
 )
 from .auth import verify_admin_token
 from .config_routes import (
-    _resolve_agent_policy,
     _resolve_global_policy,
     _policy_to_payload,
     _merge_policy_names,
@@ -104,16 +103,8 @@ async def explain_policy(payload: Dict[str, Any]):
     groups = config.get("security.tool_groups", {})
     safe_groups = groups if isinstance(groups, dict) else {}
 
-    agent_id = str(payload.get("agent_id", "")).strip()
-    agent_policy_raw: Dict[str, Any] = _resolve_agent_policy(agent_id) if agent_id else {}
     request_policy_raw = payload.get("policy")
-    resolved_policy_raw: Dict[str, Any]
-    if isinstance(request_policy_raw, dict):
-        resolved_policy_raw = request_policy_raw
-    elif agent_policy_raw:
-        resolved_policy_raw = agent_policy_raw
-    else:
-        resolved_policy_raw = {}
+    resolved_policy_raw: Dict[str, Any] = request_policy_raw if isinstance(request_policy_raw, dict) else {}
 
     directory_overlay = _resolve_agents_overlay_policy(
         str(payload.get("agents_target_dir", "")).strip() or None
@@ -123,18 +114,17 @@ async def explain_policy(payload: Dict[str, Any]):
         "deny_names": directory_overlay.get("deny_tools", []),
     }
     global_policy = normalize_tool_policy(_resolve_global_policy(), safe_groups)
-    agent_policy = normalize_tool_policy(agent_policy_raw, safe_groups)
     request_policy = normalize_tool_policy(resolved_policy_raw, safe_groups)
     directory_policy = normalize_tool_policy(directory_policy_raw, safe_groups)
+    effective_base_policy = request_policy if isinstance(request_policy_raw, dict) else global_policy
     effective_policy = _merge_policy_names(
-        request_policy,
+        effective_base_policy,
         allow_names=set(directory_policy.allow_names),
         deny_names=set(directory_policy.deny_names),
     )
     conflicts = _detect_policy_conflicts({
         "global": global_policy,
         "directory": directory_policy,
-        "agent": agent_policy,
         "request": request_policy,
     })
     overlay_conflicts = directory_overlay.get("conflicts", [])
@@ -164,7 +154,6 @@ async def explain_policy(payload: Dict[str, Any]):
                     "policy": _policy_to_payload(directory_policy),
                     "routing_hints": directory_overlay.get("routing_hints", []),
                 },
-                "agent": {"id": agent_id or None, "policy": _policy_to_payload(agent_policy)},
                 "request": _policy_to_payload(request_policy),
                 "effective": _policy_to_payload(effective_policy),
             },
@@ -183,8 +172,6 @@ async def simulate_policy(payload: Dict[str, Any]):
     model_provider = str(payload.get("model_provider", "")).strip().lower()
     model_name = str(payload.get("model_name", "")).strip().lower()
     policy_raw = payload.get("policy")
-    if policy_raw is None and payload.get("agent_id"):
-        policy_raw = _resolve_agent_policy(str(payload.get("agent_id")))
     groups = config.get("security.tool_groups", {})
     policy = normalize_tool_policy(policy_raw or {}, groups if isinstance(groups, dict) else {})
     names_raw = payload.get("tool_names")
@@ -209,13 +196,12 @@ async def simulate_policy(payload: Dict[str, Any]):
 
 @router.get("/policy/effective", dependencies=[Depends(verify_admin_token)])
 async def get_effective_policy(
-    agent_id: Optional[str] = None,
     agents_target_dir: Optional[str] = None,
     tool_name: Optional[str] = None,
     model_provider: Optional[str] = None,
     model_name: Optional[str] = None,
 ):
-    """Return current global policy and optional normalized per-agent policy."""
+    """Return current global policy with optional directory overlay preview."""
     groups = config.get("security.tool_groups", {})
     safe_groups = groups if isinstance(groups, dict) else {}
     global_policy = normalize_tool_policy(_resolve_global_policy(), safe_groups)
@@ -252,19 +238,6 @@ async def get_effective_policy(
         },
     }
     layers_for_conflicts: Dict[str, "ToolPolicy"] = {"global": global_policy, "directory": directory_policy}
-    effective_base_policy = global_policy
-    if agent_id:
-        raw_policy = _resolve_agent_policy(str(agent_id))
-        normalized = normalize_tool_policy(raw_policy, safe_groups)
-        effective_base_policy = normalized
-        result["agent"] = {
-            "id": str(agent_id),
-            "raw_policy": raw_policy,
-            "effective_policy": {
-                **_policy_to_payload(normalized),
-            },
-        }
-        layers_for_conflicts["agent"] = normalized
     conflicts = _detect_policy_conflicts(layers_for_conflicts)
     overlay_conflicts = directory_overlay.get("conflicts", [])
     if isinstance(overlay_conflicts, list) and overlay_conflicts:
@@ -272,7 +245,7 @@ async def get_effective_policy(
     result["conflicts"] = conflicts
     if tool_name:
         merged_effective = _merge_policy_names(
-            effective_base_policy,
+            global_policy,
             allow_names=set(directory_policy.allow_names),
             deny_names=set(directory_policy.deny_names),
         )

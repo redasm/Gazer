@@ -598,10 +598,6 @@ class ConfigManager:
                 ],
                 "agents": [
                     "defaults",
-                    "list",
-                    "bindings",
-                    "orchestrator",
-                    "templates",
                 ],
                 "agents.defaults": [
                     "model",
@@ -622,24 +618,6 @@ class ConfigManager:
                     "min_list_lines",
                 ],
                 "agents.defaults.subagents": ["maxConcurrent"],
-                "agents.orchestrator": [
-                    "max_parallel_tasks",
-                    "max_parallel_per_agent",
-                    "max_pending_tasks",
-                    "resource_lock_timeout_seconds",
-                    "sleep_wake",
-                    "sla",
-                ],
-                "agents.orchestrator.sleep_wake": [
-                    "poll_interval_seconds",
-                    "max_sleep_seconds",
-                ],
-                "agents.orchestrator.sla": [
-                    "timeout_seconds",
-                    "max_retries",
-                    "retry_backoff_seconds",
-                    "priority",
-                ],
             }
             preferred = preferred_orders.get(path, [])
             ordered: Dict[str, Any] = {}

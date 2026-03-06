@@ -408,11 +408,6 @@ def _consume_satellite_frame_budget(
     state["total_bytes"] = total + candidate
     return True
 
-def _require_orchestrator() -> Any:
-    if _state.ORCHESTRATOR is None:
-        raise HTTPException(status_code=503, detail="Orchestrator is not available")
-    return _state.ORCHESTRATOR
-
 def _get_tool_governance_snapshot(limit: int = 50) -> Dict[str, Any]:
     safe_limit = max(1, min(int(limit), 500))
     if _state.TOOL_REGISTRY is None:

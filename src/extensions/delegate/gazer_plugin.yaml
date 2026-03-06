@@ -1,6 +1,0 @@
-id: delegate
-name: Delegate Task
-version: 1.0.0
-slot: tool
-entry: plugin:setup
-description: Multi-agent task delegation.

@@ -1,7 +1,7 @@
 """Minimal interactive CLI for Gazer.
 
 Provides a REPL with:
-- Streaming agent responses via GazerAgent.process_message()
+- Streaming agent responses via GazerAgent.process_auto()
 - Built-in slash commands (/plan, /commit, /run-tests, /status, /help, /quit)
 - Async event loop integration
 
@@ -177,7 +177,7 @@ class InteractiveCLI:
     async def _run_cron_job(self, job) -> Optional[str]:
         """Cron callback for CLI mode."""
         try:
-            return await self.agent.process_message(content=job.message, sender="cron")
+            return await self.agent.process_auto(content=job.message, sender="cron")
         except Exception as exc:
             return f"Error: {exc}"
 

@@ -640,77 +640,6 @@ async def test_update_config_replaces_owner_channel_ids_map(monkeypatch):
     assert fake_cfg.set_many_calls[0] == {"security.owner_channel_ids": {"feishu": "ou_keep"}}
 
 
-@pytest.mark.asyncio
-async def test_update_config_rejects_unknown_policy_group(monkeypatch):
-    fake_cfg = _FakeConfig(
-        {
-            "security": {"tool_groups": {"coding": ["read_file"]}},
-            "agents": {"list": [{"id": "coder", "tool_policy": {"allow_groups": ["coding"]}}]},
-        }
-    )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.update_config(
-            {"agents": {"list": [{"id": "coder", "tool_policy": {"allow_groups": ["unknown_group"]}}]}}
-        )
-    assert exc.value.status_code == 400
-    assert "unknown groups" in str(exc.value.detail)
-    assert fake_cfg.set_many_calls == []
-
-
-@pytest.mark.asyncio
-async def test_update_config_rejects_policy_name_conflicts(monkeypatch):
-    fake_cfg = _FakeConfig(
-        {
-            "security": {"tool_groups": {"coding": ["read_file"]}},
-            "agents": {"list": []},
-        }
-    )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.update_config(
-            {
-                "agents": {
-                    "list": [
-                        {
-                            "id": "coder",
-                            "tool_policy": {"allow_names": ["read_file"], "deny_names": ["read_file"]},
-                        }
-                    ]
-                }
-            }
-        )
-    assert exc.value.status_code == 400
-    assert "name conflicts" in str(exc.value.detail)
-
-
-@pytest.mark.asyncio
-async def test_update_config_rejects_policy_model_selector_conflicts(monkeypatch):
-    fake_cfg = _FakeConfig({"security": {"tool_groups": {}}, "agents": {"list": []}})
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.update_config(
-            {
-                "agents": {
-                    "list": [
-                        {
-                            "id": "coder",
-                            "tool_policy": {
-                                "allow_model_selectors": ["openai/gpt-4o-mini"],
-                                "deny_model_selectors": ["openai/gpt-4o-mini"],
-                            },
-                        }
-                    ]
-                }
-            }
-        )
-    assert exc.value.status_code == 400
-    assert "model selector conflicts" in str(exc.value.detail)
-
-
 def test_run_verify_command_blocks_shell_metacharacters():
     result = admin_api._run_verify_command("pytest -q && whoami", Path("."), timeout_seconds=30)
     assert result["ok"] is False
@@ -1288,48 +1217,21 @@ async def test_policy_explain_endpoint_reports_reason(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_policy_simulate_endpoint_with_agent_policy(monkeypatch):
+async def test_policy_simulate_endpoint_with_request_policy(monkeypatch):
     registry = ToolRegistry()
     registry.register(_DummyTool("read_file", False, provider="coding"))
     registry.register(_DummyTool("web_search", False, provider="web"))
     monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
-    fake_cfg = _FakeConfig(
-        {
-            "security": {"tool_groups": {"coding": ["read_file"]}},
-            "agents": {"list": [{"id": "coder", "tool_policy": {"allow_groups": ["coding"]}}]},
-        }
-    )
+    fake_cfg = _FakeConfig({"security": {"tool_groups": {"coding": ["read_file"]}}})
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
-    res = await admin_api.simulate_policy({"agent_id": "coder", "max_tier": "privileged"})
+    res = await admin_api.simulate_policy(
+        {"policy": {"allow_groups": ["coding"]}, "max_tier": "privileged"}
+    )
     assert res["status"] == "ok"
     by_name = {item["tool"]: item for item in res["results"]}
     assert by_name["read_file"]["allowed"] is True
     assert by_name["web_search"]["allowed"] is False
-
-
-@pytest.mark.asyncio
-async def test_policy_effective_endpoint_with_agent(monkeypatch):
-    fake_cfg = _FakeConfig(
-        {
-            "security": {
-
-                "tool_allowlist": [],
-                "tool_denylist": [],
-                "tool_allow_providers": [],
-                "tool_deny_providers": [],
-                "tool_groups": {"coding": ["read_file"]},
-            },
-            "agents": {"list": [{"id": "coder", "tool_policy": {"allow_groups": ["coding"]}}]},
-        }
-    )
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    result = await admin_api.get_effective_policy(agent_id="coder")
-    assert result["status"] == "ok"
-    assert result["global"]["group_count"] == 1
-    assert result["agent"]["id"] == "coder"
-    assert "read_file" in result["agent"]["effective_policy"]["allow_names"]
 
 
 @pytest.mark.asyncio
@@ -1352,9 +1254,7 @@ async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_
                 "tool_denylist": ["web_search"],
                 "tool_allow_providers": [],
                 "tool_deny_providers": [],
-    
             },
-            "agents": {"list": [{"id": "coder", "tool_policy": {"allow_names": ["web_search"]}}]},
         }
     )
     monkeypatch.setattr(admin_api, "config", fake_cfg)
@@ -1362,7 +1262,7 @@ async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_
     res = await admin_api.explain_policy(
         {
             "tool_name": "web_search",
-            "agent_id": "coder",
+            "policy": {"allow_names": ["web_search"]},
             "agents_target_dir": "apps",
             "max_tier": "privileged",
         }
@@ -1423,12 +1323,11 @@ async def test_policy_effective_endpoint_includes_directory_conflicts(monkeypatc
                 "tool_deny_providers": [],
                 "tool_groups": {},
             },
-            "agents": {"list": [{"id": "coder", "tool_policy": {"allow_names": ["web_search"]}}]},
         }
     )
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
-    result = await admin_api.get_effective_policy(agent_id="coder", agents_target_dir="apps")
+    result = await admin_api.get_effective_policy(agents_target_dir="apps")
     assert result["status"] == "ok"
     assert result["directory"]["target_dir"] == "apps"
     assert "web_search" in result["directory"]["policy"]["deny_names"]
@@ -1448,31 +1347,18 @@ async def test_policy_effective_endpoint_preview_with_model_context(monkeypatch)
     fake_cfg = _FakeConfig(
         {
             "security": {
-    
                 "tool_allowlist": [],
                 "tool_denylist": [],
                 "tool_allow_providers": [],
                 "tool_deny_providers": [],
                 "tool_groups": {},
-                "tool_policy_v3": {"allow_model_names": []},
-            },
-            "agents": {
-                "list": [
-                    {
-                        "id": "coder",
-                        "tool_policy": {
-                            "allow_names": ["web_search"],
-                            "allow_model_names": ["gpt-4o-mini"],
-                        },
-                    }
-                ]
+                "tool_policy_v3": {"allow_model_names": ["gpt-4o-mini"]},
             },
         }
     )
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
     result = await admin_api.get_effective_policy(
-        agent_id="coder",
         tool_name="web_search",
         model_provider="openai",
         model_name="gpt-4o",

@@ -9,7 +9,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Optional, List, Dict
+from typing import Any, Awaitable, Callable, Optional, List, Dict
 
 from bus.events import InboundMessage, OutboundMessage, TypingEvent
 from bus.queue import MessageBus
@@ -234,6 +234,7 @@ class AgentLoop(
         slow_provider_resolver: Optional[Callable[[InboundMessage, LLMProvider], LLMProvider]] = None,
         persist_turn_callback: Optional[Callable[[InboundMessage, str], Any]] = None,
         turn_hooks: Optional[TurnHookManager] = None,
+        auto_route_turn_callback: Optional[Callable[[InboundMessage], Awaitable[Optional[str]]]] = None,
 
     ):
         self.bus = bus
@@ -244,6 +245,7 @@ class AgentLoop(
         self.max_iterations = max_iterations
         self._slow_provider_resolver = slow_provider_resolver
         self._persist_turn_callback = persist_turn_callback
+        self._auto_route_turn_callback = auto_route_turn_callback
 
         self._turn_hooks = turn_hooks
         self._active_provider_override: Optional[LLMProvider] = None
@@ -463,6 +465,51 @@ class AgentLoop(
         self.session_store.delete_session(session_key)
         logger.info("Session reset: %s", session_key)
 
+    async def _maybe_auto_route_turn(
+        self,
+        *,
+        msg: InboundMessage,
+        session_key: str,
+        trajectory_id: str,
+        reply_language: str,
+        turn_started: float,
+    ) -> Optional[OutboundMessage]:
+        callback = self._auto_route_turn_callback
+        if callback is None:
+            return None
+
+        try:
+            routed_content = await callback(msg)
+        except Exception:
+            logger.warning("Auto-route callback failed; continuing with single-agent turn", exc_info=True)
+            return None
+
+        if routed_content is None:
+            return None
+
+        self.trajectory_store.add_event(
+            trajectory_id,
+            stage="dispatch",
+            action="auto_route_multi_agent",
+            payload={"mode": "multi_agent"},
+        )
+        self._last_turn_metrics = {}
+        self._last_turn_batching = {}
+        return await self._finalize_turn(
+            msg=msg,
+            session_key=session_key,
+            trajectory_id=trajectory_id,
+            reply_language=reply_language,
+            turn_started=turn_started,
+            final_content=str(routed_content),
+            trajectory_status="success",
+            error_message="",
+            pending_media=[],
+            memory_context_chars=0,
+            recall_count=0,
+            turn_tool_calls_executed=0,
+        )
+
     async def _process_message(self, msg: InboundMessage) -> Optional[OutboundMessage]:
         """Process a single inbound message.
 
@@ -545,6 +592,16 @@ class AgentLoop(
             return OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content=fast_response,
             )
+
+        auto_route_response = await self._maybe_auto_route_turn(
+            msg=msg,
+            session_key=session_key,
+            trajectory_id=trajectory_id,
+            reply_language=reply_language,
+            turn_started=turn_started,
+        )
+        if auto_route_response is not None:
+            return auto_route_response
 
         # --- Main turn ---
         ctx = await self._build_turn_context(msg, session_key, reply_language, trajectory_id)

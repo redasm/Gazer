@@ -1,16 +1,16 @@
 # Agent 循环与调度
 
-Agent 层由 `GazerAgent + AgentLoop + AgentOrchestrator` 组成：
+Agent 层由 `GazerAgent + AgentLoop + MultiAgentRuntime` 组成：
 
-- `GazerAgent` 负责 Provider/Context/Memory 注入。
+- `GazerAgent` 负责 Provider、Context、Memory 注入，以及单 / 多 Agent 自动分流。
 - `AgentLoop` 负责单轮对话执行。
-- `AgentOrchestrator` 负责多 Agent 任务调度与资源治理。
+- `MultiAgentRuntime` 负责复杂任务的规划、Worker 调度与结果汇总。
 
 ## 关键代码
 
 - 适配与初始化：`src/agent/adapter.py`
 - 主循环：`src/agent/loop.py`
-- 多 Agent 调度：`src/agent/orchestrator.py`
+- 多 Agent 运行时：`src/multi_agent/runtime.py`
 - 上下文构建：`src/agent/context.py`
 - Turn Hook：`src/agent/turn_hooks.py`
 
@@ -52,17 +52,14 @@ process_auto(content, sender)
 - 速率限制与重试预算：`runtime/rate_limiter.py`、`runtime/resilience.py`
 - 会话与轨迹：`session_store.py`、`trajectory.py`
 
-## 多 Agent 调度（Orchestrator）
+## 多 Agent 调度（Runtime）
 
-- 支持按 channel/chat/sender binding 路由不同 Agent。
-- 提供优先级队列、并发上限、重试、超时、资源锁控制。
-- 支持 sleep/wake 与事件唤醒模型。
+- 基于 `TaskComplexityAssessor` 自动判断是否启用多 Agent。
+- 由 Planner 生成任务 DAG，Worker 池按需扩缩容执行。
+- 结果写入 Blackboard，最终由 Planner 汇总为单个回复。
 
 ## 常见配置
 
-- `agents.orchestrator.max_parallel_tasks`
-- `agents.orchestrator.max_parallel_per_agent`
-- `agents.orchestrator.sla.*`
 - `models.router.*`（路由策略与降级）
 - `multi_agent.allow_multi`（启用多 Agent 自动分流）
 - `multi_agent.max_workers`（Worker 数量上限）
@@ -73,5 +70,5 @@ process_auto(content, sender)
 
 - 响应慢：先看路由是否降级、工具是否阻塞、并发是否打满。
 - 工具连环失败：检查 `ToolRegistry` 熔断状态与策略拒绝原因。
-- 子 Agent 行为异常：检查 binding 命中与该 Agent 的 workspace/model 覆盖。
+- 多 Agent 行为异常：检查 Planner 是否成功分解任务，以及 Worker 数上限是否过低。
 - 未触发多 Agent：检查 `multi_agent.allow_multi` 是否为 `true`，快脑 Provider 是否可用。

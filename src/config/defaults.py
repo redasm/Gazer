@@ -156,7 +156,7 @@ DEFAULT_CONFIG = {
                 "allow_names_by_level": {},
                 "deny_names_by_level": {
                     "warning": ["exec", "node_invoke"],
-                    "critical": ["exec", "node_invoke", "delegate_task", "remote_exec"],
+                    "critical": ["exec", "node_invoke", "remote_exec"],
                 },
                 "allow_providers_by_level": {},
                 "deny_providers_by_level": {
@@ -474,7 +474,6 @@ DEFAULT_CONFIG = {
                 "git_push",
                 "email_send",
                 "hardware_control",
-                "delegate_task",
             ],
             "persist_on_error": False,
             "min_result_chars": 16,
@@ -601,7 +600,7 @@ DEFAULT_CONFIG = {
         },
         # Tool groups for agent-level policy (group_name -> tool names)
         "tool_groups": {
-            "runtime": ["delegate_task", "cron"],
+            "runtime": ["cron"],
             "coding": [
                 "exec",
                 "read_file",
@@ -713,66 +712,6 @@ DEFAULT_CONFIG = {
             "maxConcurrent": 4,
             "subagents": {
                 "maxConcurrent": 8,
-            },
-        },
-        # Multi-agent configuration (list of sub-agent definitions)
-        "list": [
-            {
-                "id": "mailbot",
-                "name": "Gmail Auto Reply",
-                "workspace": ".",
-                "tool_policy": {
-                    "allow_groups": ["email"],
-                },
-            },
-        ],
-        # Bindings: route messages to specific agents
-        "bindings": [
-            {
-                "agent_id": "mailbot",
-                "channel": "webhook",
-                "chat_id": "event:gmail:main",
-                "sender_id": "hook:gmail",
-            },
-        ],
-        # Orchestrator execution controls for delegated multi-agent tasks.
-        "orchestrator": {
-            "max_parallel_tasks": 3,
-            "max_parallel_per_agent": 2,
-            "max_pending_tasks": 64,
-            "resource_lock_timeout_seconds": 30.0,
-            "sleep_wake": {
-                "poll_interval_seconds": 1.0,
-                "max_sleep_seconds": 3600.0,
-            },
-            "sla": {
-                "timeout_seconds": 120.0,
-                "max_retries": 0,
-                "retry_backoff_seconds": 0.0,
-                "priority": "normal",  # high | normal | low
-            },
-        },
-        # Preset templates for reuse/customization.
-        "templates": {
-            "gmail_webhook_autoreply": {
-                "agent": {
-                    "id": "mailbot",
-                    "name": "Gmail Auto Reply",
-                    "workspace": ".",
-                    "tool_policy": {
-                        "allow_groups": ["email"],
-                    },
-                },
-                "binding": {
-                    "agent_id": "mailbot",
-                    "channel": "webhook",
-                    "chat_id": "event:gmail:main",
-                    "sender_id": "hook:gmail",
-                },
-                "notes": [
-                    "This template is a starting point; copy values into agents.list and agents.bindings.",
-                    "Use email_send with reply_to=message_id from webhook metadata for threaded replies.",
-                ],
             },
         },
     },

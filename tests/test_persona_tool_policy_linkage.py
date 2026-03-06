@@ -84,7 +84,7 @@ def _build_runtime_cfg() -> Dict[str, Any]:
                     "window_seconds": 1800,
                     "sources": ["persona_eval"],
                     "deny_names_by_level": {
-                        "critical": ["exec", "node_invoke", "delegate_task"],
+                        "critical": ["exec", "node_invoke"],
                     },
                     "deny_providers_by_level": {
                         "critical": ["devices", "runtime"],

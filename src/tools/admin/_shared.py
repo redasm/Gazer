@@ -34,7 +34,6 @@ from tools.admin.state import (  # noqa: F401
     _LOCAL_CRON_SCHEDULER_ACTIVE,
     TOOL_REGISTRY,
     LLM_ROUTER,
-    ORCHESTRATOR,
     PROMPT_CACHE_TRACKER,
     TOOL_BATCHING_TRACKER,
     TRAJECTORY_STORE,
@@ -59,7 +58,6 @@ from tools.admin.state import (  # noqa: F401
     get_prompt_cache_tracker,
     get_tool_batching_tracker,
     get_tool_registry,
-    get_orchestrator,
     get_canvas_state,
     # Satellite
     SATELLITE_SOURCES,
@@ -188,7 +186,6 @@ from tools.admin.strategy_helpers import (  # noqa: F401
     _validate_satellite_node_auth,
     _decode_frame_payload,
     _consume_satellite_frame_budget,
-    _require_orchestrator,
     _get_tool_governance_snapshot,
     _enqueue_chat_message,
 )

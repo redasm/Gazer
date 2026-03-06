@@ -20,7 +20,6 @@ const Security = React.lazy(() => import('./pages/Security'));
 const Cron = React.lazy(() => import('./pages/Cron'));
 const Canvas = React.lazy(() => import('./pages/Canvas'));
 const ToolPolicy = React.lazy(() => import('./pages/ToolPolicy'));
-const AgentPolicy = React.lazy(() => import('./pages/AgentPolicy'));
 const LlmRouter = React.lazy(() => import('./pages/LlmRouter'));
 const ModelProviders = React.lazy(() => import('./pages/ModelProviders'));
 const PolicyAudit = React.lazy(() => import('./pages/PolicyAudit'));
@@ -248,16 +247,6 @@ function App() {
           <Route path="policy/tools" element={
             <Suspense fallback={<PageFallback />}>
               <ToolPolicy
-                config={config}
-                setConfig={setConfig}
-                saveConfig={saveConfig}
-                t={t}
-              />
-            </Suspense>
-          } />
-          <Route path="policy/agents" element={
-            <Suspense fallback={<PageFallback />}>
-              <AgentPolicy
                 config={config}
                 setConfig={setConfig}
                 saveConfig={saveConfig}

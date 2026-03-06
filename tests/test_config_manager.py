@@ -91,16 +91,10 @@ class TestConfigManager:
         assert cm.get("memory.context_backend.session_prefix") == "gazer"
         assert cm.get("memory.context_backend.default_user") == "owner"
         assert cm.get("memory.context_backend.commit_every_messages") == 8
-        assert cm.get("agents.orchestrator.max_parallel_tasks") == 3
-        assert cm.get("agents.orchestrator.max_parallel_per_agent") == 2
-        assert cm.get("agents.orchestrator.max_pending_tasks") == 64
-        assert cm.get("agents.orchestrator.resource_lock_timeout_seconds") == 30.0
-        assert cm.get("agents.orchestrator.sleep_wake.poll_interval_seconds") == 1.0
-        assert cm.get("agents.orchestrator.sleep_wake.max_sleep_seconds") == 3600.0
-        assert cm.get("agents.orchestrator.sla.timeout_seconds") == 120.0
-        assert cm.get("agents.orchestrator.sla.max_retries") == 0
-        assert cm.get("agents.orchestrator.sla.retry_backoff_seconds") == 0.0
-        assert cm.get("agents.orchestrator.sla.priority") == "normal"
+        assert cm.get("agents.list") is None
+        assert cm.get("agents.bindings") is None
+        assert cm.get("agents.orchestrator") is None
+        assert cm.get("agents.templates") is None
         assert cm.get("models.router.enabled") is True
         assert cm.get("models.router.rollout.enabled") is True
         assert cm.get("models.router.rollout.owner_only") is True

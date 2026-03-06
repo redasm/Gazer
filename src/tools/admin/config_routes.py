@@ -75,14 +75,6 @@ _PROTECTED_NAMESPACES = {
 # Policy helper functions  (shared with policy.py via re-export)
 # ---------------------------------------------------------------------------
 
-
-def _resolve_agent_policy(agent_id: str) -> Dict[str, Any]:
-    for agent in config.get("agents.list", []) or []:
-        if str(agent.get("id", "")) == agent_id:
-            return dict(agent.get("tool_policy") or {})
-    return {}
-
-
 def _resolve_global_policy() -> Dict[str, Any]:
     policy_v3 = config.get("security.tool_policy_v3", {}) or {}
     if not isinstance(policy_v3, dict):
@@ -345,58 +337,6 @@ def _validate_policy_config(new_config: Dict[str, Any]) -> None:
     overlap = sorted(global_allow_model_selectors & global_deny_model_selectors)
     if overlap:
         raise HTTPException(status_code=400, detail=f"'security.tool_policy_v3' has model selector conflicts: {overlap}")
-
-    # Per-agent validation
-    agents_candidate = agents_patch.get("list")
-    if agents_candidate is None:
-        agents_candidate = config.get("agents.list", [])
-    if not isinstance(agents_candidate, list):
-        raise HTTPException(status_code=400, detail="'agents.list' must be an array")
-
-    group_names = set(groups_candidate.keys())
-
-    for idx, agent in enumerate(agents_candidate):
-        if not isinstance(agent, dict):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}]' must be an object")
-        tool_policy = agent.get("tool_policy") or {}
-        if not isinstance(tool_policy, dict):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' must be an object")
-
-        allow_names = set(_normalize_str_list(tool_policy.get("allow_names")))
-        deny_names = set(_normalize_str_list(tool_policy.get("deny_names")))
-        overlap_names = sorted(allow_names & deny_names)
-        if overlap_names:
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has name conflicts: {overlap_names}")
-
-        allow_groups = set(_normalize_str_list(tool_policy.get("allow_groups")))
-        deny_groups = set(_normalize_str_list(tool_policy.get("deny_groups")))
-        overlap_groups = sorted(allow_groups & deny_groups)
-        if overlap_groups:
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has group conflicts: {overlap_groups}")
-        unknown_groups = sorted((allow_groups | deny_groups) - group_names)
-        if unknown_groups:
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' references unknown groups: {unknown_groups}")
-
-        allow_providers = set(_normalize_str_list(tool_policy.get("allow_providers")))
-        deny_providers = set(_normalize_str_list(tool_policy.get("deny_providers")))
-        if sorted(allow_providers & deny_providers):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has provider conflicts: {sorted(allow_providers & deny_providers)}")
-
-        allow_model_providers = {item.lower() for item in _normalize_str_list(tool_policy.get("allow_model_providers"))}
-        deny_model_providers = {item.lower() for item in _normalize_str_list(tool_policy.get("deny_model_providers"))}
-        if sorted(allow_model_providers & deny_model_providers):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has model provider conflicts: {sorted(allow_model_providers & deny_model_providers)}")
-
-        allow_model_names = {item.lower() for item in _normalize_str_list(tool_policy.get("allow_model_names"))}
-        deny_model_names = {item.lower() for item in _normalize_str_list(tool_policy.get("deny_model_names"))}
-        if sorted(allow_model_names & deny_model_names):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has model name conflicts: {sorted(allow_model_names & deny_model_names)}")
-
-        allow_model_selectors = {item.lower() for item in _normalize_str_list(tool_policy.get("allow_model_selectors"))}
-        deny_model_selectors = {item.lower() for item in _normalize_str_list(tool_policy.get("deny_model_selectors"))}
-        if sorted(allow_model_selectors & deny_model_selectors):
-            raise HTTPException(status_code=400, detail=f"'agents.list[{idx}].tool_policy' has model selector conflicts: {sorted(allow_model_selectors & deny_model_selectors)}")
-
 
 # ---------------------------------------------------------------------------
 # Web wizard helpers
@@ -761,7 +701,7 @@ async def update_config(new_config: Dict[str, Any]):
         config.set_many(changed_updates)
         policy_keys = sorted(
             key for key in changed_updates.keys()
-            if key.startswith("security.tool_") or key.startswith("agents.list")
+            if key.startswith("security.tool_")
         )
         if policy_keys:
             _append_policy_audit(
@@ -772,7 +712,6 @@ async def update_config(new_config: Dict[str, Any]):
             key for key in changed_updates.keys()
             if (
                 key.startswith("security.tool_")
-                or key.startswith("agents.list")
                 or key.startswith("personality.mental_process")
                 or key.startswith("personality.runtime.auto_correction")
             )

@@ -69,7 +69,6 @@ def _tool_result_persistence_policy() -> Dict[str, Any]:
             "git_push",
             "email_send",
             "hardware_control",
-            "delegate_task",
         ],
     )
     allow = [str(item).strip() for item in allow_tools if str(item).strip()]

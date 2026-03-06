@@ -27,14 +27,13 @@ def test_state_getters_delegate_to_app_context():
     
     ctx = AppContext(
         llm_router="context_router",
-        orchestrator="context_orchestrator"
+        usage_tracker=None,
     )
     _app_context_module._ctx = ctx
     
     try:
         # Check delegation
         assert admin_state.get_llm_router() == "context_router"
-        assert admin_state.get_orchestrator() == "context_orchestrator"
         
         # Check fallback when AppContext doesn't have the field
         # wait, the getter logic says: `ctx.usage_tracker if (ctx and ctx.usage_tracker is not None) else USAGE_TRACKER`

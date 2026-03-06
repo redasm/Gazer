@@ -52,7 +52,6 @@ const Layout = ({ lang, setLang, status }) => {
             items: [
                 { path: '/security', icon: <Shield size={18} />, label: t.security || 'Security' },
                 { path: '/policy/tools', icon: <SlidersHorizontal size={18} />, label: t.toolPolicy || 'Tool Policy' },
-                { path: '/policy/agents', icon: <Cpu size={18} />, label: t.agentPolicy || 'Agent Policy' },
                 { path: '/policy/llm-router', icon: <Globe size={18} />, label: t.llmRouter || 'LLM Router' },
                 { path: '/policy/release-gate', icon: <Shield size={18} />, label: t.releaseGate || 'Release Gate' },
                 { path: '/policy/optimization-tasks', icon: <Activity size={18} />, label: t.optimizationTasks || 'Optimization Tasks' },

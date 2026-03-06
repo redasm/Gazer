@@ -26,8 +26,6 @@ from plugins.loader import PluginLoader
 from skills.loader import SkillLoader
 
 # --- OpenClaw-inspired components ---
-from bus.command_queue import CommandQueue, CommandLane
-from agent.orchestrator import AgentOrchestrator, AgentConfig, AgentBinding
 from scheduler.cron import CronScheduler
 from scheduler.heartbeat import HeartbeatRunner
 from llm.failover import FailoverProvider
@@ -152,41 +150,6 @@ class GazerBrain:
         _state.TOOL_BATCHING_TRACKER = self.app_context.tool_batching_tracker
         _state.TRAJECTORY_STORE = self.app_context.trajectory_store
 
-        # --- Lane-based Command Queue ---
-        self.command_queue = CommandQueue()
-
-        # --- Multi-Agent Orchestrator ---
-        self.orchestrator = AgentOrchestrator(
-            command_queue=self.command_queue,
-            provider=self.agent.provider,
-            bus=self.agent.bus,
-            max_parallel_tasks=int(config.get("agents.orchestrator.max_parallel_tasks", 3) or 3),
-            max_parallel_per_agent=int(config.get("agents.orchestrator.max_parallel_per_agent", 2) or 2),
-            max_pending_tasks=int(config.get("agents.orchestrator.max_pending_tasks", 64) or 64),
-            default_timeout_seconds=float(
-                config.get("agents.orchestrator.sla.timeout_seconds", 120.0) or 120.0
-            ),
-            default_max_retries=int(config.get("agents.orchestrator.sla.max_retries", 0) or 0),
-            default_retry_backoff_seconds=float(
-                config.get("agents.orchestrator.sla.retry_backoff_seconds", 0.0) or 0.0
-            ),
-            default_priority=str(
-                config.get("agents.orchestrator.sla.priority", "normal") or "normal"
-            ).strip().lower(),
-            default_resource_lock_timeout_seconds=float(
-                config.get("agents.orchestrator.resource_lock_timeout_seconds", 30.0) or 30.0
-            ),
-            sleep_poll_interval_seconds=float(
-                config.get("agents.orchestrator.sleep_wake.poll_interval_seconds", 1.0) or 1.0
-            ),
-            max_sleep_seconds=float(
-                config.get("agents.orchestrator.sleep_wake.max_sleep_seconds", 3600.0) or 3600.0
-            ),
-        )
-        self._init_orchestrator()
-        self.app_context.orchestrator = self.orchestrator
-        _admin_state.ORCHESTRATOR = self.app_context.orchestrator
-
         # --- Cron Scheduler ---
         self.cron_scheduler: Optional[CronScheduler] = None
         self.heartbeat_runner: Optional[HeartbeatRunner] = None
@@ -216,7 +179,6 @@ class GazerBrain:
         self._init_channels(ipc_input, ipc_output)
 
         self._agent_task = None
-        self._cq_task = None
         self._cron_task = None
         self._heartbeat_task = None
 
@@ -400,32 +362,6 @@ class GazerBrain:
                     ui_queue=self.ui_queue,
                 )
             )
-
-    def _init_orchestrator(self) -> None:
-        """Register sub-agents and bindings from config."""
-        workspace_path = Path(os.getcwd())
-        # Always register the default/main agent
-        self.orchestrator.register_agent(AgentConfig(
-            id="main", name="Gazer", workspace=workspace_path, is_default=True,
-        ))
-        # Additional agents from config
-        for agent_def in config.get("agents.list", []):
-            self.orchestrator.register_agent(AgentConfig(
-                id=agent_def.get("id", ""),
-                name=agent_def.get("name", ""),
-                workspace=Path(agent_def.get("workspace", str(workspace_path))),
-                model=agent_def.get("model"),
-                tool_policy=agent_def.get("tool_policy"),
-                is_default=False,
-            ))
-        for bind_def in config.get("agents.bindings", []):
-            self.orchestrator.add_binding(AgentBinding(
-                agent_id=bind_def.get("agent_id", "main"),
-                channel=bind_def.get("channel"),
-                chat_id=bind_def.get("chat_id"),
-                sender_id=bind_def.get("sender_id"),
-            ))
-
 
     def _init_email_client(self) -> None:
         """Initialize optional email client for email tools."""
@@ -768,7 +704,6 @@ class GazerBrain:
             "canvas_state": self.canvas_state,
             "email_client": self._email_client,
             "cron_scheduler": self.cron_scheduler,
-            "orchestrator": self.orchestrator,
             "coding_shell_ops": shell_ops,
             "coding_file_ops": file_ops,
             "coding_workspace": coding_workspace,
@@ -868,7 +803,7 @@ class GazerBrain:
     async def _run_cron_job(self, job) -> Optional[str]:
         """Callback for the cron scheduler — runs a job as an agent turn."""
         try:
-            result = await self.agent.process_message(
+            result = await self.agent.process_auto(
                 content=job.message, sender="cron",
             )
             # Optionally deliver to a channel
@@ -904,10 +839,6 @@ class GazerBrain:
             self._register_ipc_usage_hook()
 
         self._agent_task = asyncio.create_task(self.agent.start())
-
-        # Start Command Queue (lane-based task execution)
-        self._cq_task = asyncio.create_task(self.command_queue.run())
-        logger.info("CommandQueue started.")
 
         # Start Cron Scheduler
         if self.cron_scheduler:
@@ -1026,7 +957,7 @@ class GazerBrain:
     async def _run_heartbeat(self, prompt: str) -> Optional[str]:
         """Callback for the heartbeat runner."""
         try:
-            return await self.agent.process_message(content=prompt, sender="heartbeat")
+            return await self.agent.process_auto(content=prompt, sender="heartbeat")
         except Exception as exc:
             logger.error(f"Heartbeat execution error: {exc}")
             return f"Error: {exc}"
@@ -1042,10 +973,6 @@ class GazerBrain:
             except RuntimeError:
                 pass  # No running event loop
         # Stop new components
-        if self.command_queue:
-            self.command_queue.stop()
-        if self.orchestrator:
-            self.orchestrator.stop()
         if self.cron_scheduler:
             self.cron_scheduler.stop()
         if self.heartbeat_runner:
@@ -1056,7 +983,7 @@ class GazerBrain:
             self.agent.stop()
         if self._agent_task:
             self._agent_task.cancel()
-        for task in (self._cq_task, self._cron_task, self._heartbeat_task):
+        for task in (self._cron_task, self._heartbeat_task):
             if task:
                 task.cancel()
         logger.info("Gazer Brain stopped.")
