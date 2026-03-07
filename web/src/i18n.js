@@ -101,6 +101,9 @@ export const translations = {
         agentKanbanLogTypeComplete: "COMPLETE",
         agentKanbanLogTypeError: "ERROR",
         agentKanbanLogTypeSystem: "SYSTEM",
+        agentKanbanSettingsTitle: "Board Settings",
+        agentKanbanSettingsButton: "Settings",
+        close: "Close",
 
         // Dashboard
         systemOverview: "System Overview",
@@ -190,6 +193,7 @@ export const translations = {
         // Wake Word
         wakeWordSection: "Wake Word",
         enabled: "Enabled",
+        disabled: "Disabled",
         keyword: "Keyword",
         sensitivity: "Sensitivity (0-1)",
 
@@ -894,6 +898,9 @@ export const translations = {
         agentKanbanLogTypeComplete: "完成",
         agentKanbanLogTypeError: "错误",
         agentKanbanLogTypeSystem: "系统",
+        agentKanbanSettingsTitle: "看板设置",
+        agentKanbanSettingsButton: "设置",
+        close: "关闭",
 
         // Dashboard
         systemOverview: "系统概览",
@@ -983,6 +990,7 @@ export const translations = {
         // Wake Word
         wakeWordSection: "唤醒词",
         enabled: "启用",
+        disabled: "停用",
         keyword: "关键词",
         sensitivity: "灵敏度 (0-1)",
 

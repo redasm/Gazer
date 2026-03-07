@@ -5,17 +5,18 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  ListTodo,
   MessageSquareText,
   PauseCircle,
   PlayCircle,
   RefreshCw,
   Save,
-  Wifi,
-  WifiOff,
+  Settings2,
+  X,
 } from 'lucide-react';
 
+import API_BASE from '../config';
 import { postTaskComment } from '../api/kanbanApi';
-import { useMonitorWS } from '../hooks/useMonitorWS';
 
 const COLUMNS = [
   { key: 'queued', accent: '#64748b' },
@@ -37,13 +38,86 @@ const INITIAL_STATE = {
   connection: 'connecting',
 };
 
+function buildMonitorWsUrl() {
+  const base = new URL(API_BASE, window.location.origin);
+  const wsBase = new URL('/ws/monitor', base);
+  wsBase.protocol = wsBase.protocol === 'https:' ? 'wss:' : 'ws:';
+  return wsBase.toString();
+}
+
+function useKanbanMonitorWS({ onEvent }) {
+  const [status, setStatus] = useState('connecting');
+  const handlerRef = React.useRef(onEvent);
+
+  useEffect(() => {
+    handlerRef.current = onEvent;
+  }, [onEvent]);
+
+  useEffect(() => {
+    let socket = null;
+    let reconnectTimer = null;
+    let disposed = false;
+
+    const connect = () => {
+      if (disposed) return;
+
+      setStatus((prev) => (prev === 'live' ? 'reconnecting' : 'connecting'));
+
+      try {
+        socket = new WebSocket(buildMonitorWsUrl());
+      } catch (error) {
+        console.error('Failed to open monitor websocket', error);
+        setStatus('error');
+        reconnectTimer = window.setTimeout(connect, 2000);
+        return;
+      }
+
+      socket.onopen = () => {
+        setStatus('live');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          handlerRef.current?.(payload);
+        } catch (error) {
+          console.error('Failed to parse monitor websocket payload', error);
+        }
+      };
+
+      socket.onerror = () => {
+        setStatus('error');
+      };
+
+      socket.onclose = () => {
+        if (disposed) {
+          setStatus('closed');
+          return;
+        }
+        setStatus('reconnecting');
+        reconnectTimer = window.setTimeout(connect, 2000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (socket) socket.close();
+    };
+  }, []);
+
+  return status;
+}
+
 function buildLabels(t) {
   return {
     subtitle: t.agentKanbanSubtitle || 'Multi-Agent Mission Control',
     missionFocus: t.agentKanbanMissionFocus || 'Mission Focus',
     controlDeck: t.agentKanbanControlDeck || 'Operator Deck',
     executionLanes: t.agentKanbanExecutionLanes || 'Execution Lanes',
-    railHint: t.agentKanbanRailHint || 'Select a task card to inspect execution details, post guidance, and review live logs.',
+    railHint: t.agentKanbanRailHint || 'Select a task card to inspect details, progress, and operator comments.',
     sessionEmpty: t.agentKanbanSessionEmpty || 'No active multi-agent session',
     unnamedTask: t.agentKanbanUnnamedTask || 'Unnamed Task',
     workerFallback: t.agentKanbanWorkerFallback || 'worker',
@@ -110,6 +184,11 @@ function buildLabels(t) {
     logTypeComplete: t.agentKanbanLogTypeComplete || 'COMPLETE',
     logTypeError: t.agentKanbanLogTypeError || 'ERROR',
     logTypeSystem: t.agentKanbanLogTypeSystem || 'SYSTEM',
+    enabled: t.enabled || 'Enabled',
+    disabled: t.disabled || 'Disabled',
+    settingsTitle: t.agentKanbanSettingsTitle || t.settings || 'Settings',
+    settingsButton: t.agentKanbanSettingsButton || t.settings || 'Settings',
+    settingsClose: t.close || 'Close',
   };
 }
 
@@ -301,18 +380,16 @@ function formatTimestamp(ts) {
   }
 }
 
-function formatConnection(status, labels) {
-  if (status === 'live') return labels.connectionLive;
-  if (status === 'reconnecting') return labels.connectionReconnecting;
-  if (status === 'error') return labels.connectionError;
-  if (status === 'closed') return labels.connectionClosed;
-  return labels.connectionConnecting;
-}
-
 function formatPhase(phase, labels) {
   if (phase === 'running') return labels.phaseActive;
   if (phase === 'done') return labels.phaseDone;
   return labels.phaseIdle;
+}
+
+function phaseAccent(phase) {
+  if (phase === 'running') return '#38bdf8';
+  if (phase === 'done') return '#34d399';
+  return '#94a3b8';
 }
 
 function translateStatus(status, labels) {
@@ -330,22 +407,6 @@ function translatePriority(priority, labels) {
   return labels.priorityNormal;
 }
 
-function translateLogType(type, labels) {
-  if (type === 'start') return labels.logTypeStart;
-  if (type === 'tool') return labels.logTypeTool;
-  if (type === 'complete') return labels.logTypeComplete;
-  if (type === 'error') return labels.logTypeError;
-  return labels.logTypeSystem;
-}
-
-function logTypeColor(type) {
-  if (type === 'error') return '#fda4af';
-  if (type === 'complete') return '#86efac';
-  if (type === 'tool') return '#67e8f9';
-  if (type === 'start') return '#a5f3fc';
-  return '#cbd5e1';
-}
-
 function previewText(value, limit = 34) {
   if (!value) return '';
   if (value.length <= limit) return value;
@@ -354,12 +415,6 @@ function previewText(value, limit = 34) {
 
 function formatCount(value) {
   return Number(value || 0).toLocaleString();
-}
-
-function phaseAccent(phase) {
-  if (phase === 'running') return '#22d3ee';
-  if (phase === 'done') return '#34d399';
-  return '#64748b';
 }
 
 function accentForStatus(status) {
@@ -373,11 +428,18 @@ function taskProgress(task) {
   return 8;
 }
 
-function StatTile({ label, value, accent }) {
+function StatTile({ label, value, accent, icon: Icon }) {
   return (
     <div className="agent-kanban-stat-tile" style={{ '--agent-kanban-accent': accent }}>
+      <div className="agent-kanban-stat-head">
+        <div className="agent-kanban-stat-label">{label}</div>
+        {Icon && (
+          <div className="agent-kanban-stat-icon">
+            <Icon size={15} />
+          </div>
+        )}
+      </div>
       <div className="agent-kanban-stat-value">{value}</div>
-      <div className="agent-kanban-stat-label">{label}</div>
     </div>
   );
 }
@@ -561,33 +623,79 @@ function TaskDetail({ task, commentText, commentError, submittingComment, onComm
   );
 }
 
-function LogPanel({ logs, connection, labels }) {
+function SettingsModal({
+  open,
+  allowMulti,
+  maxWorkers,
+  labels,
+  t,
+  savingSettings,
+  onClose,
+  onConfigUpdate,
+  onRefresh,
+  onSave,
+}) {
+  if (!open) return null;
+
   return (
-    <section className="agent-kanban-log-panel">
-      <div className="agent-kanban-log-head">
-        <div>
-          <div className="agent-kanban-panel-kicker">{labels.liveLog}</div>
-          <div className="agent-kanban-log-subtitle">{formatCount(logs.length)}</div>
-        </div>
-        <div className={`agent-kanban-connection-pill is-${connection}`}>
-          {connection === 'live' ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>{formatConnection(connection, labels)}</span>
-        </div>
-      </div>
-      <div className="agent-kanban-log-stream">
-        {logs.length === 0 && <div className="agent-kanban-empty-copy">{labels.noLogs}</div>}
-        {logs.map((entry, index) => (
-          <div key={`${entry.ts || index}-${entry.agent_id || 'system'}-${index}`} className="agent-kanban-log-entry">
-            <div className="agent-kanban-log-entry-head">
-              <div className="agent-kanban-log-type" style={{ color: logTypeColor(entry.type) }}>{translateLogType(entry.type, labels)}</div>
-              <div className="agent-kanban-log-time">{formatTimestamp(entry.ts)}</div>
-            </div>
-            <div className="agent-kanban-log-agent">{entry.agent_id || labels.workerFallback}</div>
-            <div className="agent-kanban-log-message">{entry.message}</div>
+    <div className="agent-kanban-settings-modal" role="dialog" aria-modal="true" aria-label={labels.settingsTitle} onClick={onClose}>
+      <div className="agent-kanban-settings-modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="agent-kanban-settings-modal-head">
+          <div>
+            <div className="agent-kanban-panel-kicker">{t.agentKanbanControlDeck || labels.controlDeck}</div>
+            <div className="agent-kanban-settings-modal-title">{labels.settingsTitle}</div>
           </div>
-        ))}
+          <button type="button" className="btn-ghost agent-kanban-settings-close" onClick={onClose} aria-label={labels.settingsClose}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <section className="agent-kanban-control-panel agent-kanban-control-panel-modal">
+          <div className="agent-kanban-control-copy">{t.agentKanbanExecutionControlDesc || labels.executionControlDesc}</div>
+
+          <div className="agent-kanban-control-row">
+            <div>
+              <div className="agent-kanban-control-title">{t.agentKanbanMultiAgent || labels.multiAgent}</div>
+              <div className="agent-kanban-control-subtitle">{t.agentKanbanMultiAgentDesc || labels.multiAgentDesc}</div>
+            </div>
+            <button
+              type="button"
+              className={`agent-kanban-switch${allowMulti ? ' is-on' : ''}`}
+              onClick={() => onConfigUpdate('multi_agent.allow_multi', !allowMulti)}
+              aria-pressed={allowMulti}
+            >
+              <span />
+            </button>
+          </div>
+
+          <div className="agent-kanban-field">
+            <label htmlFor="max-workers-modal" className="agent-kanban-field-label">{t.agentKanbanMaxWorkers || labels.maxWorkers}</label>
+            <input
+              id="max-workers-modal"
+              type="number"
+              min="1"
+              max="20"
+              value={maxWorkers}
+              disabled={!allowMulti}
+              onChange={(event) => onConfigUpdate('multi_agent.max_workers', Math.min(20, Math.max(1, parseInt(event.target.value, 10) || 1)))}
+              className="agent-kanban-number-input"
+            />
+            <div className="agent-kanban-field-hint">{t.agentKanbanMaxWorkersHint || labels.maxWorkersHint}</div>
+          </div>
+
+          <div className="agent-kanban-action-row">
+            <button type="button" onClick={onRefresh} className="btn-secondary agent-kanban-action-button">
+              <RefreshCw size={16} />
+              {t.refresh || 'Refresh'}
+            </button>
+            <button type="button" onClick={onSave} className="btn-primary agent-kanban-action-button" disabled={savingSettings}>
+              <Save size={16} />
+              {savingSettings ? (t.saving || 'Saving...') : (t.saveConfig || 'Save')}
+            </button>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -598,8 +706,9 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
   const [commentError, setCommentError] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const handleMonitorEvent = useCallback((message) => dispatch({ type: 'event', message }), [dispatch]);
-  const connection = useMonitorWS({ onEvent: handleMonitorEvent });
+  const connection = useKanbanMonitorWS({ onEvent: handleMonitorEvent });
 
   useEffect(() => {
     dispatch({ type: 'connection', status: connection });
@@ -607,7 +716,6 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
 
   const orderedTasks = useMemo(() => sortTasks(Object.values(state.tasks)), [state.tasks]);
   const selectedTask = useMemo(() => state.tasks[state.selectedTaskId] || orderedTasks[0] || null, [orderedTasks, state.selectedTaskId, state.tasks]);
-  const logs = useMemo(() => (!selectedTask ? state.logs : state.logs.filter((entry) => !entry.task_id || entry.task_id === selectedTask.task_id)), [selectedTask, state.logs]);
   const missionTasks = useMemo(() => orderedTasks.slice(0, 4), [orderedTasks]);
   const tasksByColumn = useMemo(() => (
     Object.fromEntries(COLUMNS.map((column) => [column.key, orderedTasks.filter((task) => task.status === column.key)]))
@@ -624,14 +732,24 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
     setConfig((prev) => updateNestedConfig(prev, path, value));
   }, [setConfig]);
 
-  const handleSaveSettings = useCallback(async () => {
+  const handleSaveSettings = useCallback(async (closeAfterSave = false) => {
     setSavingSettings(true);
     try {
       await saveConfig();
+      if (closeAfterSave) setSettingsOpen(false);
     } finally {
       setSavingSettings(false);
     }
   }, [saveConfig]);
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settingsOpen]);
 
   const handleSubmitComment = useCallback(async () => {
     if (!selectedTask) return;
@@ -662,8 +780,6 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
 
   const allowMulti = Boolean(config.multi_agent?.allow_multi);
   const maxWorkers = config.multi_agent?.max_workers ?? 5;
-  const sessionLabel = state.sessionLabel || state.sessionKey || labels.sessionEmpty;
-
   return (
     <div className="agent-kanban-shell">
       <header className="agent-kanban-topbar">
@@ -676,34 +792,25 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
             <h1>{t.agentKanbanTitle || 'Multi-Agent Board'}</h1>
           </div>
         </div>
-        <div className="agent-kanban-stats-rack">
-          <StatTile label={labels.total} value={formatCount(state.stats.total)} accent="#67e8f9" />
-          <StatTile label={labels.done} value={formatCount(state.stats.done)} accent="#34d399" />
-          <StatTile label={labels.failed} value={formatCount(state.stats.failed)} accent="#fb7185" />
-          <StatTile label={labels.tokens} value={formatCount(state.stats.tokens)} accent="#f59e0b" />
-          <StatTile label={labels.statusLabel} value={formatPhase(state.phase, labels)} accent={phaseAccent(state.phase)} />
+        <div className="agent-kanban-topbar-actions">
+          <div className="agent-kanban-stats-rack">
+            <StatTile label={labels.total} value={formatCount(state.stats.total)} accent="#67e8f9" icon={ListTodo} />
+            <StatTile label={labels.done} value={formatCount(state.stats.done)} accent="#34d399" icon={CheckCircle2} />
+            <StatTile label={labels.failed} value={formatCount(state.stats.failed)} accent="#fb7185" icon={AlertTriangle} />
+            <StatTile label={labels.tokens} value={formatCount(state.stats.tokens)} accent="#f59e0b" icon={Clock3} />
+            <StatTile label={labels.statusLabel} value={formatPhase(state.phase, labels)} accent={phaseAccent(state.phase)} icon={Activity} />
+          </div>
+          <button type="button" className="btn-secondary agent-kanban-settings-trigger" onClick={() => setSettingsOpen(true)}>
+            <Settings2 size={16} />
+            {labels.settingsButton}
+          </button>
         </div>
       </header>
 
-      <section className="agent-kanban-mission-strip">
-        <div className="agent-kanban-session-panel">
-          <div className="agent-kanban-panel-kicker">{labels.session}</div>
-          <div className="agent-kanban-session-value">{sessionLabel}</div>
-          <div className="agent-kanban-session-meta">
-            <div className={`agent-kanban-connection-pill is-${connection}`}>
-              {connection === 'live' ? <Wifi size={14} /> : <WifiOff size={14} />}
-              <span>{formatConnection(connection, labels)}</span>
-            </div>
-            <div className={`agent-kanban-phase-pill is-${state.phase}`}>
-              {formatPhase(state.phase, labels)}
-            </div>
-          </div>
-        </div>
-
-        <div className="agent-kanban-mission-focus-panel">
-          <div className="agent-kanban-panel-kicker">{t.agentKanbanMissionFocus || labels.missionFocus}</div>
+      {missionTasks.length > 0 && (
+        <section className="agent-kanban-mission-strip">
+          <div className="agent-kanban-mission-focus-panel">
           <div className="agent-kanban-mission-tags">
-            {missionTasks.length === 0 && <div className="agent-kanban-mission-tag is-empty">{labels.sessionEmpty}</div>}
             {missionTasks.map((task) => (
               <div
                 key={task.task_id}
@@ -715,21 +822,12 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
               </div>
             ))}
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       <section className="agent-kanban-workbench">
         <section className="agent-kanban-stage">
-          <div className="agent-kanban-stage-head">
-            <div>
-              <div className="agent-kanban-panel-kicker">{t.agentKanbanExecutionLanes || labels.executionLanes}</div>
-              <div className="agent-kanban-stage-copy">{t.agentKanbanDesc || 'Live task decomposition, worker execution, comments, and operator controls for the current multi-agent session.'}</div>
-            </div>
-            <div className="agent-kanban-stage-pills">
-              <span className="agent-kanban-stage-pill is-running">{labels.running} {formatCount(state.stats.running)}</span>
-              <span className="agent-kanban-stage-pill is-sleeping">{labels.sleeping} {formatCount(state.stats.sleeping)}</span>
-            </div>
-          </div>
           <div className="agent-kanban-board">
             {localizedColumns.map((column) => (
               <TaskColumn
@@ -745,52 +843,6 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
         </section>
 
         <aside className="agent-kanban-rail">
-          <section className="agent-kanban-control-panel">
-            <div className="agent-kanban-panel-kicker">{t.agentKanbanControlDeck || labels.controlDeck}</div>
-            <div className="agent-kanban-control-copy">{t.agentKanbanExecutionControlDesc || labels.executionControlDesc}</div>
-
-            <div className="agent-kanban-control-row">
-              <div>
-                <div className="agent-kanban-control-title">{t.agentKanbanMultiAgent || labels.multiAgent}</div>
-                <div className="agent-kanban-control-subtitle">{t.agentKanbanMultiAgentDesc || labels.multiAgentDesc}</div>
-              </div>
-              <button
-                type="button"
-                className={`agent-kanban-switch${allowMulti ? ' is-on' : ''}`}
-                onClick={() => handleConfigUpdate('multi_agent.allow_multi', !allowMulti)}
-                aria-pressed={allowMulti}
-              >
-                <span />
-              </button>
-            </div>
-
-            <div className="agent-kanban-field">
-              <label htmlFor="max-workers" className="agent-kanban-field-label">{t.agentKanbanMaxWorkers || labels.maxWorkers}</label>
-              <input
-                id="max-workers"
-                type="number"
-                min="1"
-                max="20"
-                value={maxWorkers}
-                disabled={!allowMulti}
-                onChange={(event) => handleConfigUpdate('multi_agent.max_workers', Math.min(20, Math.max(1, parseInt(event.target.value, 10) || 1)))}
-                className="agent-kanban-number-input"
-              />
-              <div className="agent-kanban-field-hint">{t.agentKanbanMaxWorkersHint || labels.maxWorkersHint}</div>
-            </div>
-
-            <div className="agent-kanban-action-row">
-              <button type="button" onClick={fetchConfig} className="btn-secondary agent-kanban-action-button">
-                <RefreshCw size={16} />
-                {t.refresh || 'Refresh'}
-              </button>
-              <button type="button" onClick={handleSaveSettings} className="btn-primary agent-kanban-action-button" disabled={savingSettings}>
-                <Save size={16} />
-                {savingSettings ? (t.saving || 'Saving...') : (t.saveConfig || 'Save')}
-              </button>
-            </div>
-          </section>
-
           <div className="agent-kanban-detail-stack">
             <TaskDetail
               task={selectedTask}
@@ -801,10 +853,22 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
               onCommentSubmit={handleSubmitComment}
               labels={labels}
             />
-            <LogPanel logs={logs} connection={connection} labels={labels} />
           </div>
         </aside>
       </section>
+
+      <SettingsModal
+        open={settingsOpen}
+        allowMulti={allowMulti}
+        maxWorkers={maxWorkers}
+        labels={labels}
+        t={t}
+        savingSettings={savingSettings}
+        onClose={() => setSettingsOpen(false)}
+        onConfigUpdate={handleConfigUpdate}
+        onRefresh={fetchConfig}
+        onSave={() => handleSaveSettings(true)}
+      />
     </div>
   );
 }
