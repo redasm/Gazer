@@ -369,7 +369,6 @@ async def test_verify_admin_token_rejects_bearer_when_disabled(monkeypatch):
         SimpleNamespace(
             get=lambda key, default=None: {
                 "api.allow_admin_bearer_token": False,
-                "api.allow_loopback_without_token": False,
             }.get(key, default)
         ),
     )
@@ -381,26 +380,17 @@ async def test_verify_admin_token_rejects_bearer_when_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_verify_admin_token_blocks_loopback_bypass_when_proxy_headers_present(monkeypatch):
+async def test_verify_admin_token_never_allows_loopback_bypass_without_token(monkeypatch):
     monkeypatch.setattr("tools.admin.auth._is_allowed_origin", lambda _: True)
-    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: False)
+    monkeypatch.setattr("tools.admin.auth._is_loopback", lambda _: True)
     monkeypatch.setattr(admin_api, "get_owner_manager", lambda: SimpleNamespace(validate_session=lambda *_args, **_kwargs: False))
     monkeypatch.setattr(
         admin_api,
         "config",
-        SimpleNamespace(
-            get=lambda key, default=None: {
-                "api.allow_loopback_without_token": True,
-                "api.local_bypass_environments": ["dev", "test", "local"],
-                "runtime.environment": "dev",
-            }.get(key, default)
-        ),
+        SimpleNamespace(get=lambda key, default=None: default),
     )
 
-    request = _make_request(
-        host="127.0.0.1",
-        extra_headers={"x-forwarded-for": "203.0.113.9"},
-    )
+    request = _make_request(host="127.0.0.1")
     with pytest.raises(HTTPException) as exc:
         await admin_api.verify_admin_token(request)
     assert exc.value.status_code == 401
@@ -593,10 +583,10 @@ async def test_update_config_blocks_nested_protected_keys(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_config_blocks_loopback_auth_bypass_toggle(monkeypatch):
+async def test_update_config_rejects_removed_loopback_auth_key(monkeypatch):
     fake_cfg = _FakeConfig(
         {
-            "api": {"allow_loopback_without_token": False},
+            "api": {},
             "security": {
                 "dm_policy": "pairing",
                 "auto_approve_privileged": False,
@@ -610,8 +600,9 @@ async def test_update_config_blocks_loopback_auth_bypass_toggle(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await admin_api.update_config({"api": {"allow_loopback_without_token": True}})
-    assert exc.value.status_code == 403
+    assert exc.value.status_code == 400
     assert fake_cfg.set_many_calls == []
+    assert "no longer supported" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
@@ -723,6 +714,42 @@ def test_run_verify_command_executes_without_shell(monkeypatch):
     assert result["ok"] is True
     assert called["cmd"] == ["pytest", "-q"]
     assert called["kwargs"]["shell"] is False
+
+
+def test_run_verify_command_preserves_quoted_arguments(monkeypatch):
+    called = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    def _fake_run(cmd, **kwargs):
+        called["cmd"] = cmd
+        called["kwargs"] = kwargs
+        return _Proc()
+
+    monkeypatch.setattr(admin_api._subprocess, "run", _fake_run)
+
+    result = admin_api._run_verify_command('pytest -k "owner token"', Path("."), timeout_seconds=30)
+
+    assert result["ok"] is True
+    assert called["cmd"] == ["pytest", "-k", "owner token"]
+    assert called["kwargs"]["shell"] is False
+
+
+def test_safe_task_path_rejects_absolute_and_prefix_collision(monkeypatch, tmp_path):
+    project_root = tmp_path / "repo"
+    project_root.mkdir()
+    sibling = tmp_path / "repo-evil"
+    sibling.mkdir()
+    monkeypatch.setattr(admin_api, "_PROJECT_ROOT", project_root)
+
+    with pytest.raises(ValueError, match="Absolute paths are not allowed"):
+        admin_api._safe_task_path(str((project_root / "file.txt").resolve()))
+
+    with pytest.raises(ValueError, match="Path traversal detected"):
+        admin_api._safe_task_path("../repo-evil/steal.txt")
 
 
 

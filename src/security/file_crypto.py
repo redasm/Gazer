@@ -92,26 +92,22 @@ class SecureFileStorage:
     Features:
     - AES-256-GCM authenticated encryption
     - Machine-specific key derivation (no external key management needed)
-    - Graceful fallback to plaintext if cryptography unavailable (dev mode only)
     - File permission hardening on supported platforms
     """
-    
-    def __init__(self, file_path: str, *, allow_plaintext_fallback: bool = False):
+
+    def __init__(self, file_path: str):
         """Initialize secure storage.
-        
+
         Args:
             file_path: Path to the encrypted storage file
-            allow_plaintext_fallback: If True, falls back to plaintext when
-                cryptography is unavailable (USE ONLY IN DEVELOPMENT)
         """
         self.file_path = file_path
-        self.allow_plaintext_fallback = allow_plaintext_fallback
         self._cipher: Optional[AESGCM] = None
-        
+
         if CRYPTO_AVAILABLE:
             key = _get_machine_key()
             self._cipher = AESGCM(key)
-        elif not allow_plaintext_fallback:
+        else:
             raise RuntimeError(
                 "cryptography library required for secure storage. "
                 "Install with: pip install cryptography"
@@ -125,26 +121,17 @@ class SecureFileStorage:
         """
         serialized = json.dumps(data, ensure_ascii=False, indent=2)
         
-        if self._cipher:
-            # Encrypt with AES-GCM
-            nonce = os.urandom(12)  # 96-bit nonce for GCM
-            ciphertext = self._cipher.encrypt(nonce, serialized.encode("utf-8"), None)
-            
-            # Store nonce + ciphertext
-            encrypted_blob = base64.b64encode(nonce + ciphertext).decode("ascii")
-            payload = {
-                "version": 1,
-                "encrypted": True,
-                "data": encrypted_blob,
-            }
-        else:
-            # Plaintext fallback (dev mode only)
-            logger.warning("Saving in plaintext mode (encryption unavailable)")
-            payload = {
-                "version": 1,
-                "encrypted": False,
-                "data": data,
-            }
+        # Encrypt with AES-GCM
+        nonce = os.urandom(12)  # 96-bit nonce for GCM
+        ciphertext = self._cipher.encrypt(nonce, serialized.encode("utf-8"), None)
+
+        # Store nonce + ciphertext
+        encrypted_blob = base64.b64encode(nonce + ciphertext).decode("ascii")
+        payload = {
+            "version": 1,
+            "encrypted": True,
+            "data": encrypted_blob,
+        }
         
         # Atomic write
         os.makedirs(os.path.dirname(self.file_path) or ".", exist_ok=True)
@@ -212,9 +199,7 @@ class SecureFileStorage:
                 return data
             except Exception as e:
                 raise ValueError(f"Decryption failed: {e}") from e
-        else:
-            # Plaintext mode
-            return payload.get("data", {})
+        raise ValueError("Plaintext secure storage payloads are no longer supported")
     
     def migrate_from_plaintext(self, plaintext_file: str) -> bool:
         """Migrate existing plaintext JSON file to encrypted storage.

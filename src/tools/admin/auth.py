@@ -7,7 +7,6 @@ authentication dependencies used by other routers.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict
 from urllib.parse import urlparse
 from http.cookies import SimpleCookie
@@ -144,29 +143,6 @@ def _is_allowed_origin(origin: str) -> bool:
 
 
 
-
-
-def _is_dev_environment() -> bool:
-    """Check if running in dev environment."""
-    env = str(config.get("runtime.environment", "dev")).strip().lower()
-    return env in ("dev", "development", "local")
-
-
-def _allow_local_auth_bypass(*, is_loopback: bool, headers: Dict[str, Any]) -> bool:
-    """Allow loopback auth bypass ONLY in dev environment.
-
-    In production, all requests require valid authentication tokens.
-    In dev, loopback requests from allowed origins may bypass token auth
-    to support the local web UI development workflow.
-    """
-    if not is_loopback or not _is_dev_environment():
-        return False
-    origin = headers.get("origin", "")
-    if origin and not _is_allowed_origin(origin):
-        return False
-    return True
-
-
 def _owner_validate_admin_token(owner_manager: Any, token: str) -> bool:
     """Validate an admin token against the owner manager."""
     validator = getattr(owner_manager, "validate_admin_token", None)
@@ -274,13 +250,6 @@ async def verify_admin_token(request: Request):
         ):
             return
 
-    # Dev-only loopback bypass for local web UI
-    if _allow_local_auth_bypass(
-        is_loopback=is_loop,
-        headers=dict(request.headers),
-    ):
-        return
-
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
@@ -337,15 +306,6 @@ async def _verify_ws_auth(websocket: WebSocket) -> bool:
             return True
         await websocket.close(code=4003, reason="Invalid token")
         return False
-
-    # Dev-only loopback bypass for local web UI
-    client_host = websocket.client.host if websocket.client else ""
-    is_loop = client_host in ("127.0.0.1", "::1", "localhost")
-    if _allow_local_auth_bypass(
-        is_loopback=is_loop,
-        headers=dict(websocket.headers),
-    ):
-        return True
 
     await websocket.close(code=4003, reason="Authentication required")
     return False

@@ -426,7 +426,6 @@ api:
   - http://127.0.0.1:5175
   - http://127.0.0.1:8080
   cors_credentials: null
-  allow_loopback_without_token: true
   max_ws_message_bytes: 262144
   max_chat_message_chars: 8000
   max_upload_bytes: 10485760
@@ -440,10 +439,6 @@ api:
   - .tmp_pytest
   - exports
   allow_audit_buffer_clear: false
-  local_bypass_environments:
-  - dev
-  - test
-  - local
   mcp:
     enabled: true
     rate_limit_requests: 120

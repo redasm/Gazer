@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import shutil
 import tempfile
 import time
@@ -32,6 +33,7 @@ from tools.admin.state import (
     TRAJECTORY_STORE,
 )
 from tools.admin.observability_helpers import _get_eval_benchmark_manager
+from tools.admin.utils import _is_subpath
 
 logger = logging.getLogger('GazerAdminAPI')
 
@@ -67,8 +69,11 @@ def _classify_workflow_validation_error(detail: Any) -> str:
     return "workflow_invalid"
 
 def _safe_task_path(rel_path: str) -> Path:
-    target = (_PROJECT_ROOT / rel_path).resolve()
-    if not str(target).startswith(str(_PROJECT_ROOT.resolve())):
+    candidate = Path(rel_path).expanduser()
+    if candidate.is_absolute():
+        raise ValueError("Absolute paths are not allowed")
+    target = (_PROJECT_ROOT / candidate).resolve()
+    if not _is_subpath(_PROJECT_ROOT, target):
         raise ValueError("Path traversal detected")
     return target
 
@@ -101,7 +106,14 @@ def _run_verify_command(cmd: str, cwd: Path, timeout_seconds: int = 120) -> Dict
 
     try:
         # Avoid shell=True for security, the tests mock shell=False
-        args = cmd.split()
+        args = shlex.split(cmd, posix=True)
+        if not args:
+            return {
+                "ok": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": "Error: verify command is empty"
+            }
         res = subprocess.run(
             args, shell=False, cwd=str(cwd),
             capture_output=True, text=True, timeout=timeout_seconds
@@ -1083,4 +1095,3 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
         "truncated": visited >= max_steps or bool(remaining_nodes),
         "remaining_nodes": remaining_nodes,
     }
-

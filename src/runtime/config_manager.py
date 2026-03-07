@@ -238,6 +238,12 @@ class ConfigManager:
         """Fail fast in development when deprecated config keys are present."""
         deprecated_paths: List[str] = []
         if isinstance(self.data, dict):
+            api_cfg = self.data.get("api")
+            if isinstance(api_cfg, dict):
+                if "allow_loopback_without_token" in api_cfg:
+                    deprecated_paths.append("api.allow_loopback_without_token")
+                if "local_bypass_environments" in api_cfg:
+                    deprecated_paths.append("api.local_bypass_environments")
             models = self.data.get("models")
             if isinstance(models, dict):
                 if "active_profile" in models:
@@ -587,7 +593,6 @@ class ConfigManager:
                 "api": [
                     "cors_origins",
                     "cors_credentials",
-                    "allow_loopback_without_token",
                     "max_ws_message_bytes",
                     "max_chat_message_chars",
                     "max_upload_bytes",
@@ -598,7 +603,6 @@ class ConfigManager:
                     "allow_admin_bearer_token",
                     "export_allowed_dirs",
                     "allow_audit_buffer_clear",
-                    "local_bypass_environments",
                     "mcp",
                 ],
                 "api.mcp": [

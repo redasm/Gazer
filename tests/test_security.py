@@ -74,6 +74,17 @@ class TestOwnerManager:
         assert tokens[3] in sessions
         assert tokens[4] in sessions
 
+    def test_owner_manager_fails_closed_when_secure_storage_unavailable(self, tmp_dir, monkeypatch):
+        path = str(tmp_dir / "owner.json")
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError("crypto unavailable")
+
+        monkeypatch.setattr("security.owner.SecureFileStorage", _raise)
+
+        with pytest.raises(RuntimeError, match="Encrypted owner storage initialization failed"):
+            OwnerManager(owner_file=path)
+
 
 class TestPairingManager:
     @pytest.fixture

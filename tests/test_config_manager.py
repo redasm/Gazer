@@ -240,6 +240,23 @@ class TestConfigManager:
         assert router_idx != -1
         assert embedding_idx < router_idx
 
+    def test_rejects_removed_api_auth_bypass_keys(self, tmp_config_file):
+        with open(tmp_config_file, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "api": {
+                        "allow_loopback_without_token": True,
+                        "local_bypass_environments": ["dev"],
+                    }
+                },
+                f,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+
+        with pytest.raises(RuntimeError, match="Deprecated config keys detected"):
+            ConfigManager(config_path=tmp_config_file)
+
     def test_to_safe_dict_masks_nested_sensitive_values(self, tmp_config_file):
         cm = ConfigManager(config_path=tmp_config_file)
         cm.set_many(

@@ -63,8 +63,6 @@ except ImportError:
 _PROTECTED_NAMESPACES = {
     "security.dm_policy",
     "security.auto_approve_privileged",
-    "api.allow_loopback_without_token",
-    "api.local_bypass_environments",
     "api.cors_origins",
     "api.cors_credentials",
     "api.cookie_secure",
@@ -76,6 +74,11 @@ _PROTECTED_NAMESPACES = {
 
 _INTERNAL_CONFIG_PREFIXES = {
     "agents.defaults.planning",
+}
+
+_DEPRECATED_CONFIG_KEYS = {
+    "api.allow_loopback_without_token",
+    "api.local_bypass_environments",
 }
 
 
@@ -698,6 +701,14 @@ async def update_config(new_config: Dict[str, Any]):
     before_values = {key: config.get(key) for key in changed_updates.keys()}
 
     for changed_key in changed_updates.keys():
+        if changed_key in _DEPRECATED_CONFIG_KEYS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Config key '{changed_key}' has been removed and is no longer supported. "
+                    "Delete it from settings.yaml instead of updating it through the admin API."
+                ),
+            )
         if changed_key in _PROTECTED_NAMESPACES:
             raise HTTPException(
                 status_code=403,

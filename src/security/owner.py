@@ -23,7 +23,6 @@ import time
 from typing import Dict, Optional
 
 from runtime.config_manager import config
-from runtime.utils import atomic_write_json
 from security.file_crypto import SecureFileStorage
 
 logger = logging.getLogger("OwnerManager")
@@ -53,14 +52,8 @@ class OwnerManager:
     def __init__(self, owner_file: str = _OWNER_FILE) -> None:
         self._file = owner_file
         self._data: Dict = {}
-        # Use encrypted storage with dev-mode fallback
-        env = str(os.getenv("GAZER_ENV", "dev")).strip().lower()
-        allow_fallback = env in ("dev", "test", "local")
         try:
-            self._storage = SecureFileStorage(
-                owner_file, 
-                allow_plaintext_fallback=allow_fallback
-            )
+            self._storage = SecureFileStorage(owner_file)
             # Auto-migrate from plaintext if old file exists
             if os.path.exists(owner_file):
                 try:
@@ -73,8 +66,8 @@ class OwnerManager:
                 except Exception:
                     pass
         except Exception as e:
-            logger.warning(f"Failed to initialize encrypted storage: {e}. Using plaintext.")
-            self._storage = None
+            logger.error("Failed to initialize encrypted owner storage: %s", e)
+            raise RuntimeError("Encrypted owner storage initialization failed") from e
         
         self._load()
         self._ensure_admin_token()
@@ -90,8 +83,7 @@ class OwnerManager:
             self._data["admin_token"] = secrets.token_urlsafe(32)
             self._data.setdefault("created_at", time.time())
             self._save()
-            logger.info("Admin token auto-generated on first run.  "
-                        f"See {self._file} for the token.")
+            logger.info("Admin token auto-generated and stored in encrypted owner storage.")
 
     def _ensure_session_store(self) -> None:
         sessions = self._data.get("sessions")
@@ -244,23 +236,14 @@ class OwnerManager:
         if not os.path.exists(self._file):
             return
         try:
-            if self._storage:
-                self._data = self._storage.load()
-            else:
-                # Fallback to plaintext
-                with open(self._file, "r", encoding="utf-8") as f:
-                    self._data = json.load(f)
+            self._data = self._storage.load()
             logger.info("Owner token loaded.")
         except (json.JSONDecodeError, OSError, ValueError) as e:
             logger.warning(f"Failed to load owner data: {e}")
 
     def _save(self) -> None:
         try:
-            if self._storage:
-                self._storage.save(self._data)
-            else:
-                # Fallback to plaintext
-                atomic_write_json(self._file, self._data)
+            self._storage.save(self._data)
         except OSError as e:
             logger.error(f"Failed to save owner data: {e}")
 
