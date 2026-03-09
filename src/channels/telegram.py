@@ -23,8 +23,8 @@ from bus.events import OutboundMessage, TypingEvent
 from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media, cleanup_old_media
 from runtime.config_manager import config
-from security.pairing import pairing_manager
-from soul.evolution import evolution
+from security.pairing import get_pairing_manager
+from soul.evolution import get_evolution
 
 logger = logging.getLogger("TelegramChannel")
 
@@ -53,7 +53,7 @@ class TelegramChannel(ChannelAdapter):
         # Seed pairing manager with pre-configured allowed IDs
         for uid in self.allowed_ids:
             if uid:
-                pairing_manager.add_approved("telegram", uid)
+                get_pairing_manager().add_approved("telegram", uid)
 
     # ------------------------------------------------------------------
     # ChannelAdapter interface
@@ -65,11 +65,11 @@ class TelegramChannel(ChannelAdapter):
             await self.app.start()
             # Test bot token validity
             bot_info = await self.app.bot.get_me()
-            logger.info(f"Telegram bot connected: @{bot_info.username} ({bot_info.first_name})")
+            logger.info("Telegram bot connected: @%s (%s)", bot_info.username, bot_info.first_name)
             await self.app.updater.start_polling()
             logger.info("Telegram polling started.")
         except Exception as exc:
-            logger.error(f"Failed to start Telegram channel: {exc}", exc_info=True)
+            logger.error("Failed to start Telegram channel: %s", exc, exc_info=True)
             raise
 
     async def stop(self) -> None:
@@ -82,14 +82,14 @@ class TelegramChannel(ChannelAdapter):
         try:
             chat_id = int(msg.chat_id)
         except (ValueError, TypeError):
-            logger.error(f"Invalid chat_id: {msg.chat_id}")
+            logger.error("Invalid chat_id: %s", msg.chat_id)
             return
 
         if msg.is_partial:
             try:
                 await self.app.bot.send_chat_action(chat_id=chat_id, action="typing")
             except Exception as exc:
-                logger.warning(f"Telegram typing indicator failed: {exc}")
+                logger.warning("Telegram typing indicator failed: %s", exc)
             return
 
         # --- Send images first (if any) ---
@@ -100,9 +100,9 @@ class TelegramChannel(ChannelAdapter):
                 if p.is_file():
                     with p.open("rb") as f:
                         await self.app.bot.send_photo(chat_id=chat_id, photo=f)
-                    logger.info(f"Telegram sent photo: {media_path}")
+                    logger.info("Telegram sent photo: %s", media_path)
             except Exception as exc:
-                logger.error(f"Failed to send Telegram photo: {exc}")
+                logger.error("Failed to send Telegram photo: %s", exc)
 
         # --- Send text ---
         if not msg.content or not msg.content.strip():
@@ -120,7 +120,7 @@ class TelegramChannel(ChannelAdapter):
                 chat_id=chat_id, text=msg.content, reply_markup=reply_markup
             )
         except Exception as exc:
-            logger.error(f"Failed to send Telegram message to {chat_id}: {exc}")
+            logger.error("Failed to send Telegram message to %s: %s", chat_id, exc)
 
     async def _on_typing(self, event: TypingEvent) -> None:
         if not event.is_typing:
@@ -171,16 +171,16 @@ class TelegramChannel(ChannelAdapter):
             return
         user_id = str(update.effective_user.id)
         chat_id = str(update.effective_chat.id)
-        logger.info(f"Telegram /start received from user {user_id} in chat {chat_id}")
+        logger.info("Telegram /start received from user %s in chat %s", user_id, chat_id)
         
         # Check authorization first
         if not self._is_sender_authorized(user_id):
-            logger.info(f"User {user_id} is not authorized, issuing pairing challenge")
+            logger.info("User %s is not authorized, issuing pairing challenge", user_id)
             await self._on_pairing_challenge(chat_id, user_id)
             return
         
         # Send greeting through AgentLoop for SOUL/memory-powered response
-        logger.info(f"User {user_id} authorized, routing /start to AgentLoop")
+        logger.info("User %s authorized, routing /start to AgentLoop", user_id)
         await self.publish(
             content="Hello",  # Natural greeting for the agent to respond to
             chat_id=chat_id,
@@ -193,7 +193,7 @@ class TelegramChannel(ChannelAdapter):
         user_id = str(update.effective_user.id)
 
         text = update.message.text
-        logger.info(f"Telegram received from {user_id}: {text}")
+        logger.info("Telegram received from %s: %s", user_id, text)
 
         # publish() enforces DM policy internally (pairing / allowlist / open)
         await self.publish(
@@ -243,7 +243,7 @@ class TelegramChannel(ChannelAdapter):
             tg_file = await photo.get_file()
             data = await tg_file.download_as_bytearray()
             path = save_media(bytes(data), ext=".jpg", prefix="tg")
-            logger.info(f"Telegram photo from {user_id}: {path} ({len(data)} bytes)")
+            logger.info("Telegram photo from %s: %s (%s bytes)", user_id, path, len(data))
             await self.publish(
                 content=caption,
                 chat_id=chat_id,
@@ -251,7 +251,7 @@ class TelegramChannel(ChannelAdapter):
                 media=[str(path)],
             )
         except Exception as exc:
-            logger.error(f"Failed to download Telegram photo: {exc}", exc_info=True)
+            logger.error("Failed to download Telegram photo: %s", exc, exc_info=True)
             await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
 
     async def _on_document_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -273,7 +273,7 @@ class TelegramChannel(ChannelAdapter):
             tg_file = await doc.get_file()
             data = await tg_file.download_as_bytearray()
             path = save_media(bytes(data), ext=ext, prefix="tg")
-            logger.info(f"Telegram document image from {user_id}: {path} ({len(data)} bytes)")
+            logger.info("Telegram document image from %s: %s (%s bytes)", user_id, path, len(data))
             await self.publish(
                 content=caption,
                 chat_id=chat_id,
@@ -281,7 +281,7 @@ class TelegramChannel(ChannelAdapter):
                 media=[str(path)],
             )
         except Exception as exc:
-            logger.error(f"Failed to download Telegram document image: {exc}", exc_info=True)
+            logger.error("Failed to download Telegram document image: %s", exc, exc_info=True)
             await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
 
     async def _on_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -303,7 +303,7 @@ class TelegramChannel(ChannelAdapter):
             tg_file = await voice.get_file()
             data = await tg_file.download_as_bytearray()
             path = save_media(bytes(data), ext=ext, prefix="tg_voice")
-            logger.info(f"Telegram voice from {user_id}: {path} ({len(data)} bytes)")
+            logger.info("Telegram voice from %s: %s (%s bytes)", user_id, path, len(data))
             await self.publish(
                 content=caption,
                 chat_id=chat_id,
@@ -316,7 +316,7 @@ class TelegramChannel(ChannelAdapter):
                 },
             )
         except Exception as exc:
-            logger.error(f"Failed to download Telegram voice: {exc}", exc_info=True)
+            logger.error("Failed to download Telegram voice: %s", exc, exc_info=True)
             await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
 
     async def _on_video(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -339,7 +339,7 @@ class TelegramChannel(ChannelAdapter):
             tg_file = await video.get_file()
             data = await tg_file.download_as_bytearray()
             path = save_media(bytes(data), ext=ext, prefix="tg_video")
-            logger.info(f"Telegram video from {user_id}: {path} ({len(data)} bytes)")
+            logger.info("Telegram video from %s: %s (%s bytes)", user_id, path, len(data))
             await self.publish(
                 content=caption,
                 chat_id=chat_id,
@@ -352,7 +352,7 @@ class TelegramChannel(ChannelAdapter):
                 },
             )
         except Exception as exc:
-            logger.error(f"Failed to download Telegram video: {exc}", exc_info=True)
+            logger.error("Failed to download Telegram video: %s", exc, exc_info=True)
             await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
 
     async def _on_document_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -381,7 +381,7 @@ class TelegramChannel(ChannelAdapter):
             tg_file = await doc.get_file()
             data = await tg_file.download_as_bytearray()
             path = save_media(bytes(data), ext=ext, prefix="tg_file")
-            logger.info(f"Telegram file from {user_id}: {path} ({len(data)} bytes)")
+            logger.info("Telegram file from %s: %s (%s bytes)", user_id, path, len(data))
             await self.publish(
                 content=caption,
                 chat_id=chat_id,
@@ -394,7 +394,7 @@ class TelegramChannel(ChannelAdapter):
                 },
             )
         except Exception as exc:
-            logger.error(f"Failed to download Telegram file: {exc}", exc_info=True)
+            logger.error("Failed to download Telegram file: %s", exc, exc_info=True)
             await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
 
     async def _on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -404,7 +404,7 @@ class TelegramChannel(ChannelAdapter):
         await query.answer()
 
         label = "positive" if "positive" in query.data else "negative"
-        evolution.collect_feedback(label, "telegram_reply", feedback_text=f"User clicked {label}")
+        get_evolution().collect_feedback(label, "telegram_reply", feedback_text=f"User clicked {label}")
 
         await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text(
@@ -417,5 +417,5 @@ class TelegramChannel(ChannelAdapter):
             return
 
         feedback_text = " ".join(context.args)
-        evolution.collect_feedback("correction", "telegram_command", feedback_text=feedback_text)
+        get_evolution().collect_feedback("correction", "telegram_command", feedback_text=feedback_text)
         await update.message.reply_text("Feedback received! Gazer will evolve based on your suggestions.")

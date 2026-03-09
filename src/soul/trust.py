@@ -73,9 +73,9 @@ class TrustSystem:
                 data = json.load(f)
             for name, vals in data.items():
                 self.identities[name] = Identity(**vals)
-            logger.info(f"Loaded {len(self.identities)} identities from {self.persist_path}")
+            logger.info("Loaded %s identities from %s", len(self.identities), self.persist_path)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Failed to load trust data: {e}")
+            logger.warning("Failed to load trust data: %s", e)
 
     def _save(self):
         """Persist trust data to JSON file."""
@@ -87,4 +87,4 @@ class TrustSystem:
                     f, ensure_ascii=False, indent=2
                 )
         except OSError as e:
-            logger.error(f"Failed to save trust data: {e}")
+            logger.error("Failed to save trust data: %s", e)

@@ -124,7 +124,7 @@ class MemoryManager:
                     from_reindex=False,
                 )
             except Exception as e:
-                logger.error(f"Failed to process memory entry: {e}")
+                logger.error("Failed to process memory entry: %s", e)
 
     # ------------------------------------------------------------------
     # Context for LLM

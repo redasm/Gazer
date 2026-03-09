@@ -40,7 +40,7 @@ class ConnectionManager:
             try:
                 await connection.send_json(message)
             except Exception as exc:
-                logger.warning(f"WS broadcast failed: {exc}")
+                logger.warning("WS broadcast failed: %s", exc)
                 disconnected.append(connection)
         for conn in disconnected:
             self.disconnect(conn)
@@ -71,7 +71,7 @@ class ChatConnectionManager:
             try:
                 await connection.send_json(message)
             except Exception as exc:
-                logger.warning(f"Chat WS broadcast failed [chat_id={chat_id}]: {exc}")
+                logger.warning("Chat WS broadcast failed [chat_id=%s]: %s", chat_id, exc)
                 disconnected.append(connection)
         for conn in disconnected:
             self.disconnect(conn, chat_id)
@@ -165,13 +165,13 @@ async def websocket_endpoint(websocket: WebSocket):
 async def canvas_endpoint(websocket: WebSocket):
     """Canvas WebSocket -- syncs A2UI canvas state with the web UI."""
     try:
-        logger.info(f"Canvas WebSocket connection attempt from {websocket.client.host if websocket.client else 'unknown'} (Origin: {websocket.headers.get('origin', 'none')})")
+        logger.info("Canvas WebSocket connection attempt from %s (Origin: %s)", websocket.client.host if websocket.client else 'unknown', websocket.headers.get('origin', 'none'))
         if not await _verify_ws_auth(websocket):
             logger.warning("Canvas WebSocket auth rejected")
             return
         logger.info("Canvas WebSocket auth passed")
     except Exception as e:
-        logger.error(f"Canvas WebSocket auth exception: {e}")
+        logger.error("Canvas WebSocket auth exception: %s", e)
         return
 
     # Lazy import to avoid circular dependencies
@@ -210,11 +210,11 @@ async def canvas_endpoint(websocket: WebSocket):
                 raise
             except Exception as e:
                 # Log but do not crash the websocket connection on malformed payloads
-                logger.error(f"Error handling canvas websocket message: {e}")
+                logger.error("Error handling canvas websocket message: %s", e)
     except WebSocketDisconnect:
         logger.info("Canvas WebSocket client disconnected cleanly.")
     except Exception as e:
-        logger.error(f"Canvas WebSocket FATAL error: {e}", exc_info=True)
+        logger.error("Canvas WebSocket FATAL error: %s", e, exc_info=True)
     finally:
         canvas_ws_manager.disconnect(websocket)
 

@@ -67,7 +67,7 @@ class SessionStore:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
         except OSError as exc:
-            logger.error(f"Failed to append session {session_key}: {exc}")
+            logger.error("Failed to append session %s: %s", session_key, exc)
 
         # Update cache
         if session_key not in self._cache:
@@ -142,7 +142,7 @@ class SessionStore:
 
         # Refresh cache
         self._cache.pop(session_key, None)
-        logger.info(f"Pruned {removed} messages from session {session_key}")
+        logger.info("Pruned %s messages from session %s", removed, session_key)
         return removed
 
     def delete_session(self, session_key: str) -> bool:

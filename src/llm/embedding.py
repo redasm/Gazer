@@ -67,7 +67,7 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
             vec = getattr(item, "embedding", None) or item["embedding"]
             return np.array(vec, dtype=np.float32)
         except Exception as e:
-            logger.error(f"Embedding failed: {e}")
+            logger.error("Embedding failed: %s", e)
             return None
 
 
@@ -99,5 +99,5 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             resp = await self._client.embeddings.create(input=[text], model=self.model)
             return np.array(resp.data[0].embedding, dtype=np.float32)
         except Exception as e:
-            logger.error(f"OpenAI embedding failed: {e}")
+            logger.error("OpenAI embedding failed: %s", e)
             return None

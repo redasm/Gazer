@@ -310,7 +310,7 @@ async def talk_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as exc:
-        logger.error(f"Talk WebSocket error: {exc}", exc_info=True)
+        logger.error("Talk WebSocket error: %s", exc, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +361,7 @@ async def gateway_endpoint(websocket: WebSocket) -> None:
                 try:
                     await handler(client, payload)
                 except Exception as exc:
-                    logger.error(f"Gateway handler error [{msg_type}]: {exc}", exc_info=True)
+                    logger.error("Gateway handler error [%s]: %s", msg_type, exc, exc_info=True)
                     await websocket.send_json(
                         {"type": "error", "message": f"Handler error: {exc}"}
                     )
@@ -373,6 +373,6 @@ async def gateway_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as exc:
-        logger.error(f"Gateway WebSocket error: {exc}", exc_info=True)
+        logger.error("Gateway WebSocket error: %s", exc, exc_info=True)
     finally:
         gateway_manager.disconnect(client)

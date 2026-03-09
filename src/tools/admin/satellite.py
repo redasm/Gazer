@@ -48,7 +48,7 @@ async def upload_satellite_snapshot(file: UploadFile = File(...)):
 
         return {"status": "received", "size": len(content)}
     except Exception as e:
-        logger.error(f"Failed to process satellite snapshot: {e}")
+        logger.error("Failed to process satellite snapshot: %s", e)
         return {"status": "error", "message": str(e)}
 
 @app.websocket("/ws/satellite")
@@ -68,7 +68,7 @@ async def satellite_ws(websocket: WebSocket):
         config.get("satellite.max_frame_bytes_per_window", 4 * _MAX_WS_MESSAGE_BYTES)
         or (4 * _MAX_WS_MESSAGE_BYTES)
     )
-    logger.info(f"Satellite WS connected: source_id={source_id} ip={client_ip}")
+    logger.info("Satellite WS connected: source_id=%s ip=%s", source_id, client_ip)
     try:
         while True:
             await SATELLITE_SESSION_MANAGER.prune_stale_sessions()
@@ -198,9 +198,9 @@ async def satellite_ws(websocket: WebSocket):
                 source.push_frame(image, metadata={"transport": "websocket_binary", "node_id": authed_node_id})
                 continue
     except WebSocketDisconnect:
-        logger.info(f"Satellite WS disconnected: source_id={source_id} node_id={authed_node_id or 'unknown'}")
+        logger.info("Satellite WS disconnected: source_id=%s node_id=%s", source_id, authed_node_id or 'unknown')
     except Exception as exc:
-        logger.error(f"Satellite WS error ({source_id}): {exc}")
+        logger.error("Satellite WS error (%s): %s", source_id, exc)
     finally:
         if authed_node_id:
             await SATELLITE_SESSION_MANAGER.unregister(authed_node_id)

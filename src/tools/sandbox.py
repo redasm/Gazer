@@ -90,7 +90,7 @@ class DockerShellOperations(ShellOperations):
             stdout, stderr = await proc.communicate()
             if proc.returncode != 0:
                 raise RuntimeError(f"Failed to start sandbox container: {stderr.decode()}")
-            logger.info(f"Sandbox container started: {self._container}")
+            logger.info("Sandbox container started: %s", self._container)
         else:
             # Make sure it's running
             proc = await asyncio.create_subprocess_exec(
@@ -137,9 +137,9 @@ class DockerShellOperations(ShellOperations):
             )
             await proc.wait()
             self._started = False
-            logger.info(f"Sandbox container removed: {self._container}")
+            logger.info("Sandbox container removed: %s", self._container)
         except Exception as exc:
-            logger.warning(f"Failed to remove sandbox container: {exc}")
+            logger.warning("Failed to remove sandbox container: %s", exc)
 
 
 class DockerFileOperations(FileOperations):

@@ -67,7 +67,7 @@ class FailoverProvider(LLMProvider):
 
         for idx, (provider, default_model) in enumerate(self._providers):
             if self._is_cooled(idx):
-                logger.debug(f"Skipping cooled-down provider #{idx}")
+                logger.debug("Skipping cooled-down provider #%s", idx)
                 continue
 
             use_model = model or default_model
@@ -80,13 +80,13 @@ class FailoverProvider(LLMProvider):
                     temperature=temperature,
                 )
                 if response.error:
-                    logger.warning(f"Provider #{idx} returned error: {response.content}")
+                    logger.warning("Provider #%s returned error: %s", idx, response.content)
                     self._cool_down(idx)
                     last_error = response
                     continue
                 return response
             except Exception as exc:
-                logger.warning(f"Provider #{idx} raised exception: {exc}")
+                logger.warning("Provider #%s raised exception: %s", idx, exc)
                 self._cool_down(idx)
                 last_error = LLMResponse(
                     content=f"Error: {exc}",
@@ -130,7 +130,7 @@ class FailoverProvider(LLMProvider):
                 if had_content:
                     return
             except Exception as exc:
-                logger.warning(f"Stream from provider #{idx} failed: {exc}")
+                logger.warning("Stream from provider #%s failed: %s", idx, exc)
                 self._cool_down(idx)
 
         yield "\n[All LLM providers are unavailable]"

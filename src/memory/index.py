@@ -83,10 +83,10 @@ class SQLiteIndex:
                 self.id_map = cursor.fetchall()
                 self._next_id = len(self.id_map)
                 conn.close()
-                logger.info(f"Loaded Faiss index ({len(self.id_map)} vectors, dim={self.dim}).")
+                logger.info("Loaded Faiss index (%s vectors, dim=%s).", len(self.id_map), self.dim)
                 return
             except Exception as e:
-                logger.error(f"Failed to load Faiss index: {e}, rebuilding...")
+                logger.error("Failed to load Faiss index: %s, rebuilding...", e)
         self._rebuild_sync()
 
     def _rebuild_sync(self) -> None:
@@ -120,14 +120,14 @@ class SQLiteIndex:
             # Auto-detect dimension from stored vectors (may differ from provider default)
             actual_dim = all_vecs[0].shape[0]
             if actual_dim != self.dim:
-                logger.warning(f"Vector dimension mismatch: index={self.dim}, stored={actual_dim}. Adapting.")
+                logger.warning("Vector dimension mismatch: index=%s, stored=%s. Adapting.", self.dim, actual_dim)
                 self.dim = actual_dim
             self.faiss_index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dim))
             vecs_array = np.array(all_vecs, dtype=np.float32)
             ids_array = np.array(all_ids, dtype=np.int64)
             self.faiss_index.add_with_ids(vecs_array, ids_array)
             faiss.write_index(self.faiss_index, self.index_path)
-            logger.info(f"Rebuilt Faiss index with {len(all_vecs)} vectors (dim={self.dim}).")
+            logger.info("Rebuilt Faiss index with %s vectors (dim=%s).", len(all_vecs), self.dim)
 
     async def get_embedding(self, text: str) -> Optional[np.ndarray]:
         if not self.embedding_provider:
@@ -220,7 +220,7 @@ class SQLiteIndex:
                 results.append((content, sender, ts, score))
             return results
         except Exception as e:
-            logger.error(f"FTS search failed: {e}")
+            logger.error("FTS search failed: %s", e)
             return []
         finally:
             conn.close()
@@ -302,7 +302,7 @@ class SQLiteIndex:
             )
             conn.commit()
         except Exception as e:
-            logger.error(f"Failed to delete memories for {date_str}: {e}")
+            logger.error("Failed to delete memories for %s: %s", date_str, e)
         finally:
             conn.close()
         self._rebuild_sync()

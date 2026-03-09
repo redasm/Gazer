@@ -415,12 +415,12 @@ class ToolRegistry:
     def set_allowlist(self, names: List[str]) -> None:
         """When set, *only* these tool names are available."""
         self._allowlist = set(names)
-        logger.info(f"Tool allowlist set: {self._allowlist}")
+        logger.info("Tool allowlist set: %s", self._allowlist)
 
     def set_denylist(self, names: List[str]) -> None:
         """These tool names are always hidden even if registered."""
         self._denylist = set(names)
-        logger.info(f"Tool denylist set: {self._denylist}")
+        logger.info("Tool denylist set: %s", self._denylist)
 
     # ------------------------------------------------------------------
     # Tier-aware queries
@@ -898,7 +898,7 @@ class ToolRegistry:
             model_provider=model_provider,
             model_name=model_name,
         ):
-            logger.warning(f"Tool '{name}' blocked by safety policy (owner_only={tool.owner_only})")
+            logger.warning("Tool '%s' blocked by safety policy (owner_only=%s)", name, tool.owner_only)
             access = self.evaluate_tool_access(
                 name,
                 policy=policy,

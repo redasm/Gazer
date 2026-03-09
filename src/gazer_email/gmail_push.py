@@ -138,7 +138,7 @@ class GmailPushManager:
                 await loop.run_in_executor(None, creds.refresh, GRequest())
             else:
                 if not os.path.exists(self.credentials_file):
-                    logger.error(f"Gmail credentials file not found: {self.credentials_file}")
+                    logger.error("Gmail credentials file not found: %s", self.credentials_file)
                     return False
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_file, SCOPES,
@@ -184,9 +184,9 @@ class GmailPushManager:
             if not self._history_id:
                 self._history_id = new_hid
                 self._save_history_id()
-            logger.info(f"Gmail watch registered. historyId={new_hid}, expiration={result.get('expiration')}")
+            logger.info("Gmail watch registered. historyId=%s, expiration=%s", new_hid, result.get('expiration'))
         except Exception as exc:
-            logger.error(f"Failed to register Gmail watch: {exc}")
+            logger.error("Failed to register Gmail watch: %s", exc)
 
     async def _renew_loop(self) -> None:
         """Renew watch every 6 days."""
@@ -196,7 +196,7 @@ class GmailPushManager:
                 await self._register_watch()
                 logger.info("Gmail watch renewed.")
             except Exception as exc:
-                logger.error(f"Gmail watch renewal failed: {exc}")
+                logger.error("Gmail watch renewal failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Notification handling
@@ -226,7 +226,7 @@ class GmailPushManager:
         if not new_history_id:
             return "no historyId in notification"
 
-        logger.info(f"Gmail push: email={email_address}, historyId={new_history_id}")
+        logger.info("Gmail push: email=%s, historyId=%s", email_address, new_history_id)
 
         # Fetch new messages since our last known history ID
         message_ids = await self._fetch_history(new_history_id)
@@ -262,7 +262,7 @@ class GmailPushManager:
                 ).execute(),
             )
         except Exception as exc:
-            logger.error(f"Gmail history.list failed: {exc}")
+            logger.error("Gmail history.list failed: %s", exc)
             return []
 
         message_ids = []
@@ -351,7 +351,7 @@ class GmailPushManager:
             with open(self.history_store, "w") as f:
                 json.dump({"history_id": self._history_id}, f)
         except Exception as exc:
-            logger.warning(f"Failed to save Gmail history ID: {exc}")
+            logger.warning("Failed to save Gmail history ID: %s", exc)
 
     # ------------------------------------------------------------------
     # Lifecycle

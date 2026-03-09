@@ -21,7 +21,7 @@ class LLMCognitiveStep(CognitiveStep):
             base_url=base_url,
             default_headers=default_headers,
         )
-        logger.info(f"LLM Client initialized. Model: {model}, Base: {base_url or 'Default'}")
+        logger.info("LLM Client initialized. Model: %s, Base: %s", model, base_url or 'Default')
 
     async def run(self, memory: WorkingMemory, system_prompt: str, tools: list = None, **kwargs) -> MemoryEntry:
         """Run the cognitive step and generate a response."""
@@ -72,7 +72,7 @@ class LLMCognitiveStep(CognitiveStep):
                     try:
                         args = json.loads(tc.function.arguments)
                     except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"Failed to parse tool call args for {tc.function.name}: {e}")
+                        logger.warning("Failed to parse tool call args for %s: %s", tc.function.name, e)
                         args = {}
                     tool_calls.append({"name": tc.function.name, "args": args})
                 return MemoryEntry(
@@ -83,7 +83,7 @@ class LLMCognitiveStep(CognitiveStep):
 
             return MemoryEntry(sender=memory.owner, content=msg.content)
         except Exception as e:
-            logger.error(f"OpenAI API call failed: {e}")
+            logger.error("OpenAI API call failed: %s", e)
             return MemoryEntry(sender=memory.owner, content="[System Error: Cognitive Failure]")
 
     async def process_with_image(self, prompt: str, image_base64: str, system_prompt: str = "You are a helpful assistant.") -> str:
@@ -121,5 +121,5 @@ class LLMCognitiveStep(CognitiveStep):
             )
             return response.choices[0].message.content
         except Exception as e:
-            logger.error(f"Vision API call failed: {e}")
+            logger.error("Vision API call failed: %s", e)
             return f"[Error: Vision Analysis Failed - {str(e)}]"

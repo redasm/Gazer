@@ -225,9 +225,9 @@ class ConfigManager:
                 self._restore_sensitive_from_defaults(self.data, DEFAULT_CONFIG)
                 # Keep persona prompt single-sourced from assets/SOUL.md.
                 self._sync_persona_system_prompt(loaded_prompt=loaded_prompt)
-                logger.info(f"Configuration loaded from {self.config_path}")
+                logger.info("Configuration loaded from %s", self.config_path)
             except Exception as e:
-                logger.error(f"Failed to load config: {e}.")
+                logger.error("Failed to load config: %s.", e)
                 raise RuntimeError(f"Failed to load config '{self.config_path}': {e}") from e
         else:
             self.data = copy.deepcopy(DEFAULT_CONFIG)
@@ -294,7 +294,7 @@ class ConfigManager:
                 file_value = target.get(key, "")
                 if (not file_value or file_value == "***") and default_value:
                     target[key] = default_value
-                    logger.debug(f"Restored sensitive field '{current_path}' from environment.")
+                    logger.debug("Restored sensitive field '%s' from environment.", current_path)
 
     def get(self, key_path: str, default: Any = None) -> Any:
         """Get config value by dot-separated path, e.g. 'api.model'."""
@@ -377,10 +377,10 @@ class ConfigManager:
                 self._last_mtime = os.path.getmtime(self.config_path)
             logger.info("Configuration saved.")
         except FileLockError as e:
-            logger.error(f"Failed to save config (lock timeout): {e}")
+            logger.error("Failed to save config (lock timeout): %s", e)
             raise RuntimeError(f"Failed to save config (lock timeout): {e}") from e
         except Exception as e:
-            logger.error(f"Failed to save config: {e}")
+            logger.error("Failed to save config: %s", e)
             raise RuntimeError(f"Failed to save config: {e}") from e
 
     def _order_for_persist(self, value: Any, path: str = "") -> Any:

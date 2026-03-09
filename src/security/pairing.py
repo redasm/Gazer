@@ -95,7 +95,7 @@ class PairingManager:
         code = _generate_code()
         self._pending[code] = PairingRequest(channel=channel, sender_id=sender_id, code=code)
         self._save_pending()
-        logger.info(f"Pairing challenge issued: channel={channel} sender={sender_id}")
+        logger.info("Pairing challenge issued: channel=%s sender=%s", channel, sender_id)
         return code
 
     def approve(self, code: str) -> Optional[PairingRequest]:
@@ -108,7 +108,7 @@ class PairingManager:
         self._save_pending()
         self._approved.setdefault(req.channel, set()).add(req.sender_id)
         self._save()
-        logger.info(f"Pairing approved: channel={req.channel} sender={req.sender_id}")
+        logger.info("Pairing approved: channel=%s sender=%s", req.channel, req.sender_id)
         return req
 
     def reject(self, code: str) -> Optional[PairingRequest]:
@@ -118,7 +118,7 @@ class PairingManager:
         req = self._pending.pop(code, None)
         if req:
             self._save_pending()
-            logger.info(f"Pairing rejected: channel={req.channel} sender={req.sender_id}")
+            logger.info("Pairing rejected: channel=%s sender=%s", req.channel, req.sender_id)
         return req
 
     def revoke(self, channel: str, sender_id: str) -> bool:
@@ -127,7 +127,7 @@ class PairingManager:
         if sender_id in approved_set:
             approved_set.discard(sender_id)
             self._save()
-            logger.info(f"Pairing revoked: channel={channel} sender={sender_id}")
+            logger.info("Pairing revoked: channel=%s sender=%s", channel, sender_id)
             return True
         return False
 
@@ -198,11 +198,11 @@ class PairingManager:
                     loaded[ch] = {str(sender) for sender in senders if str(sender).strip()}
             self._approved = loaded
             self._last_mtime = current_mtime
-            logger.info(f"Loaded pairing data: {sum(len(s) for s in self._approved.values())} approved senders")
+            logger.info("Loaded pairing data: %s approved senders", sum(len(s) for s in self._approved.values()))
         except FileLockError:
             logger.warning("Failed to acquire lock for loading pairing data")
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Failed to load pairing data: {e}")
+            logger.warning("Failed to load pairing data: %s", e)
 
     def _save(self) -> None:
         """Save approved senders with file locking for cross-process safety."""
@@ -215,7 +215,7 @@ class PairingManager:
         except FileLockError:
             logger.error("Failed to acquire lock for saving pairing data")
         except OSError as e:
-            logger.error(f"Failed to save pairing data: {e}")
+            logger.error("Failed to save pairing data: %s", e)
 
     def _load_pending(self) -> None:
         """Load pending requests with file locking (shared across Brain and Admin API processes)."""
@@ -236,7 +236,7 @@ class PairingManager:
         except FileLockError:
             logger.warning("Failed to acquire lock for loading pending pairing data")
         except (json.JSONDecodeError, OSError, KeyError) as e:
-            logger.warning(f"Failed to load pending pairing data: {e}")
+            logger.warning("Failed to load pending pairing data: %s", e)
 
     def _save_pending(self) -> None:
         """Persist pending requests with file locking for cross-process safety."""
@@ -254,7 +254,7 @@ class PairingManager:
         except FileLockError:
             logger.error("Failed to acquire lock for saving pending pairing data")
         except OSError as e:
-            logger.error(f"Failed to save pending pairing data: {e}")
+            logger.error("Failed to save pending pairing data: %s", e)
 
 
 # Lazy singleton
@@ -268,8 +268,3 @@ def get_pairing_manager() -> "PairingManager":
         _pairing_manager = PairingManager()
     return _pairing_manager
 
-
-def __getattr__(name: str):
-    if name == "pairing_manager":
-        return get_pairing_manager()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

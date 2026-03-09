@@ -12,7 +12,7 @@ from channels.discord import DiscordChannel
 from eval.persona_consistency import PersonaConsistencyManager
 from eval.trainer import TrainingJobManager
 from plugins.loader import PluginLoader
-from security.pairing import pairing_manager
+from security.pairing import get_pairing_manager
 from tools.admin import api_facade as admin_api
 
 
@@ -98,7 +98,7 @@ async def test_discord_channel_ingest_routes_to_message_bus():
     bus = MessageBus()
     channel = DiscordChannel(token="", allowed_guild_ids=["g1"])
     channel.bind(bus)
-    pairing_manager.add_approved("discord", "u1")
+    get_pairing_manager().add_approved("discord", "u1")
     await channel.ingest_message(content="hello", chat_id="c1", sender_id="u1", guild_id="g1")
     message = await asyncio.wait_for(bus.inbound.get(), timeout=1.0)
     assert message.channel == "discord"

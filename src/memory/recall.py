@@ -69,7 +69,7 @@ class MemoryRecaller:
                     data = json.load(f)
                     self.milestones = [Milestone(**m) for m in data]
             except Exception as e:
-                logger.error(f"Failed to load milestones: {e}")
+                logger.error("Failed to load milestones: %s", e)
     
     def _save_milestones(self):
         """Save milestones."""
@@ -84,7 +84,7 @@ class MemoryRecaller:
             # 同时生成 Markdown
             self._save_milestones_markdown()
         except Exception as e:
-            logger.error(f"Failed to save milestones: {e}")
+            logger.error("Failed to save milestones: %s", e)
     
     def _save_milestones_markdown(self):
         """Generate human-readable Markdown."""
@@ -191,7 +191,7 @@ class MemoryRecaller:
                     memories.append(f"[Previously discussed] {sender}: {content[:100]}")
             return memories
         except Exception as e:
-            logger.error(f"Hybrid recall failed: {e}")
+            logger.error("Hybrid recall failed: %s", e)
             return []
     
     def _check_time_triggers(self) -> List[str]:

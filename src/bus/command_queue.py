@@ -106,7 +106,7 @@ class CommandQueue:
             future.set_exception(ValueError(f"Unknown lane: {lane}"))
             return future
         await state.queue.put(entry)
-        logger.debug(f"Enqueued task {entry.id} in lane {lane.value}")
+        logger.debug("Enqueued task %s in lane %s", entry.id, lane.value)
         return future
 
     async def run(self) -> None:
@@ -179,7 +179,7 @@ class CommandQueue:
             if entry.future and not entry.future.done():
                 entry.future.set_result(result)
         except Exception as exc:
-            logger.error(f"Task {entry.id} in lane {state.name} failed: {exc}", exc_info=True)
+            logger.error("Task %s in lane %s failed: %s", entry.id, state.name, exc, exc_info=True)
             if entry.future and not entry.future.done():
                 entry.future.set_exception(exc)
         finally:

@@ -77,7 +77,7 @@ class FileLock:
                 
                 elapsed = time.monotonic() - start_time
                 if elapsed >= self.timeout:
-                    logger.warning(f"Failed to acquire lock {self.path}: timeout after {elapsed:.1f}s")
+                    logger.warning("Failed to acquire lock %s: timeout after %.1fs", self.path, elapsed)
                     return False
                 
                 time.sleep(self.retry_interval)

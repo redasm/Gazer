@@ -177,7 +177,7 @@ class MemoryCurator:
         from datetime import date, timedelta
         import os
 
-        logger.info(f"Curating memories from the past {days_to_check} days...")
+        logger.info("Curating memories from the past %s days...", days_to_check)
 
         stats = {"active": 0, "archived": 0, "forgotten": 0}
         now = datetime.now()
@@ -237,7 +237,7 @@ class MemoryCurator:
                         for block in archive_blocks:
                             f.write(block + "\n\n")
                 except OSError as e:
-                    logger.error(f"Failed to write archive for {date_str}: {e}")
+                    logger.error("Failed to write archive for %s: %s", date_str, e)
 
         logger.info(
             f"Memory curation completed: "

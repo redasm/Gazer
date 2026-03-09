@@ -99,10 +99,10 @@ class RelationshipGraph:
                             person_data["last_mentioned"] = datetime.fromisoformat(person_data["last_mentioned"])
                             self.people[name] = Person(**person_data)
                         except Exception as e:
-                            logger.warning(f"Skipping corrupt relationship entry '{name}': {e}")
-                logger.info(f"Loaded {len(self.people)} relationships from {json_path}")
+                            logger.warning("Skipping corrupt relationship entry '%s': %s", name, e)
+                logger.info("Loaded %s relationships from %s", len(self.people), json_path)
         except Exception as e:
-            logger.error(f"Failed to load relationships: {e}")
+            logger.error("Failed to load relationships: %s", e)
     
     def _save(self):
         """Save relationship graph to file."""
@@ -125,7 +125,7 @@ class RelationshipGraph:
             self._save_markdown()
             
         except Exception as e:
-            logger.error(f"Failed to save relationships: {e}")
+            logger.error("Failed to save relationships: %s", e)
     
     def _save_markdown(self):
         """Save human-readable Markdown format."""

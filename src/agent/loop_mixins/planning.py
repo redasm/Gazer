@@ -126,6 +126,6 @@ class PlanningMixin:
                 self.usage.add(response.usage, model=response.model or "")
             return response.content
         except Exception as e:
-            logger.warning(f"Plan generation failed: {e}")
+            logger.warning("Plan generation failed: %s", e)
             return None
 

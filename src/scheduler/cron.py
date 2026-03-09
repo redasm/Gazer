@@ -130,9 +130,9 @@ class CronScheduler:
             for raw in data:
                 job = CronJob(**{k: v for k, v in raw.items() if k in CronJob.__dataclass_fields__})
                 self._jobs[job.id] = job
-            logger.info(f"Loaded {len(self._jobs)} cron jobs from {self._store}")
+            logger.info("Loaded %s cron jobs from %s", len(self._jobs), self._store)
         except Exception as exc:
-            logger.error(f"Failed to load cron jobs: {exc}")
+            logger.error("Failed to load cron jobs: %s", exc)
 
     def save(self) -> None:
         """Persist jobs to disk."""
@@ -149,7 +149,7 @@ class CronScheduler:
     def add(self, job: CronJob) -> CronJob:
         self._jobs[job.id] = job
         self.save()
-        logger.info(f"Added cron job: {job.id} ({job.name})")
+        logger.info("Added cron job: %s (%s)", job.id, job.name)
         return job
 
     def remove(self, job_id: str) -> bool:
@@ -206,15 +206,15 @@ class CronScheduler:
 
             # Due!
             job.last_run = now_ts
-            logger.info(f"Running cron job: {job.id} ({job.name})")
+            logger.info("Running cron job: %s (%s)", job.id, job.name)
             try:
                 await self._run_callback(job)
             except Exception as exc:
-                logger.error(f"Cron job {job.id} failed: {exc}", exc_info=True)
+                logger.error("Cron job %s failed: %s", job.id, exc, exc_info=True)
 
             if job.one_shot:
                 self._jobs.pop(job.id, None)
-                logger.info(f"One-shot cron job {job.id} removed after execution")
+                logger.info("One-shot cron job %s removed after execution", job.id)
 
         self.save()
 

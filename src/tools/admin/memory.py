@@ -416,7 +416,7 @@ async def get_recent_memory(limit: int = 50):
             ]
         }
     except Exception as e:
-        logger.error(f"Failed to load memory: {e}")
+        logger.error("Failed to load memory: %s", e)
         return {"count": 0, "entries": [], "error": str(e)}
 
 @app.get("/memory/search", dependencies=[Depends(verify_admin_token)])
@@ -452,7 +452,7 @@ async def search_memory(q: str, limit: int = 10, mode: str = "quick"):
             "results": results
         }
     except Exception as e:
-        logger.error(f"Search failed: {e}")
+        logger.error("Search failed: %s", e)
         return {"query": q, "count": 0, "results": [], "error": str(e)}
 
 @app.get("/memory/quality-report", dependencies=[Depends(verify_admin_token)])

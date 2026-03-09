@@ -29,7 +29,7 @@ def _read_asset(name: str) -> str:
                     return f.read().strip()
             except Exception:
                 pass
-    logger.warning(f"Asset file not found: {name} (searched {paths})")
+    logger.warning("Asset file not found: %s (searched %s)", name, paths)
     return ""
 
 

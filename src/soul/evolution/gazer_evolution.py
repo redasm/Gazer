@@ -114,7 +114,7 @@ class GazerEvolution:
         feedbacks = self._load_feedback()
         feedbacks.append(entry)
         self._save_feedback(feedbacks)
-        logger.info(f"Feedback recorded: {label} from {context}")
+        logger.info("Feedback recorded: %s from %s", label, context)
 
     async def optimize_persona(self) -> bool:
         """Analyze accumulated feedback and refine the system prompt.
@@ -272,7 +272,7 @@ class GazerEvolution:
             return True
 
         except Exception as e:
-            logger.error(f"Prompt optimization failed: {e}")
+            logger.error("Prompt optimization failed: %s", e)
             self._record_history_event(
                 {
                     "event": "optimize_persona",
@@ -464,7 +464,7 @@ class GazerEvolution:
                 with open(self.feedback_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
-                logger.warning(f"Failed to load feedback file: {e}")
+                logger.warning("Failed to load feedback file: %s", e)
                 return []
 
     def _save_feedback(self, feedbacks: List[Dict]) -> None:
@@ -473,7 +473,7 @@ class GazerEvolution:
                 with open(self.feedback_path, "w", encoding="utf-8") as f:
                     json.dump(feedbacks, f, ensure_ascii=False, indent=2)
             except OSError as e:
-                logger.error(f"Failed to save feedback: {e}")
+                logger.error("Failed to save feedback: %s", e)
 
     def _archive_feedback(self, feedbacks: List[Dict]) -> None:
         """Move consumed feedback to a dated archive file and clear active."""
@@ -485,9 +485,9 @@ class GazerEvolution:
             with open(archive_path, "w", encoding="utf-8") as f:
                 json.dump(feedbacks, f, ensure_ascii=False, indent=2)
             self._save_feedback([])
-            logger.info(f"Feedback archived to {archive_path}")
+            logger.info("Feedback archived to %s", archive_path)
         except OSError as e:
-            logger.error(f"Failed to archive feedback: {e}")
+            logger.error("Failed to archive feedback: %s", e)
 
     def _get_auto_optimize_settings(self) -> Dict[str, Any]:
         raw = config.get("personality.evolution.auto_optimize", {}) or {}
@@ -809,9 +809,3 @@ def get_evolution() -> "GazerEvolution":
     if _evolution is None:
         _evolution = GazerEvolution()
     return _evolution
-
-
-def __getattr__(name: str):
-    if name == "evolution":
-        return get_evolution()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

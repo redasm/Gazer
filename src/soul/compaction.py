@@ -46,7 +46,7 @@ class ContextPruner:
         if current_tokens <= self.max_tokens:
             return None
 
-        logger.info(f"Context pruning triggered. Current est. tokens: {current_tokens}, Max: {self.max_tokens}")
+        logger.info("Context pruning triggered. Current est. tokens: %s, Max: %s", current_tokens, self.max_tokens)
 
         # 1. Soft-trim oversized tool outputs
         new_memories, _trimmed = self._soft_trim_tool_outputs(memory.memories)
@@ -83,7 +83,7 @@ class ContextPruner:
                     trimmed_content = f"{head}\n...\n{tail}{note}"
                     new_memories.append(entry.model_copy(update={"content": trimmed_content}))
                     changed = True
-                    logger.info(f"Trimmed large tool output from {original_len} to {len(trimmed_content)} chars.")
+                    logger.info("Trimmed large tool output from %s to %s chars.", original_len, len(trimmed_content))
                     continue
             new_memories.append(entry)
         return new_memories, changed
@@ -123,5 +123,5 @@ class ContextPruner:
         )
         new_memories.insert(insert_pos, summary_entry)
         
-        logger.info(f"Compacted history: Removed {len(indices_to_remove)} messages.")
+        logger.info("Compacted history: Removed %s messages.", len(indices_to_remove))
         return new_memories

@@ -239,13 +239,13 @@ class OwnerManager:
             self._data = self._storage.load()
             logger.info("Owner token loaded.")
         except (json.JSONDecodeError, OSError, ValueError) as e:
-            logger.warning(f"Failed to load owner data: {e}")
+            logger.warning("Failed to load owner data: %s", e)
 
     def _save(self) -> None:
         try:
             self._storage.save(self._data)
         except OSError as e:
-            logger.error(f"Failed to save owner data: {e}")
+            logger.error("Failed to save owner data: %s", e)
 
 
 # Lazy singleton
@@ -258,10 +258,3 @@ def get_owner_manager() -> "OwnerManager":
     if _owner_manager is None:
         _owner_manager = OwnerManager()
     return _owner_manager
-
-
-# Backwards-compatible module-level attribute (lazy via __getattr__)
-def __getattr__(name: str):
-    if name == "owner_manager":
-        return get_owner_manager()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

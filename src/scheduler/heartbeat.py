@@ -59,7 +59,7 @@ class HeartbeatRunner:
     async def start(self) -> None:
         """Start the heartbeat loop."""
         self._running = True
-        logger.info(f"HeartbeatRunner started (interval={self._interval}s)")
+        logger.info("HeartbeatRunner started (interval=%ss)", self._interval)
         while self._running:
             await asyncio.sleep(self._interval)
             await self._tick()
@@ -99,8 +99,8 @@ class HeartbeatRunner:
         try:
             result = await self._run_callback(prompt)
             if result and HEARTBEAT_OK not in result:
-                logger.info(f"Heartbeat produced actionable output ({len(result)} chars)")
+                logger.info("Heartbeat produced actionable output (%s chars)", len(result))
             else:
                 logger.debug("Heartbeat: all OK")
         except Exception as exc:
-            logger.error(f"Heartbeat check failed: {exc}", exc_info=True)
+            logger.error("Heartbeat check failed: %s", exc, exc_info=True)

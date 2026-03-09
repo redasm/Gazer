@@ -209,9 +209,9 @@ class NightlyConsolidator(MemoryConsolidator):
             identity_data = json.loads(content)
             self._append_to_identity(identity_data)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse identity extraction: {e}")
+            logger.warning("Failed to parse identity extraction: %s", e)
         except Exception as e:
-            logger.error(f"Failed to update identity: {e}")
+            logger.error("Failed to update identity: %s", e)
 
     def _append_to_identity(self, data: Dict):
         new_info = []
@@ -232,9 +232,9 @@ class NightlyConsolidator(MemoryConsolidator):
             with open(self.identity_path, "a", encoding="utf-8") as f:
                 f.write(f"\n## {date.today().isoformat()} Update\n")
                 f.write("\n".join(new_info) + "\n")
-            logger.info(f"Updated identity with {len(new_info)} new items.")
+            logger.info("Updated identity with %s new items.", len(new_info))
         except Exception as e:
-            logger.error(f"Failed to write identity file: {e}")
+            logger.error("Failed to write identity file: %s", e)
 
     def _consolidate_relationships(self):
         logger.info(
@@ -262,9 +262,9 @@ class NightlyConsolidator(MemoryConsolidator):
             for story in data.get("stories", []):
                 self._save_story(story)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse story extraction: {e}")
+            logger.warning("Failed to parse story extraction: %s", e)
         except Exception as e:
-            logger.error(f"Failed to extract stories: {e}")
+            logger.error("Failed to extract stories: %s", e)
 
     def _save_story(self, story: Dict):
         try:
@@ -284,9 +284,9 @@ class NightlyConsolidator(MemoryConsolidator):
                     f.write(
                         "## People Involved\n" + ", ".join(story["people_involved"]) + "\n"
                     )
-            logger.info(f"Saved story: {title}")
+            logger.info("Saved story: %s", title)
         except Exception as e:
-            logger.error(f"Failed to save story: {e}")
+            logger.error("Failed to save story: %s", e)
 
 
 # Default instance (requires dependencies, instantiated by Persona)

@@ -72,10 +72,10 @@ Conversation Log:
             
         daily_file = os.path.join(self.memory.daily_path, f"{date_str}.md")
         if not os.path.exists(daily_file):
-            logger.info(f"No log found for {date_str}, skipping archive.")
+            logger.info("No log found for %s, skipping archive.", date_str)
             return
 
-        logger.info(f"Archiving log for {date_str}...")
+        logger.info("Archiving log for %s...", date_str)
         
         # 1. Read Log
         with open(daily_file, "r", encoding="utf-8") as f:
@@ -103,7 +103,7 @@ Conversation Log:
                 logger.warning("No knowledge extracted or invalid format.")
                 
         except Exception as e:
-            logger.error(f"Archival failed: {e}")
+            logger.error("Archival failed: %s", e)
 
     def _save_knowledge(self, items: List[Dict]):
         """Save extracted items to respective markdown files"""
@@ -135,9 +135,9 @@ Conversation Log:
                     # Write Entry
                     f.write(f"- {content} *({item.get('source_date', 'Unknown')})*\n")
                 
-                logger.info(f"Archived fact to {subdir}/{subject}.md")
+                logger.info("Archived fact to %s/%s.md", subdir, subject)
             except Exception as e:
-                logger.error(f"Failed to write to {file_path}: {e}")
+                logger.error("Failed to write to %s: %s", file_path, e)
 
     def _parse_json(self, text: str) -> Optional[Dict]:
         """Robust JSON parser"""
@@ -149,5 +149,5 @@ Conversation Log:
                 text = text.split("```")[1].split("```")[0]
             return json.loads(text.strip())
         except Exception as e:
-            logger.debug(f"JSON parse failure: {e}, raw text: {text[:200]}")
+            logger.debug("JSON parse failure: %s, raw text: %s", e, text[:200])
             return None

@@ -805,7 +805,7 @@ class LiteLLMProvider(LLMProvider):
                 extra={"request_id": stream_request_id, "model": stream_model},
             )
         except Exception as e:
-            logger.error(f"Stream error: {e}")
+            logger.error("Stream error: %s", e)
             yield f"\n[Error streaming: {e}]"
 
     def get_default_model(self) -> str:

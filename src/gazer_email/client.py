@@ -167,7 +167,7 @@ class EmailClient:
         ctx = ssl.create_default_context()
         conn = imaplib.IMAP4_SSL(self.imap_host, self.imap_port, ssl_context=ctx)
         conn.login(self.username, self.password)
-        logger.info(f"IMAP connected to {self.imap_host} as {self.username}")
+        logger.info("IMAP connected to %s as %s", self.imap_host, self.username)
         return conn
 
     async def connect_imap(self) -> None:
@@ -419,10 +419,10 @@ class EmailClient:
                 server.ehlo()
                 server.login(self.username, self.password)
                 server.sendmail(self.username, recipients, msg.as_string())
-            logger.info(f"Email sent to {to}: {subject}")
+            logger.info("Email sent to %s: %s", to, subject)
             return f"Email sent successfully to {to}"
         except Exception as exc:
-            logger.error(f"Failed to send email: {exc}")
+            logger.error("Failed to send email: %s", exc)
             return f"Error sending email: {exc}"
 
     # ------------------------------------------------------------------

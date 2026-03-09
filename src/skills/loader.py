@@ -52,9 +52,9 @@ class SkillLoader:
                 meta = self._parse_frontmatter(skill_md, child)
                 if meta and meta.name not in self._skills:
                     self._skills[meta.name] = meta
-                    logger.info(f"Discovered skill: {meta.name} ({child})")
+                    logger.info("Discovered skill: %s (%s)", meta.name, child)
 
-        logger.info(f"Total skills discovered: {len(self._skills)}")
+        logger.info("Total skills discovered: %s", len(self._skills))
 
     def get_instructions(self, name: str) -> str:
         """Load the full SKILL.md body for a skill (activation)."""
@@ -113,29 +113,29 @@ class SkillLoader:
         try:
             content = skill_md.read_text(encoding="utf-8")
         except OSError as exc:
-            logger.warning(f"Cannot read {skill_md}: {exc}")
+            logger.warning("Cannot read %s: %s", skill_md, exc)
             return None
 
         if not content.startswith("---"):
-            logger.warning(f"No frontmatter in {skill_md}")
+            logger.warning("No frontmatter in %s", skill_md)
             return None
 
         end_idx = content.find("---", 3)
         if end_idx == -1:
-            logger.warning(f"Malformed frontmatter in {skill_md}")
+            logger.warning("Malformed frontmatter in %s", skill_md)
             return None
 
         yaml_str = content[3:end_idx]
         try:
             data = yaml.safe_load(yaml_str) or {}
         except yaml.YAMLError as exc:
-            logger.warning(f"YAML parse error in {skill_md}: {exc}")
+            logger.warning("YAML parse error in %s: %s", skill_md, exc)
             return None
 
         name = data.get("name")
         description = data.get("description", "")
         if not name:
-            logger.warning(f"Missing 'name' in {skill_md}")
+            logger.warning("Missing 'name' in %s", skill_md)
             return None
 
         return SkillMetadata(

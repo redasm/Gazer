@@ -68,7 +68,7 @@ class ExecTool(CodingToolBase):
     async def execute(self, command: str, workdir: str = ".", timeout: int = 30, **_: Any) -> str:
         warning = check_dangerous_command(command)
         if warning:
-            logger.warning(f"ExecTool blocked: {command!r}")
+            logger.warning("ExecTool blocked: %r", command)
             return warning
 
         cwd = (self._workspace / workdir).resolve()
@@ -76,7 +76,7 @@ class ExecTool(CodingToolBase):
             return self._error("CODING_WORKDIR_OUTSIDE_WORKSPACE", "workdir must be inside the workspace.")
 
         timeout = min(max(timeout, 1), self._timeout_limit)
-        logger.info(f"ExecTool: running {command!r} in {cwd} (timeout={timeout}s)")
+        logger.info("ExecTool: running %r in %s (timeout=%ss)", command, cwd, timeout)
 
         import time as _time
         exec_start = _time.time()
@@ -95,7 +95,7 @@ class ExecTool(CodingToolBase):
             from tools.media_marker import MEDIA_MARKER
             for mp in media_paths:
                 output += f"\n{MEDIA_MARKER}{mp}"
-            logger.info(f"ExecTool auto-detected image(s): {media_paths}")
+            logger.info("ExecTool auto-detected image(s): %s", media_paths)
 
         return output
 

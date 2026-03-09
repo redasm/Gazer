@@ -60,9 +60,9 @@ class SkillRegistryClient:
                 for s in data
                 if s.get("name")
             ]
-            logger.info(f"Fetched {len(self._cache)} skills from registry")
+            logger.info("Fetched %s skills from registry", len(self._cache))
         except Exception as exc:
-            logger.warning(f"Failed to fetch skill index: {exc}")
+            logger.warning("Failed to fetch skill index: %s", exc)
             self._cache = []
         return self._cache
 

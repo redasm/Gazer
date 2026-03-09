@@ -140,7 +140,7 @@ class CanvasState:
             )
         if len(content) > self.max_content_size:
             content = content[: self.max_content_size]
-            logger.warning(f"Panel {panel_id} content truncated to {self.max_content_size} bytes")
+            logger.warning("Panel %s content truncated to %s bytes", panel_id, self.max_content_size)
 
         now = time.time()
         if panel_id in self._panels:
@@ -157,7 +157,7 @@ class CanvasState:
                 # Evict oldest
                 oldest = self._order.pop(0)
                 del self._panels[oldest]
-                logger.info(f"Evicted oldest panel '{oldest}' (max={self.max_panels})")
+                logger.info("Evicted oldest panel '%s' (max=%s)", oldest, self.max_panels)
 
             panel = CanvasPanel(
                 id=panel_id,
@@ -292,7 +292,7 @@ class CanvasState:
             try:
                 await self.on_change(self, extra)
             except Exception as exc:
-                logger.debug(f"Canvas on_change callback error: {exc}")
+                logger.debug("Canvas on_change callback error: %s", exc)
 
     def _ensure_surface(self, surface_id: str) -> A2UISurface:
         existing = self._surfaces.get(surface_id)

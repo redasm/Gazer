@@ -323,7 +323,7 @@ class GazerPersonality:
         before returning.  Callers should NOT persist these entries
         again to avoid duplication.
         """
-        logger.info(f"Current State: {self.current_state.name}")
+        logger.info("Current State: %s", self.current_state.name)
 
         user_input = context.user_input
         if not user_input:
@@ -430,7 +430,7 @@ class GazerPersonality:
                     if not isinstance(tool_args, dict):
                         tool_args = {}
 
-                    logger.info(f"AI requested tool: {tool_name} with {tool_args}")
+                    logger.info("AI requested tool: %s with %s", tool_name, tool_args)
                     try:
                         result = await self.tool_registry.execute(
                             tool_name,

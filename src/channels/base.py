@@ -12,8 +12,8 @@ from typing import Any, Optional, Dict, Type, Callable
 from bus.events import InboundMessage, OutboundMessage, TypingEvent
 from bus.queue import MessageBus
 from runtime.config_manager import config
-from security.owner import owner_manager
-from security.pairing import pairing_manager
+from security.owner import get_owner_manager
+from security.pairing import get_pairing_manager
 
 # Session reset trigger words (inspired by OpenClaw /new /reset)
 _SESSION_RESET_TRIGGERS = {"/new", "/reset"}
@@ -53,7 +53,7 @@ class ChannelAdapter(ABC):
         self.bus = bus
         bus.subscribe_outbound(self.channel_name, self.send)
         bus.subscribe_typing(self.channel_name, self._on_typing)
-        logger.info(f"Channel '{self.channel_name}' bound to MessageBus.")
+        logger.info("Channel '%s' bound to MessageBus.", self.channel_name)
 
     @abstractmethod
     async def start(self) -> None:
@@ -98,7 +98,7 @@ class ChannelAdapter(ABC):
         The **Owner** always bypasses all DM policies.
         """
         # Owner always has access
-        if owner_manager.is_owner_sender(self.channel_name, sender_id):
+        if get_owner_manager().is_owner_sender(self.channel_name, sender_id):
             return True
 
         policy = self._get_dm_policy()
@@ -107,7 +107,7 @@ class ChannelAdapter(ABC):
             return True
 
         # Both "allowlist" and "pairing" require the sender to be approved
-        return pairing_manager.is_approved(self.channel_name, sender_id)
+        return get_pairing_manager().is_approved(self.channel_name, sender_id)
 
     async def _on_pairing_challenge(self, chat_id: str, sender_id: str) -> None:
         """Called when an unapproved sender needs a pairing code.
@@ -115,7 +115,7 @@ class ChannelAdapter(ABC):
         Default implementation generates a code and sends it as an outbound
         message.  Subclasses may override for channel-specific formatting.
         """
-        code = pairing_manager.challenge(self.channel_name, sender_id)
+        code = get_pairing_manager().challenge(self.channel_name, sender_id)
         try:
             await self.send(
                 OutboundMessage(
@@ -127,7 +127,7 @@ class ChannelAdapter(ABC):
                 )
             )
         except Exception as exc:
-            logger.warning(f"Failed to send pairing challenge: {exc}")
+            logger.warning("Failed to send pairing challenge: %s", exc)
 
     async def publish(
         self,
@@ -142,7 +142,7 @@ class ChannelAdapter(ABC):
         Enforces DM policy before forwarding to the bus.
         """
         if not self.bus:
-            logger.warning(f"Channel '{self.channel_name}' not bound to any bus.")
+            logger.warning("Channel '%s' not bound to any bus.", self.channel_name)
             return
 
         # --- DM policy enforcement ---
@@ -151,7 +151,7 @@ class ChannelAdapter(ABC):
             if policy == "pairing":
                 await self._on_pairing_challenge(chat_id, sender_id)
             else:
-                logger.info(f"Sender {sender_id} blocked by DM policy '{policy}' on {self.channel_name}")
+                logger.info("Sender %s blocked by DM policy '%s' on %s", sender_id, policy, self.channel_name)
             return
 
         # --- Session reset triggers ---

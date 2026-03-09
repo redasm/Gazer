@@ -41,7 +41,7 @@ def save_media(data: bytes, ext: str = ".png", prefix: str = "img") -> Path:
     filename = f"{prefix}_{uuid.uuid4().hex[:12]}{ext}"
     filepath = media_dir / filename
     filepath.write_bytes(data)
-    logger.debug(f"Saved media: {filepath} ({len(data)} bytes)")
+    logger.debug("Saved media: %s (%s bytes)", filepath, len(data))
     return filepath.resolve()
 
 
@@ -62,5 +62,5 @@ def cleanup_old_media(max_age: int = _MAX_AGE) -> int:
             except OSError:
                 pass
     if deleted:
-        logger.debug(f"Cleaned up {deleted} old media file(s)")
+        logger.debug("Cleaned up %s old media file(s)", deleted)
     return deleted

@@ -350,7 +350,7 @@ async def get_system_info():
             ]
         }
     except Exception as e:
-        logger.error(f"Failed to get system info: {e}")
+        logger.error("Failed to get system info: %s", e)
         return {"error": str(e)}
 
 @app.get("/debug/llm-history", dependencies=[Depends(verify_admin_token)])

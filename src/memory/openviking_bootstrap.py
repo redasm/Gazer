@@ -146,8 +146,8 @@ def ensure_openviking_ready(cfg: Any) -> OpenVikingBootstrapSettings:
                 if base_url:
                     os.environ["OPENVIKING_BASE_URL"] = base_url
                 os.environ["OPENVIKING_EMBEDDING_MODEL"] = model_name
-                logger.info(f"Injected OpenViking embedding overrides: provider={provider_name}, model={model_name}")
+                logger.info("Injected OpenViking embedding overrides: provider=%s, model=%s", provider_name, model_name)
         except Exception as e:
-            logger.warning(f"Failed to inject OpenViking embedding overrides: {e}")
+            logger.warning("Failed to inject OpenViking embedding overrides: %s", e)
 
     return settings

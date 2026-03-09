@@ -256,7 +256,7 @@ def _preload_history_buffers() -> None:
             _state._strategy_change_history.append(entry)
 
 
-def init_admin_api
+def init_admin_api(ctx: AppContext) -> None:
     """Initialise Admin API state for in-process operation.
 
     Called by brain.py before starting uvicorn as an asyncio task.

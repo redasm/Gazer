@@ -38,7 +38,7 @@ from bus.events import OutboundMessage, TypingEvent
 from channels.base import ChannelAdapter, ChannelRegistry
 from channels.media_utils import save_media
 from runtime.config_manager import config
-from security.pairing import pairing_manager
+from security.pairing import get_pairing_manager
 
 logger = logging.getLogger("FeishuChannel")
 
@@ -141,7 +141,7 @@ class FeishuChannel(ChannelAdapter):
         # Seed pairing manager with pre-configured allowed IDs
         for uid in self.allowed_ids:
             if uid:
-                pairing_manager.add_approved("feishu", uid)
+                get_pairing_manager().add_approved("feishu", uid)
 
     # ------------------------------------------------------------------
     # ChannelAdapter interface
@@ -246,7 +246,7 @@ class FeishuChannel(ChannelAdapter):
 
         # --- Send media files (images or documents) ---
         if msg.media:
-            logger.info(f"Feishu send: {len(msg.media)} media file(s) to send")
+            logger.info("Feishu send: %s media file(s) to send", len(msg.media))
         for media_path in (msg.media or []):
             self._send_media_file(chat_id, media_path)
 
@@ -393,25 +393,25 @@ class FeishuChannel(ChannelAdapter):
         
         p = Path(file_path)
         if not p.is_file():
-            logger.warning(f"Feishu: file not found: {file_path}")
+            logger.warning("Feishu: file not found: %s", file_path)
             return
 
         # Determine if this is an image or generic file
         ext = p.suffix.lower()
         is_image = ext in self._IMAGE_EXTENSIONS
         
-        logger.info(f"Feishu: sending {'image' if is_image else 'file'} to {chat_id}: {file_path}")
+        logger.info("Feishu: sending %s to %s: %s", 'image' if is_image else 'file', chat_id, file_path)
         
         try:
             file_data = p.read_bytes()
-            logger.info(f"Feishu: read {len(file_data)} bytes from {file_path}")
+            logger.info("Feishu: read %s bytes from %s", len(file_data), file_path)
             
             if is_image:
                 self._send_image(chat_id, file_data, file_path)
             else:
                 self._send_file(chat_id, file_data, p.name, file_path)
         except Exception as exc:
-            logger.error(f"Feishu send media exception: {exc}", exc_info=True)
+            logger.error("Feishu send media exception: %s", exc, exc_info=True)
 
     def _send_image(self, chat_id: str, image_data: bytes, file_path: str) -> None:
         """Upload and send an image."""
@@ -435,7 +435,7 @@ class FeishuChannel(ChannelAdapter):
             )
             return
         image_key = upload_resp.data.image_key
-        logger.info(f"Feishu: image uploaded, key={image_key}")
+        logger.info("Feishu: image uploaded, key=%s", image_key)
 
         # Step 2: Send image message
         content = json.dumps({"image_key": image_key})
@@ -457,7 +457,7 @@ class FeishuChannel(ChannelAdapter):
                 f"Feishu image send failed: code={send_resp.code}, msg={send_resp.msg}"
             )
         else:
-            logger.info(f"Feishu sent image: {file_path}")
+            logger.info("Feishu sent image: %s", file_path)
 
     def _send_file(self, chat_id: str, file_data: bytes, file_name: str, file_path: str) -> None:
         """Upload and send a generic file."""
@@ -482,7 +482,7 @@ class FeishuChannel(ChannelAdapter):
             )
             return
         file_key = upload_resp.data.file_key
-        logger.info(f"Feishu: file uploaded, key={file_key}")
+        logger.info("Feishu: file uploaded, key=%s", file_key)
 
         # Step 2: Send file message
         content = json.dumps({"file_key": file_key})
@@ -504,7 +504,7 @@ class FeishuChannel(ChannelAdapter):
                 f"Feishu file send failed: code={send_resp.code}, msg={send_resp.msg}"
             )
         else:
-            logger.info(f"Feishu sent file: {file_path}")
+            logger.info("Feishu sent file: %s", file_path)
 
     # ------------------------------------------------------------------
     # Inbound event handler (called from SDK WebSocket thread)
@@ -584,7 +584,7 @@ class FeishuChannel(ChannelAdapter):
             mentions = message.mentions or []
             # If no mentions at all, skip (group privacy)
             if not mentions:
-                logger.debug(f"Feishu: group message without mention, skipping")
+                logger.debug("Feishu: group message without mention, skipping")
                 return
             # Strip @bot mention text from the content
             for mention in mentions:
@@ -719,7 +719,7 @@ class FeishuChannel(ChannelAdapter):
         # Check if user needs pairing first (for /start command)
         if text.strip().lower() in ("/start", "start") and not media:
             if not self._is_sender_authorized(sender_id):
-                logger.info(f"Feishu: user {sender_id} not authorized, issuing pairing")
+                logger.info("Feishu: user %s not authorized, issuing pairing", sender_id)
                 await self._on_pairing_challenge(chat_id, sender_id)
                 return
             # If authorized, let the message flow through to AgentLoop
@@ -909,7 +909,7 @@ class FeishuChannel(ChannelAdapter):
     def _log_future_error(future: asyncio.Future) -> None:
         exc = future.exception()
         if exc:
-            logger.error(f"Feishu inbound handler error: {exc}", exc_info=exc)
+            logger.error("Feishu inbound handler error: %s", exc, exc_info=exc)
 
     def _remember_message_id(self, message_id: str) -> bool:
         """Record Feishu message_id and return False for duplicates."""

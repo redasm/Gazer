@@ -351,7 +351,7 @@ class LLMInteractionMixin:
         if len(content) > FAST_BRAIN_MAX_LENGTH:
             return None
 
-        logger.info(f"Fast brain handling: {content[:30]!r}")
+        logger.info("Fast brain handling: %r", content[:30])
         try:
             session_key = msg.session_key
             history = self._get_history(session_key)
@@ -382,7 +382,7 @@ class LLMInteractionMixin:
             if response.content and not response.has_tool_calls:
                 return response.content
         except Exception as e:
-            logger.warning(f"Fast brain failed, falling through: {e}")
+            logger.warning("Fast brain failed, falling through: %s", e)
 
         return None
 
@@ -451,6 +451,6 @@ class LLMInteractionMixin:
             "content": f"[Context compacted: {total_dropped} older messages removed to fit context window.]",
         }
         result = head + [summary] + compacted_middle + tail
-        logger.info(f"Context compacted: {len(messages)} -> {len(result)} messages ({total_dropped} dropped).")
+        logger.info("Context compacted: %s -> %s messages (%s dropped).", len(messages), len(result), total_dropped)
         return result
 

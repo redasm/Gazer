@@ -88,10 +88,10 @@ class EmotionAnalyzer:
             self._llm_client = AsyncOpenAI(api_key=api_key, base_url=base_url, default_headers=headers)
             self._llm_model = model_name or "gpt-3.5-turbo"
             self._llm_available = True
-            logger.info(f"EmotionAnalyzer: LLM mode enabled (model={self._llm_model})")
+            logger.info("EmotionAnalyzer: LLM mode enabled (model=%s)", self._llm_model)
             return True
         except Exception as e:
-            logger.warning(f"EmotionAnalyzer: LLM init failed, using keyword fallback: {e}")
+            logger.warning("EmotionAnalyzer: LLM init failed, using keyword fallback: %s", e)
             self._llm_available = False
             return False
 
@@ -124,7 +124,7 @@ class EmotionAnalyzer:
             topics = [str(t) for t in data.get("topics", []) if isinstance(t, str)][:5]
             return emotion, sentiment, topics
         except Exception as e:
-            logger.debug(f"LLM emotion analysis failed, falling back to keywords: {e}")
+            logger.debug("LLM emotion analysis failed, falling back to keywords: %s", e)
             return None
 
     def analyze(self, text: str) -> Tuple[str, float]:
@@ -208,7 +208,7 @@ class EmotionTracker:
                     data = json.load(f)
                     self._today_data = EmotionSnapshot(**data)
             except Exception as e:
-                logger.error(f"Failed to load today's emotion snapshot: {e}")
+                logger.error("Failed to load today's emotion snapshot: %s", e)
                 self._today_data = EmotionSnapshot(date=today)
         else:
             self._today_data = EmotionSnapshot(date=today)
@@ -223,7 +223,7 @@ class EmotionTracker:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self._today_data.model_dump(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"Failed to save emotion snapshot: {e}")
+            logger.error("Failed to save emotion snapshot: %s", e)
     
     def analyze_message(self, content: str, sender: str = "user") -> Tuple[str, float, List[str]]:
         """
@@ -411,6 +411,6 @@ class EmotionTracker:
                 # User is happy -> reinforce the good mood
                 return "You're in such a great mood today! Seeing you happy makes me happy too!"
         except Exception as e:
-            logger.debug(f"Emotion-based memory retrieval failed: {e}")
+            logger.debug("Emotion-based memory retrieval failed: %s", e)
 
         return None

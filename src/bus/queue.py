@@ -43,7 +43,7 @@ class MessageBus:
         timestamps = self._rate_log.get(session_key, [])
         timestamps = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW]
         if len(timestamps) >= _RATE_LIMIT_MAX:
-            logger.warning(f"Rate limit exceeded for session {session_key}")
+            logger.warning("Rate limit exceeded for session %s", session_key)
             raise ValueError(
                 f"Rate limit exceeded: max {_RATE_LIMIT_MAX} messages per {int(_RATE_LIMIT_WINDOW)}s"
             )
@@ -98,7 +98,7 @@ class MessageBus:
             try:
                 await cb(event)
             except Exception as e:
-                logger.debug(f"Typing indicator callback error: {e}")
+                logger.debug("Typing indicator callback error: %s", e)
     
     async def dispatch_outbound(self) -> None:  # noqa: C901
         """
@@ -127,7 +127,7 @@ class MessageBus:
                 for callback in subscribers:
                     await self._dispatch_with_retry(callback, msg)
             except Exception as e:
-                logger.error(f"MessageBus dispatch error: {e}")
+                logger.error("MessageBus dispatch error: %s", e)
                 await asyncio.sleep(1)
     
     async def _dispatch_with_retry(

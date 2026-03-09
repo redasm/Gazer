@@ -34,7 +34,7 @@ async def rebuild_index():
                         dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
                         await manager.index.add_memory(text.strip(), sender.strip(), dt)
                     except Exception as e:
-                        logger.warning(f"Failed to index block in {filename}: {e}")
+                        logger.warning("Failed to index block in %s: %s", filename, e)
     
     logger.info("Index rebuild complete.")
 
