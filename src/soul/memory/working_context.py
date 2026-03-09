@@ -78,16 +78,6 @@ class WorkingContext:
         current.update(kwargs)
         return WorkingContext(**current)
 
-    # ── Backward compatibility ─────────────────────────────────────────
-
-    def all_memories(self) -> tuple[str, ...]:
-        """Aggregate view of all three slots.
-
-        Provides backward compatibility for code that previously consumed
-        the flat ``WorkingMemory.memories`` field.
-        """
-        return self.user_context + self.agent_context + self.session_context
-
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def get_metadata(self, key: str, default: Any = None) -> Any:

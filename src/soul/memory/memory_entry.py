@@ -1,7 +1,7 @@
 """Canonical MemoryEntry model.
 
 This is the single source of truth for the ``MemoryEntry`` Pydantic model.
-``soul.core`` re-exports it for backward compatibility.
+``soul.core`` re-exports it as the canonical public import path.
 """
 
 from __future__ import annotations

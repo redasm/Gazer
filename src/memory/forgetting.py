@@ -240,9 +240,8 @@ class MemoryCurator:
                     logger.error("Failed to write archive for %s: %s", date_str, e)
 
         logger.info(
-            f"Memory curation completed: "
-            f"{stats['active']} active, {stats['archived']} archived, "
-            f"{stats['forgotten']} forgotten."
+            "Memory curation completed: %s active, %s archived, %s forgotten.",
+            stats["active"], stats["archived"], stats["forgotten"],
         )
         return stats
     

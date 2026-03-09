@@ -4,7 +4,6 @@ Verifies:
   - ``WorkingContext`` is frozen — field assignment raises FrozenInstanceError
   - ``with_update()`` returns a new snapshot, original unchanged (idempotency)
   - Three-slot isolation: user_context / agent_context / session_context
-  - ``all_memories()`` backward-compatible aggregation
 """
 
 import pytest
@@ -71,21 +70,6 @@ class TestThreeSlotIsolation:
         ctx = WorkingContext(user_context=("a", "b"))
         with pytest.raises(AttributeError):
             ctx.user_context.append("c")  # type: ignore[attr-defined]
-
-
-class TestAllMemories:
-    def test_aggregation(self) -> None:
-        ctx = WorkingContext(
-            user_context=("u1", "u2"),
-            agent_context=("a1",),
-            session_context=("s1", "s2", "s3"),
-        )
-        all_mem = ctx.all_memories()
-        assert all_mem == ("u1", "u2", "a1", "s1", "s2", "s3")
-
-    def test_empty(self) -> None:
-        ctx = WorkingContext()
-        assert ctx.all_memories() == ()
 
 
 class TestMetadata:
