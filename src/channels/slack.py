@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 import httpx
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler

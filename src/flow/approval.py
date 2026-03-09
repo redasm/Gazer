@@ -41,11 +41,6 @@ def _sig_v2(raw: bytes) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _sig_v1_legacy(raw: bytes) -> str:
-    """Legacy truncated signature kept for transition compatibility."""
-    return hmac.new(_SECRET, raw, hashlib.sha256).hexdigest()[:16]
-
-
 def create_resume_token(
     flow_name: str,
     step_id: str,
@@ -81,11 +76,8 @@ def verify_resume_token(token: str) -> Optional[Dict[str, Any]]:
         raw = base64.urlsafe_b64decode(b64_data)
         expected_v2 = _sig_v2(raw)
         if not hmac.compare_digest(sig, expected_v2):
-            # Backward compatibility for older in-flight tokens.
-            expected_v1 = _sig_v1_legacy(raw)
-            if not hmac.compare_digest(sig, expected_v1):
-                logger.warning("Resume token signature mismatch")
-                return None
+            logger.warning("Resume token signature mismatch")
+            return None
         payload = json.loads(raw)
         # Check expiry
         ts = payload.get("ts", 0)

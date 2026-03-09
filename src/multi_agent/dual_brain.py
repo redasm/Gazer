@@ -35,7 +35,6 @@ class DualBrain:
     Provides:
     - ``generate(hint=...)`` — hint-based routing via ``DualBrainRouter``
     - ``chat_with_tools(hint=...)`` — hint-based routing with tool support
-    - ``slow_generate()`` / ``fast_generate()`` — legacy explicit calls
     """
 
     def __init__(
@@ -91,40 +90,6 @@ class DualBrain:
             messages=messages,
             tools=tools,
             hint=hint,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-    # ------------------------------------------------------------------
-    # Legacy explicit fast/slow API (kept for backward compatibility)
-    # ------------------------------------------------------------------
-
-    async def slow_generate(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> str:
-        return await self.generate(
-            prompt=prompt,
-            system=system,
-            hint=HINT_DEEP,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-    async def fast_generate(
-        self,
-        prompt: str,
-        system: str = "",
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-    ) -> str:
-        return await self.generate(
-            prompt=prompt,
-            system=system,
-            hint=HINT_FAST,
             temperature=temperature,
             max_tokens=max_tokens,
         )

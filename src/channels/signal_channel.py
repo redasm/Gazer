@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from typing import Any, Optional
 
 from bus.events import OutboundMessage, TypingEvent
 from channels.base import ChannelAdapter, ChannelRegistry
