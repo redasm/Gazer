@@ -254,9 +254,8 @@ class GazerBrain:
 
         while self.is_running:
             try:
-                config.check_reload()
-                self.app_context.hook_bus = self.agent.bus
-                self.app_context.hook_token = config.get("hooks.token", "") or None
+                if config.check_reload():
+                    self.app_context.hook_token = config.get("hooks.token", "") or None
 
                 if self.spatial:
                     attention = self.spatial.get_attention_level()

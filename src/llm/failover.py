@@ -52,7 +52,7 @@ class FailoverProvider(LLMProvider):
         self._cooled[idx] = time.monotonic() + self._cooldown
         provider_name = type(self._providers[idx][0]).__name__
         logger.warning(
-            f"Provider #{idx} ({provider_name}) cooled down for {self._cooldown}s"
+            "Provider #%s (%s) cooled down for %ss", idx, provider_name, self._cooldown,
         )
 
     async def chat(

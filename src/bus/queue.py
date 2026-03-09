@@ -1,18 +1,12 @@
 """Async message queue for decoupled channel-agent communication."""
 
 import asyncio
-import time
 from typing import Callable, Awaitable, List, Dict
 import logging
 
 from bus.events import InboundMessage, OutboundMessage, TypingEvent
 
 logger = logging.getLogger("MessageBus")
-
-# Rate limiting constants
-_RATE_LIMIT_WINDOW = 60.0  # seconds
-_RATE_LIMIT_MAX = 30  # max messages per window per session
-
 
 class MessageBus:
     """
@@ -28,36 +22,9 @@ class MessageBus:
         self._outbound_subscribers: Dict[str, List[Callable[[OutboundMessage], Awaitable[None]]]] = {}
         self._typing_subscribers: Dict[str, List[Callable[[TypingEvent], Awaitable[None]]]] = {}
         self._running = False
-        # Rate limiting: session_key -> list of timestamps
-        self._rate_log: Dict[str, List[float]] = {}
     
     async def publish_inbound(self, msg: InboundMessage) -> None:
-        """Publish a message from a channel to the agent.
-        
-        Raises ValueError if the session exceeds the rate limit.
-        """
-        session_key = msg.session_key
-        now = time.monotonic()
-        
-        # Prune old timestamps and check rate limit
-        timestamps = self._rate_log.get(session_key, [])
-        timestamps = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW]
-        if len(timestamps) >= _RATE_LIMIT_MAX:
-            logger.warning("Rate limit exceeded for session %s", session_key)
-            raise ValueError(
-                f"Rate limit exceeded: max {_RATE_LIMIT_MAX} messages per {int(_RATE_LIMIT_WINDOW)}s"
-            )
-        timestamps.append(now)
-        self._rate_log[session_key] = timestamps
-
-        # Periodically prune stale sessions to prevent unbounded memory growth
-        if len(self._rate_log) > 200:
-            cutoff = now - _RATE_LIMIT_WINDOW
-            self._rate_log = {
-                k: v for k, v in self._rate_log.items()
-                if v and v[-1] > cutoff
-            }
-
+        """Publish a message from a channel to the agent."""
         await self.inbound.put(msg)
     
     async def consume_inbound(self) -> InboundMessage:
@@ -145,13 +112,14 @@ class MessageBus:
                 if attempt < max_retries - 1:
                     delay = 2 ** attempt  # 1s, 2s, 4s
                     logger.warning(
-                        f"Outbound dispatch to {msg.channel} failed (attempt {attempt + 1}), "
-                        f"retrying in {delay}s: {e}"
+                        "Outbound dispatch to %s failed (attempt %s), retrying in %ss: %s",
+                        msg.channel, attempt + 1, delay, e,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
-                        f"Outbound dispatch to {msg.channel} failed after {max_retries} attempts: {e}"
+                        "Outbound dispatch to %s failed after %s attempts: %s",
+                        msg.channel, max_retries, e,
                     )
 
     def stop(self) -> None:

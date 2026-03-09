@@ -260,12 +260,14 @@ class ConfigManager:
                 f"{joined}. Use agents.defaults.model.primary/fallbacks."
             )
 
-    def check_reload(self):
+    def check_reload(self) -> bool:
         """Check if the config file has been modified and reload if so."""
         if os.path.exists(self.config_path):
             mtime = os.path.getmtime(self.config_path)
             if mtime > self._last_mtime:
                 self._load()
+                return True
+        return False
 
     def _merge_defaults(self, target: dict, source: dict):
         """Recursively merge default values into target."""

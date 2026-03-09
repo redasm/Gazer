@@ -30,19 +30,6 @@ class TestMessageBus:
         assert got.content == "reply"
 
     @pytest.mark.asyncio
-    async def test_rate_limiting(self, bus):
-        """Exceed the rate limit and expect ValueError."""
-        from bus.queue import _RATE_LIMIT_MAX
-        for i in range(_RATE_LIMIT_MAX):
-            msg = InboundMessage(channel="web", sender_id="u", chat_id="c", content=str(i))
-            await bus.publish_inbound(msg)
-        # Next should be rejected
-        with pytest.raises(ValueError, match="Rate limit exceeded"):
-            await bus.publish_inbound(
-                InboundMessage(channel="web", sender_id="u", chat_id="c", content="overflow")
-            )
-
-    @pytest.mark.asyncio
     async def test_subscribe_outbound(self, bus):
         received = []
 
