@@ -28,16 +28,8 @@ from .config_routes import (
 
 router = APIRouter(tags=["policy"])
 
-try:
-    from tools.registry import ToolPolicy, normalize_tool_policy
-except ImportError:
-    ToolPolicy = None  # type: ignore
-    normalize_tool_policy = None  # type: ignore
-
-try:
-    from tools.agents_overlay import lint_agents_overlay
-except ImportError:
-    lint_agents_overlay = None  # type: ignore
+from tools.registry import ToolPolicy, normalize_tool_policy
+from agent.agents_md_lint import lint_agents_overlay
 
 
 # ---------------------------------------------------------------------------

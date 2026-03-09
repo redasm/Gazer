@@ -20,11 +20,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from flow.flowise_interop import flowise_migration_suggestion
 from runtime.config_manager import config
-try:
-    from plugins.loader import PluginLoader
-    from security.threat_scan import scan_directory as threat_scan_directory
-except ImportError:
-    pass
+from plugins.loader import PluginLoader
+from security.threat_scan import scan_directory as threat_scan_directory
 from tools.admin.state import (
     _PROJECT_ROOT,
     _WORKFLOW_GRAPH_DIR,

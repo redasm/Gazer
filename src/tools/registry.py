@@ -463,6 +463,7 @@ class ToolRegistry:
         explicit_owner_only = bool(getattr(tool, "owner_only", False))
         if explicit_owner_only:
             return True
+        return False
 
 
     @staticmethod
