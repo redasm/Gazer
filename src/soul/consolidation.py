@@ -189,18 +189,27 @@ class NightlyConsolidator(MemoryConsolidator):
     # from MemoryConsolidator — no need to duplicate.
 
     async def _update_identity(self, conversation: str):
-        if not self.llm:
-            return
         try:
             prompt = self.IDENTITY_EXTRACTION_PROMPT.format(
                 conversation=conversation[:3000]
             )
-            temp_memory = WorkingMemory(
-                memories=[MemoryEntry(sender="System", content=prompt)]
-            )
-            result = await self.llm.run(temp_memory, "Extract user identity information.")
 
-            content = result.content
+            if self._llm_provider is not None:
+                messages = [
+                    {"role": "system", "content": "Extract user identity information."},
+                    {"role": "user", "content": prompt},
+                ]
+                resp = await self._llm_provider.chat(messages, model=self._llm_model)
+                content = resp.content
+            elif self.llm:
+                temp_memory = WorkingMemory(
+                    memories=[MemoryEntry(sender="System", content=prompt)]
+                )
+                result = await self.llm.run(temp_memory, "Extract user identity information.")
+                content = result.content
+            else:
+                return
+
             # Extract JSON from potential markdown code fences
             match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
             if match:
@@ -238,22 +247,31 @@ class NightlyConsolidator(MemoryConsolidator):
 
     def _consolidate_relationships(self):
         logger.info(
-            f"Relationship graph has {len(self.relationships.people)} people."
+            "Relationship graph has %s people.", len(self.relationships.people)
         )
 
     async def _extract_stories(self, conversation: str):
-        if not self.llm:
-            return
         try:
             prompt = self.STORY_EXTRACTION_PROMPT.format(
                 conversation=conversation[:3000]
             )
-            temp_memory = WorkingMemory(
-                memories=[MemoryEntry(sender="System", content=prompt)]
-            )
-            result = await self.llm.run(temp_memory, "Extract meaningful stories.")
 
-            content = result.content
+            if self._llm_provider is not None:
+                messages = [
+                    {"role": "system", "content": "Extract meaningful stories."},
+                    {"role": "user", "content": prompt},
+                ]
+                resp = await self._llm_provider.chat(messages, model=self._llm_model)
+                content = resp.content
+            elif self.llm:
+                temp_memory = WorkingMemory(
+                    memories=[MemoryEntry(sender="System", content=prompt)]
+                )
+                result = await self.llm.run(temp_memory, "Extract meaningful stories.")
+                content = result.content
+            else:
+                return
+
             match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
             if match:
                 content = match.group(1).strip()

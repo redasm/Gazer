@@ -1,17 +1,15 @@
-"""Legacy soul core — kept for backward compatibility.
+"""Soul core data types.
 
-``MemoryEntry`` now lives in ``soul.memory.memory_entry`` and is
-re-exported here so existing imports continue to work.
+Defines the foundational types used across the soul subsystem:
+``MemoryEntry``, ``WorkingMemory``, ``CognitiveStep``, ``MentalState``.
 
-``MentalProcess``, ``PassthroughMentalProcess``, and
-``PassthroughCognitiveStep`` have been removed — they were unused
-after the Soul Architecture Reform.
+``MemoryEntry`` is defined in ``soul.memory.memory_entry`` and
+re-exported here as the canonical public import path.
 """
 
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
-# Canonical location — re-exported for backward compatibility.
 from soul.memory.memory_entry import MemoryEntry  # noqa: F401
 
 

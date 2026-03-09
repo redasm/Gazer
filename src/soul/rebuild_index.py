@@ -6,7 +6,6 @@ from memory import MemoryManager
 from soul.core import MemoryEntry
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("GazerConsistency")
 
 async def rebuild_index():
@@ -39,5 +38,6 @@ async def rebuild_index():
     logger.info("Index rebuild complete.")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(rebuild_index())
 

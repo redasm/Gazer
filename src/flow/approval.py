@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("FlowApproval")
 
