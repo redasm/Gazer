@@ -144,7 +144,7 @@ async def _handle_chat_send(client: GatewayClient, payload: dict) -> None:
 
     input_q = API_QUEUES.get("input")
     if input_q:
-        input_q.put({
+        input_q.put_nowait({
             "type": "chat",
             "content": content,
             "source": "gateway",
@@ -184,7 +184,7 @@ async def _handle_session_clear(client: GatewayClient, payload: dict) -> None:
     # Send clear request to Brain via IPC
     input_q = API_QUEUES.get("input")
     if input_q:
-        input_q.put({"type": "session_clear", "session_key": session_key})
+        input_q.put_nowait({"type": "session_clear", "session_key": session_key})
         await client.ws.send_json({"type": "session.cleared", "session_key": session_key})
     else:
         await client.ws.send_json({"type": "error", "message": "Brain disconnected"})
@@ -227,64 +227,6 @@ _HANDLERS = {
     "config.get": _handle_config_get,
     "subscribe": _handle_subscribe,
 }
-
-
-# ---------------------------------------------------------------------------
-# Gateway output bridge — forwards Brain output to gateway clients
-# ---------------------------------------------------------------------------
-
-async def gateway_output_bridge() -> None:
-    """Background task: bridge IPC output queue to gateway WebSocket clients.
-
-    This runs alongside the existing broadcast_output_worker and forwards
-    relevant messages to gateway clients.
-    """
-    loop = asyncio.get_running_loop()
-    while True:
-        output_q = API_QUEUES.get("output")
-        if output_q is not None and gateway_manager.clients:
-            try:
-                msg = await asyncio.wait_for(
-                    loop.run_in_executor(None, output_q.get, True, 0.5),
-                    timeout=1.0,
-                )
-                if not isinstance(msg, dict):
-                    continue
-
-                msg_type = msg.get("type", "")
-
-                if msg_type == "log_entry":
-                    await gateway_manager.broadcast(
-                        {"type": "log.entry", "entry": msg.get("entry", {})},
-                        event_type="log",
-                    )
-                elif msg_type in ("chat_stream", "chat_end", "chat_response"):
-                    chat_id = str(msg.get("chat_id", "web-main"))
-                    gw_type = "chat.stream" if msg_type == "chat_stream" else "chat.end"
-                    await gateway_manager.broadcast_to_chat(chat_id, {
-                        "type": gw_type,
-                        "chat_id": chat_id,
-                        "content": msg.get("content", ""),
-                        "is_partial": msg_type == "chat_stream",
-                    })
-                elif msg_type == "tool_call_event":
-                    chat_id = str(msg.get("chat_id", "web-main"))
-                    await gateway_manager.broadcast_to_chat(chat_id, {
-                        "type": "chat.tool_call",
-                        "chat_id": chat_id,
-                        "event_type": msg.get("event_type", ""),
-                        "payload": msg.get("payload", {}),
-                    })
-                else:
-                    # Forward other events as generic channel events
-                    await gateway_manager.broadcast(
-                        {"type": "channel.event", "event": msg},
-                        event_type="channel",
-                    )
-            except Exception:
-                await asyncio.sleep(0.1)
-        else:
-            await asyncio.sleep(0.5)
 
 
 # ---------------------------------------------------------------------------

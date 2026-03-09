@@ -28,30 +28,28 @@ def test_channel_adapter_interface():
 
 
 def test_web_channel_publishes_to_bus():
-    """WebChannel routes messages through MessageBus instead of calling agent directly."""
+    """WebChannel routes messages through MessageBus via shared asyncio.Queue."""
+    import tools.admin.state as _state
     from bus.queue import MessageBus
-    from bus.events import OutboundMessage
     from channels.web import WebChannel
 
-    ipc_in = Queue()
-    ipc_out = Queue()
     ui_q = Queue()
-
     bus = MessageBus()
-    web = WebChannel(ipc_in, ipc_out, ui_queue=ui_q)
+    web = WebChannel(ui_queue=ui_q)
     web.bind(bus)
 
-    # Simulate user sending a chat message via IPC
-    ipc_in.put({"type": "chat", "content": "hello from web"})
-
-    # Run the channel for a brief moment
+    # Inject an asyncio.Queue into state (mimics init_admin_api)
     async def run():
+        q = asyncio.Queue()
+        _state.API_QUEUES["input"] = q
+
+        await q.put({"type": "chat", "content": "hello from web"})
+
         task = asyncio.create_task(web.start())
-        await asyncio.sleep(0.15)  # enough for at least one poll cycle
+        await asyncio.sleep(0.15)
         web._running = False
         task.cancel()
 
-        # The message should be in the bus inbound queue
         assert not bus.inbound.empty(), "Expected an inbound message on the bus"
         msg = await bus.inbound.get()
         assert msg.channel == "web"
@@ -64,28 +62,28 @@ def test_web_channel_publishes_to_bus():
 
 
 def test_web_channel_publishes_media_and_metadata():
-    """WebChannel should forward media/metadata from IPC to InboundMessage."""
+    """WebChannel should forward media/metadata to InboundMessage."""
+    import tools.admin.state as _state
     from bus.queue import MessageBus
     from channels.web import WebChannel
 
-    ipc_in = Queue()
-    ipc_out = Queue()
     bus = MessageBus()
-    web = WebChannel(ipc_in, ipc_out)
+    web = WebChannel()
     web.bind(bus)
 
-    ipc_in.put(
-        {
+    async def run():
+        q = asyncio.Queue()
+        _state.API_QUEUES["input"] = q
+
+        await q.put({
             "type": "chat",
             "content": "[User sent media]",
             "media": ["data/media/web_1.png"],
             "metadata": {"web_media": [{"source": "b64", "path": "data/media/web_1.png"}]},
             "chat_id": "web-main",
             "sender_id": "WebUser",
-        }
-    )
+        })
 
-    async def run():
         task = asyncio.create_task(web.start())
         await asyncio.sleep(0.15)
         web._running = False
@@ -98,56 +96,6 @@ def test_web_channel_publishes_media_and_metadata():
 
     asyncio.run(run())
     print("OK: WebChannel forwards media/metadata.")
-
-
-def test_web_channel_sends_outbound():
-    """WebChannel.send() writes to IPC output queue."""
-    from bus.events import OutboundMessage
-    from channels.web import WebChannel
-
-    ipc_in = Queue()
-    ipc_out = Queue()
-
-    web = WebChannel(ipc_in, ipc_out)
-
-    msg = OutboundMessage(channel="web", chat_id="web-main", content="agent reply")
-    asyncio.run(web.send(msg))
-
-    assert not ipc_out.empty()
-    result = ipc_out.get()
-    assert result["type"] == "chat_end"
-    assert result["content"] == "agent reply"
-
-    print("OK: WebChannel.send() forwards to IPC output.")
-
-
-def test_web_channel_partial():
-    """Partial messages update UI status, not IPC output."""
-    from bus.events import OutboundMessage
-    from channels.web import WebChannel
-
-    ipc_in = Queue()
-    ipc_out = Queue()
-    ui_q = Queue()
-
-    web = WebChannel(ipc_in, ipc_out, ui_queue=ui_q)
-
-    partial = OutboundMessage(
-        channel="web", chat_id="web-main", content="Thinking...", is_partial=True
-    )
-    asyncio.run(web.send(partial))
-
-    # Partials are streamed to ipc_output as "chat_stream" AND update UI queue
-    assert not ipc_out.empty(), "Partial should go to ipc_output as chat_stream"
-    stream_msg = ipc_out.get()
-    assert stream_msg["type"] == "chat_stream"
-    assert stream_msg["content"] == "Thinking..."
-
-    assert not ui_q.empty(), "Partial should update UI queue"
-    status = ui_q.get()
-    assert status["data"] == "Thinking..."
-
-    print("OK: Partial messages go to UI queue, not IPC output.")
 
 
 def test_outbound_message_has_is_partial():
@@ -168,9 +116,8 @@ def test_web_channel_typing_event_updates_ui_status():
     from bus.events import TypingEvent
     from channels.web import WebChannel
 
-    ipc_in = Queue()
     ui_q = Queue()
-    web = WebChannel(ipc_in, None, ui_queue=ui_q)
+    web = WebChannel(ui_queue=ui_q)
 
     asyncio.run(web._on_typing(TypingEvent(channel="web", chat_id="web-main", is_typing=True)))
     assert not ui_q.empty()
@@ -197,18 +144,33 @@ def test_no_direct_agent_call_in_web():
     """WebChannel should not call agent.process_message() directly."""
     web_path = project_root / "src" / "channels" / "web.py"
     content = web_path.read_text()
-    # No actual method call to .process_message( in executable code
     assert ".process_message(" not in content, "WebChannel must not call agent.process_message()"
     assert "self.publish(" in content, "WebChannel must use self.publish() via bus"
     print("OK: WebChannel routes through MessageBus, not agent directly.")
+
+
+def test_single_process_architecture():
+    """Verify the codebase uses single-process architecture (no IPC queues)."""
+    brain_path = project_root / "src" / "runtime" / "brain.py"
+    content = brain_path.read_text()
+    assert "ipc_input" not in content, "brain.py should not reference ipc_input"
+    assert "ipc_output" not in content, "brain.py should not reference ipc_output"
+    assert "_IpcLogHandler" not in content, "_IpcLogHandler should be removed"
+    assert "_start_admin_api" in content, "brain.py should start admin API in-process"
+
+    ipc_path = project_root / "src" / "runtime" / "ipc_secure.py"
+    assert not ipc_path.exists(), "ipc_secure.py should be deleted"
+
+    print("OK: Single-process architecture verified.")
 
 
 if __name__ == "__main__":
     test_channel_adapter_interface()
     test_outbound_message_has_is_partial()
     test_web_channel_publishes_to_bus()
-    test_web_channel_sends_outbound()
-    test_web_channel_partial()
+    test_web_channel_publishes_media_and_metadata()
+    test_web_channel_typing_event_updates_ui_status()
     test_brain_has_no_poll_ipc()
     test_no_direct_agent_call_in_web()
+    test_single_process_architecture()
     print("\n=== ALL CHANNEL VERIFICATION PASSED ===")

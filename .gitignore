@@ -52,12 +52,15 @@ assets/memory/*.db
 assets/memory/*.faiss
 assets/captured/
 data/
-config/owner.json
+
+# Sensitive config files (recursive — covers config/, src/config/, etc.)
+**/owner.json
+**/owner.json.bak
+**/owner.json.tmp
+**/settings.yaml.lock
 config/model_providers.local.json
 config/model_providers.local.json.lock
 config/model_providers.local.json.bak-*
-config/settings.yaml.lock
-config/owner.json.bak
 
 # IDEs
 .cursor/

@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import asyncio
@@ -17,54 +18,32 @@ load_dotenv()
 
 from runtime.brain import GazerBrain
 from runtime.config_manager import config
-from runtime.ipc_secure import wrap_queue
+
+logger = logging.getLogger("GazerMain")
 
 async def main():
-    # Create IPC queues with HMAC authentication
-    ui_queue_raw = multiprocessing.Queue()
-    chat_input_raw = multiprocessing.Queue()
-    chat_output_raw = multiprocessing.Queue()
-    
-    # Wrap with secure communication layer
-    ui_queue = wrap_queue(ui_queue_raw, max_age_seconds=60.0)
-    chat_input_q = wrap_queue(chat_input_raw, max_age_seconds=300.0)
-    chat_output_q = wrap_queue(chat_output_raw, max_age_seconds=300.0)
-    
-    # 1. Start face UI process if enabled in config
+    # 1. Start face UI process if enabled (only subsystem that needs a separate process)
+    ui_queue = None
     ui_process = None
     if config.get("ui.enabled", False):
         try:
             from ui.head import run_head
+            ui_queue = multiprocessing.Queue()
             ui_process = multiprocessing.Process(target=run_head, args=(ui_queue,))
             ui_process.start()
         except ImportError:
-            print("PySide6 not installed, skipping face UI.")
+            logger.warning("PySide6 not installed, skipping face UI.")
     else:
-        print("Face UI disabled in config.")
-    
-    # 2. Start Admin API process (pass in Chat Queues)
-    from tools.admin_api import run_admin_api
-    api_port = int(os.environ.get("ADMIN_API_PORT", config.get("web.port", 8080)))
-    api_process = multiprocessing.Process(
-        target=run_admin_api,
-        args=(api_port, chat_input_q, chat_output_q),
-    )
-    api_process.start()
-    
-    # 3. Start core brain
-    brain = GazerBrain(ui_queue=ui_queue, ipc_input=chat_input_q, ipc_output=chat_output_q)
+        logger.info("Face UI disabled in config.")
+
+    # 2. Start core brain (Admin API runs as asyncio task in the same process)
+    brain = GazerBrain(ui_queue=ui_queue)
     try:
         await brain.start()
     finally:
         if ui_process:
             ui_process.terminate()
             ui_process.join()
-        # Graceful shutdown for api_process
-        api_process.terminate()
-        api_process.join(timeout=5)
-        if api_process.is_alive():
-            api_process.kill()
-            api_process.join()
 
 if __name__ == "__main__":
     # On Windows, multiprocessing must run under if __name__ == "__main__":
@@ -84,5 +63,5 @@ if __name__ == "__main__":
         try:
             asyncio.run(main())
         except KeyboardInterrupt:
-            print("Gazer shutting down...")
+            logger.info("Gazer shutting down...")
             sys.exit(0)

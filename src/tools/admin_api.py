@@ -135,132 +135,29 @@ _ATOMIC_OBJECT_UPDATE_PATHS: Tuple[str, ...] = (
 
 # --- Lifespan (replaces deprecated @app.on_event) ---
 
-async def _broadcast_output_worker():
-    """Background task: bridge multiprocessing output queue to WebSocket broadcast."""
-    loop = asyncio.get_running_loop()
-    while True:
-        output_q = API_QUEUES.get("output")
-        if output_q is not None:
-            # Use run_in_executor to avoid blocking the event loop on queue.get()
-            try:
-                msg = await asyncio.wait_for(
-                    loop.run_in_executor(None, output_q.get, True, 0.5),
-                    timeout=1.0,
-                )
-                # Intercept usage snapshots from the Brain process
-                if isinstance(msg, dict) and msg.get("type") == "usage_update":
-                    _state.IPC_USAGE_SNAPSHOT = msg.get("usage")
-                    if msg.get("router_status") is not None:
-                        _state.IPC_ROUTER_STATUS = msg["router_status"]
-                # Intercept log entries forwarded from the Brain process
-                elif isinstance(msg, dict) and msg.get("type") == "log_entry":
-                    entry = msg.get("entry", {})
-                    _log_buffer.append(entry)
-                    # Track LLM calls in debug history
-                    meta = entry.get("meta", {})
-                    if meta.get("request_id"):
-                        _llm_history.append({
-                            "timestamp": entry.get("timestamp"),
-                            "request_id": meta.get("request_id"),
-                            "model": meta.get("model"),
-                            "tokens": meta.get("tokens"),
-                            "message": entry.get("message", ""),
-                            "level": entry.get("level"),
-                        })
-                elif isinstance(msg, dict) and msg.get("type") == "multi_agent_monitor_event":
-                    from multi_agent.monitor import monitor_hub
-
-                    entry = msg.get("entry", {})
-                    if isinstance(entry, dict):
-                        await monitor_hub.apply_remote_event(entry)
-                else:
-                    msg_type = msg.get("type") if isinstance(msg, dict) else None
-                    if msg_type in {"chat_stream", "chat_end", "chat_response", "tool_call_event"} and isinstance(msg, dict):
-                        chat_id = str(msg.get("chat_id", "web-main"))
-                        # Use the chat_manager from websockets module where WS
-                        # clients actually register their connections.
-                        from tools.admin.websockets import chat_manager as _ws_chat_mgr
-                        await _ws_chat_mgr.broadcast(chat_id, msg)
-                    else:
-                        from tools.admin.websockets import manager as _ws_mgr
-                        await _ws_mgr.broadcast(msg)
-            except Exception:
-                logger.debug("Broadcast worker tick failed", exc_info=True)
-                await asyncio.sleep(0.1)
-        else:
-            await asyncio.sleep(0.5)
-
-
 async def _coding_benchmark_scheduler_worker():
     """Background task: periodically run configured coding benchmark suites."""
     loop = asyncio.get_running_loop()
     while True:
         try:
-            await loop.run_in_executor(None, _maybe_run_scheduled_coding_benchmark)
+            await loop.run_in_executor(None, _shared._maybe_run_scheduled_coding_benchmark)
         except Exception:
             logger.debug("Coding benchmark scheduler tick failed", exc_info=True)
         await asyncio.sleep(5)
 
 
-async def _run_cron_job_via_ipc(job: Any) -> Optional[str]:
-    """Cron callback used when scheduler runs inside Admin API process."""
-    try:
-        message = str(getattr(job, "message", "") or "").strip()
-        if not message:
-            return "skipped: empty message"
-        session_mode = str(getattr(job, "session_mode", "isolated") or "isolated").strip().lower()
-        job_id = str(getattr(job, "id", "job") or "job").strip()
-        session_id = "web-main" if session_mode == "main" else f"cron-{job_id}"
-        _enqueue_chat_message(
-            content=message,
-            session_id=session_id,
-            source="cron",
-            sender_id="cron",
-        )
-        return "enqueued"
-    except HTTPException as exc:
-        return f"Error: {exc.detail}"
-    except Exception as exc:
-        return f"Error: {exc}"
-
-
-def _ensure_local_cron_scheduler() -> None:
-    """Initialize CronScheduler in API process when not injected by brain."""
-    if _state.CRON_SCHEDULER is not None:
-        return
-    if not bool(config.get("scheduler.cron_enabled", True)):
-        return
-    try:
-        from scheduler.cron import CronScheduler
-        _state.CRON_SCHEDULER = CronScheduler(run_callback=_run_cron_job_via_ipc)
-        _state.CRON_SCHEDULER.load()
-        _state._LOCAL_CRON_SCHEDULER_ACTIVE = True
-        
-        # Also update local aliases for backwards compatibility
-        global CRON_SCHEDULER, _LOCAL_CRON_SCHEDULER_ACTIVE
-        CRON_SCHEDULER = _shared.CRON_SCHEDULER
-        _LOCAL_CRON_SCHEDULER_ACTIVE = _shared._LOCAL_CRON_SCHEDULER_ACTIVE
-        
-        logger.info("Cron scheduler initialized in Admin API process.")
-    except Exception as exc:
-        logger.error("Failed to initialize local cron scheduler: %s", exc)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan handler -- starts background workers on startup."""
-    _ensure_local_cron_scheduler()
-    task = asyncio.create_task(_broadcast_output_worker())
     bench_task = asyncio.create_task(_coding_benchmark_scheduler_worker())
     cron_task: Optional[asyncio.Task] = None
-    if _shared._LOCAL_CRON_SCHEDULER_ACTIVE and _shared.CRON_SCHEDULER is not None:
-        cron_task = asyncio.create_task(_shared.CRON_SCHEDULER.start())
+    if _state.CRON_SCHEDULER is not None:
+        cron_task = asyncio.create_task(_state.CRON_SCHEDULER.start())
     yield
-    if _shared.CRON_SCHEDULER is not None and _shared._LOCAL_CRON_SCHEDULER_ACTIVE:
-        _shared.CRON_SCHEDULER.stop()
+    if _state.CRON_SCHEDULER is not None:
+        _state.CRON_SCHEDULER.stop()
     if cron_task is not None:
         cron_task.cancel()
-    task.cancel()
     bench_task.cancel()
 
 
@@ -462,24 +359,22 @@ async def _canvas_on_change(canvas_state, extra=None):
 
 # --- Debug API ---
 
-def run_admin_api(port: int = 8080, input_q=None, output_q=None):
-    API_QUEUES["input"] = input_q
-    API_QUEUES["output"] = output_q
-    
-    ctx = get_app_context()
-    if ctx is None:
-        ctx = AppContext()
-        set_app_context(ctx)
+def init_admin_api(ctx: AppContext) -> None:
+    """Initialise Admin API state for in-process operation.
+
+    Called by brain.py before starting uvicorn as an asyncio task.
+    Sets up the shared asyncio.Queue so WebSocket/REST handlers can
+    enqueue chat messages for the WebChannel.
+    """
+    import tools.admin.state as _st
+    if _st.API_QUEUES["input"] is None:
+        _st.API_QUEUES["input"] = asyncio.Queue()
+
+    set_app_context(ctx)
     app.state.ctx = ctx
 
     logger.info(
-        "CORS configured: origins=%s, credentials=%s",
+        "Admin API initialised (in-process). CORS origins=%s, credentials=%s",
         _cors_origins,
         _cors_credentials,
     )
-    import uvicorn
-    host = os.environ.get("ADMIN_API_HOST", "127.0.0.1")
-    uvicorn.run(app, host=host, port=port)
-
-if __name__ == "__main__":
-    run_admin_api()

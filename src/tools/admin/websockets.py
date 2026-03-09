@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from ._shared import API_QUEUES, _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
+from ._shared import _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
 from .auth import _verify_ws_auth
 from tools.admin.state import API_QUEUES, CANVAS_STATE
 
@@ -200,7 +200,7 @@ async def canvas_endpoint(websocket: WebSocket):
                 if isinstance(payload, dict):
                     action = payload.get("userAction")
                     if action and API_QUEUES.get("input") is not None:
-                        API_QUEUES["input"].put({
+                        API_QUEUES["input"].put_nowait({
                             "type": "a2ui_action",
                             "action": action,
                             "source": "web_canvas"
@@ -268,7 +268,7 @@ async def chat_endpoint(websocket: WebSocket):
                 continue
 
             if API_QUEUES["input"]:
-                API_QUEUES["input"].put({
+                API_QUEUES["input"].put_nowait({
                     "type": "chat",
                     "content": content,
                     "source": "web_chat",

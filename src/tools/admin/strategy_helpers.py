@@ -447,7 +447,7 @@ def _enqueue_chat_message(*, content: str, session_id: str, source: str, sender_
             status_code=400,
             detail=f"Message too long (max {_MAX_CHAT_MESSAGE_CHARS} characters)",
         )
-    _state.API_QUEUES["input"].put(
+    _state.API_QUEUES["input"].put_nowait(
         {
             "type": "chat",
             "content": text,

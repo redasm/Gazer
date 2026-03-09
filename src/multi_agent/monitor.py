@@ -1,9 +1,7 @@
 """In-memory monitor hub for multi-agent task sessions.
 
 Keeps a snapshot of the latest multi-agent session state and broadcasts
-event envelopes to local websocket subscribers. Runtime-side publishers can
-optionally forward the same envelopes through the Admin API IPC output queue
-so the admin process can mirror the monitor state.
+event envelopes to local websocket subscribers.
 """
 
 from __future__ import annotations
@@ -274,7 +272,7 @@ class MultiAgentMonitorHub:
         self,
         envelope: dict[str, Any],
         *,
-        forward_ipc: bool,
+        forward_ipc: bool = False,
         already_applied: bool = False,
     ) -> None:
         if not already_applied:
@@ -284,8 +282,6 @@ class MultiAgentMonitorHub:
         else:
             async with self._lock:
                 subscribers = list(self._subscribers)
-        if forward_ipc:
-            self._forward_ipc_event(envelope)
         await self._broadcast(subscribers, envelope)
 
     async def _broadcast(
@@ -565,29 +561,10 @@ class MultiAgentMonitorHub:
             "payload": copy.deepcopy(payload),
         }
 
-    @staticmethod
-    def _forward_ipc_event(envelope: dict[str, Any]) -> None:
-        try:
-            from tools.admin.state import API_QUEUES
-
-            output_q = API_QUEUES.get("output")
-            if output_q is not None:
-                output_q.put({
-                    "type": "multi_agent_monitor_event",
-                    "entry": copy.deepcopy(envelope),
-                })
-        except Exception:
-            logger.debug("Failed to forward monitor event via IPC", exc_info=True)
-
 
 monitor_hub = MultiAgentMonitorHub()
 
 
 def should_forward_monitor_events() -> bool:
-    """True when running in Brain process with an Admin API IPC output queue."""
-    try:
-        from tools.admin.state import API_QUEUES
-
-        return API_QUEUES.get("output") is not None
-    except Exception:
-        return False
+    """No longer needed in single-process architecture."""
+    return False

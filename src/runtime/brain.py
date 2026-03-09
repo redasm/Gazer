@@ -45,7 +45,6 @@ from devices.registry import DeviceRegistry
 from devices.adapters.local_desktop import LocalDesktopNode
 from devices.adapters.remote_satellite import RemoteSatelliteNode
 from devices.adapters.body_hardware import BodyHardwareNode
-import tools.admin.state as _admin_state
 
 from runtime.app_context import AppContext, set_app_context
 
@@ -69,43 +68,10 @@ install_log_sanitizer(also_on_root=True)
 logger = logging.getLogger("GazerBrain")
 
 
-class _IpcLogHandler(logging.Handler):
-    """Forward log records from the Brain process to the Admin API process via IPC queue.
-
-    Captures the same structured metadata (request_id, model, tokens) as the
-    Admin API's GazerLogHandler so that LLM call info shows up in the web log viewer.
-    """
-    _META_KEYS = ("request_id", "model", "tokens")
-
-    def __init__(self, queue) -> None:
-        super().__init__()
-        self._queue = queue
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            from datetime import datetime
-            entry = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-                "level": record.levelname,
-                "source": record.name,
-                "message": record.getMessage(),
-            }
-            meta = {}
-            for key in self._META_KEYS:
-                val = getattr(record, key, None)
-                if val is not None:
-                    meta[key] = val
-            if meta:
-                entry["meta"] = meta
-            self._queue.put({"type": "log_entry", "entry": entry})
-        except Exception:
-            self.handleError(record)
-
-
 class GazerBrain:
     """Gazer Brain: coordinates perception, cognition, and action."""
 
-    def __init__(self, ui_queue=None, ipc_input=None, ipc_output=None):
+    def __init__(self, ui_queue=None):
         ensure_openviking_ready(config)
         self.app_context = AppContext()
         set_app_context(self.app_context)
@@ -124,8 +90,6 @@ class GazerBrain:
             self.spatial = get_spatial()
 
         self.ui_queue = ui_queue
-        self._ipc_input = ipc_input
-        self._ipc_output = ipc_output
 
         self.audio.set_queues(ui_queue)
 
@@ -176,7 +140,7 @@ class GazerBrain:
 
         # --- Channels (unified via ChannelAdapter) ---
         self.channels: List[ChannelAdapter] = []
-        self._init_channels(ipc_input, ipc_output)
+        self._init_channels()
 
         self._agent_task = None
         self._cron_task = None
@@ -400,7 +364,7 @@ class GazerBrain:
         _state_hook.HOOK_BUS = self.app_context.hook_bus
         _state_hook.HOOK_TOKEN = self.app_context.hook_token
 
-    def _init_channels(self, ipc_input, ipc_output) -> None:
+    def _init_channels(self) -> None:
         """Create and bind all configured channels."""
         bus = self.agent.bus
 
@@ -429,8 +393,6 @@ class GazerBrain:
             try:
                 channel = channel_cls.from_config(
                     config,
-                    ipc_input=ipc_input,
-                    ipc_output=ipc_output,
                     ui_queue=self.ui_queue,
                 )
                 if channel:
@@ -685,7 +647,7 @@ class GazerBrain:
         # Prepare runtime services for plugins
         # =============================================================
         cron_enabled = bool(config.get("scheduler.cron_enabled", True))
-        if cron_enabled and self._ipc_input is None:
+        if cron_enabled:
             self.cron_scheduler = CronScheduler(
                 run_callback=self._run_cron_job,
             )
@@ -693,8 +655,6 @@ class GazerBrain:
             self.app_context.cron_scheduler = self.cron_scheduler
             import tools.admin.state as _state_cron
             _state_cron.CRON_SCHEDULER = self.app_context.cron_scheduler
-        elif cron_enabled:
-            logger.info("Cron scheduler delegated to Admin API process (IPC mode).")
 
         services = {
             "capture_manager": self.capture_manager,
@@ -780,25 +740,19 @@ class GazerBrain:
         read_skill_tool.set_skill_loader(skill_loader)
         logger.info(f"Loaded {len(skill_loader.skills)} skills into context.")
 
-    def _register_ipc_usage_hook(self) -> None:
-        """Register an after-turn hook that pushes usage & router snapshots to the Admin API process."""
-        ipc_out = self._ipc_output
-        usage_tracker = self.agent.loop.usage
-        router = self.agent.router
+    async def _start_admin_api(self) -> None:
+        """Start the Admin API (uvicorn) as an asyncio task in the same event loop."""
+        import uvicorn
+        from tools.admin_api import app, init_admin_api
 
-        async def _push_usage(payload: Dict[str, Any]) -> None:
-            try:
-                msg: Dict[str, Any] = {
-                    "type": "usage_update",
-                    "usage": usage_tracker.summary(),
-                }
-                if router is not None and hasattr(router, "get_status"):
-                    msg["router_status"] = router.get_status()
-                ipc_out.put(msg)
-            except Exception:
-                pass
+        api_port = int(os.environ.get("ADMIN_API_PORT", config.get("web.port", 8080)))
+        host = os.environ.get("ADMIN_API_HOST", "127.0.0.1")
 
-        self.agent.turn_hooks.on_after_turn(_push_usage)
+        init_admin_api(self.app_context)
+
+        uvi_config = uvicorn.Config(app, host=host, port=api_port, log_level="info")
+        server = uvicorn.Server(uvi_config)
+        await server.serve()
 
     async def _run_cron_job(self, job) -> Optional[str]:
         """Callback for the cron scheduler — runs a job as an agent turn."""
@@ -823,20 +777,14 @@ class GazerBrain:
     # Main loop
     # ------------------------------------------------------------------
     async def start(self):
-        # Install IPC log handler to forward Brain-process logs to Admin API
-        if hasattr(self, '_ipc_output') and self._ipc_output:
-            ipc_handler = _IpcLogHandler(self._ipc_output)
-            ipc_handler.setLevel(logging.INFO)
-            logging.getLogger().addHandler(ipc_handler)
-
         logger.info("Gazer Brain starting...")
         self.is_running = True
         self._update_ui_status("Initializing...")
 
         await self._setup_tools()
 
-        if self._ipc_output:
-            self._register_ipc_usage_hook()
+        # Start Admin API server as asyncio task (same event loop)
+        self._api_server_task = asyncio.create_task(self._start_admin_api())
 
         self._agent_task = asyncio.create_task(self.agent.start())
 

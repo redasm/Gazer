@@ -1,7 +1,9 @@
 """Secure file encryption for sensitive data storage.
 
-Uses AES-256-GCM with a machine-specific key derived from hardware identifiers.
-Designed for Windows platform compatibility.
+Uses AES-256-GCM with a key derived from a per-user random seed combined
+with machine identifiers.  The random seed is generated once on first run
+and stored under the user's home directory, ensuring different OS users on
+the same machine produce different keys.
 """
 
 import base64
@@ -10,6 +12,9 @@ import json
 import logging
 import os
 import platform
+import secrets
+import stat
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("FileCrypto")
@@ -17,7 +22,6 @@ logger = logging.getLogger("FileCrypto")
 # Conditional import for cryptography
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    from cryptography.hazmat.backends import default_backend
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
@@ -26,64 +30,81 @@ except ImportError:
         "Install with: pip install cryptography"
     )
 
+_KEY_VERSION = 2
+_SEED_LENGTH = 32
 
-def _get_machine_key() -> bytes:
-    """Derive a machine-specific encryption key from hardware identifiers.
-    
-    Uses a combination of:
-    - Windows: Computer name, processor info, system UUID
-    - Fallback: hostname and basic system info
-    
-    Returns:
-        32-byte key suitable for AES-256
-    """
-    components = []
-    
-    # System hostname
-    components.append(platform.node())
-    
-    # Processor identifier (Windows-specific)
+
+def _seed_path() -> Path:
+    """Return the path to the per-user random seed file."""
+    if platform.system() == "Windows":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        base = Path.home()
+    return base / ".gazer" / "key_seed"
+
+
+def _read_or_create_seed() -> bytes:
+    """Read the per-user seed, creating it on first run."""
+    path = _seed_path()
+    if path.is_file():
+        raw = path.read_bytes()
+        if len(raw) >= _SEED_LENGTH:
+            return raw[:_SEED_LENGTH]
+        logger.warning("Seed file too short, regenerating.")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    seed = secrets.token_bytes(_SEED_LENGTH)
+    path.write_bytes(seed)
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
+    logger.info("Generated new encryption seed at %s", path)
+    return seed
+
+
+def _get_machine_components() -> list:
+    """Collect non-secret machine identifiers for key mixing."""
+    components = [platform.node(), platform.system(), platform.machine()]
     if platform.system() == "Windows":
         try:
             import winreg
             key = winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
-                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
             )
             proc_id, _ = winreg.QueryValueEx(key, "ProcessorNameString")
             components.append(str(proc_id))
         except Exception:
             pass
-    
-    # System UUID (if available)
-    try:
-        if platform.system() == "Windows":
+        try:
             import subprocess
             result = subprocess.run(
-                ["wmic", "csproduct", "get", "UUID"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["powershell", "-NoProfile", "-Command",
+                 "(Get-CimInstance Win32_ComputerSystemProduct).UUID"],
+                capture_output=True, text=True, timeout=5,
             )
-            uuid_line = result.stdout.strip().split("\n")[-1].strip()
-            if uuid_line and uuid_line != "UUID":
+            uuid_line = result.stdout.strip()
+            if uuid_line:
                 components.append(uuid_line)
-    except Exception:
-        pass
-    
-    # Platform and architecture
-    components.append(platform.system())
-    components.append(platform.machine())
-    
-    # Combine and hash
-    combined = "|".join(components)
-    key_material = hashlib.sha256(combined.encode("utf-8")).digest()
-    
-    # Additional mixing with a static salt for this application
-    salt = b"Gazer-FileCrypto-v1"
-    final_key = hashlib.pbkdf2_hmac("sha256", key_material, salt, iterations=100000)
-    
-    return final_key
+        except Exception:
+            pass
+    return components
+
+
+def _get_machine_key() -> bytes:
+    """Derive a 32-byte AES-256 key from per-user seed + machine identifiers.
+
+    The per-user random seed ensures that different OS users on the same
+    machine produce different encryption keys.  Machine identifiers add an
+    extra binding so the encrypted file cannot be trivially moved to another
+    host.
+    """
+    seed = _read_or_create_seed()
+    machine_info = "|".join(_get_machine_components()).encode("utf-8")
+    key_material = seed + hashlib.sha256(machine_info).digest()
+    salt = b"Gazer-FileCrypto-v2"
+    return hashlib.pbkdf2_hmac("sha256", key_material, salt, iterations=100000)
 
 
 class SecureFileStorage:

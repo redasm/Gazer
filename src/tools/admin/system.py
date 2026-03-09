@@ -1410,14 +1410,6 @@ async def get_usage_stats():
         except Exception:
             logger.debug("Failed to read tool batching summary", exc_info=True)
     if _usage is None:
-        ipc_snapshot = _shared.IPC_USAGE_SNAPSHOT
-        if ipc_snapshot:
-            return {
-                "status": "ok",
-                "usage": ipc_snapshot,
-                "prompt_cache": prompt_cache,
-                "tool_batching": tool_batching,
-            }
         payload: Dict[str, Any] = {"status": "ok", "note": "Usage tracker not injected yet."}
         if prompt_cache:
             payload["prompt_cache"] = prompt_cache

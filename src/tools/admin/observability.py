@@ -1328,7 +1328,7 @@ async def get_observability_metrics(limit: int = 200):
     model_map: Dict[str, Dict[str, Any]] = {}
 
     _llm_router = get_llm_router()
-    _status_raw = _llm_router.get_status() if _llm_router is not None else _shared.IPC_ROUTER_STATUS
+    _status_raw = _llm_router.get_status() if _llm_router is not None else None
     if _status_raw is not None:
         status = _status_raw
         providers = status.get("providers", []) if isinstance(status, dict) else []

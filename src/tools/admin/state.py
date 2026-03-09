@@ -30,8 +30,8 @@ logger = logging.getLogger("GazerAdminAPI")
 # Runtime globals -- injected by brain.py at startup
 # ---------------------------------------------------------------------------
 
-# IPC queues: input_q (UI/Web -> Brain), output_q (Brain -> UI/Web)
-API_QUEUES: Dict[str, Any] = {"input": None, "output": None}
+# In-process asyncio.Queue for Web → Agent chat messages.
+API_QUEUES: Dict[str, Any] = {"input": None}
 
 CANVAS_STATE: Optional["CanvasState"] = None
 GMAIL_PUSH_MANAGER: Optional[Any] = None
@@ -62,8 +62,6 @@ GOOGLE_CHAT_CHANNEL: Optional[Any] = None
 
 # Usage / tracking
 USAGE_TRACKER: Optional[Any] = None
-IPC_USAGE_SNAPSHOT: Optional[Dict[str, Any]] = None
-IPC_ROUTER_STATUS: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------

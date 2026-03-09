@@ -1,8 +1,7 @@
-"""Web Chat channel adapter -- bridges IPC queues through the MessageBus."""
+"""Web Chat channel adapter — in-process bridge between Admin API and MessageBus."""
 
 import asyncio
 import logging
-from queue import Queue, Empty
 from typing import Optional, Any
 
 from bus.events import OutboundMessage, TypingEvent
@@ -10,42 +9,32 @@ from channels.base import ChannelAdapter, ChannelRegistry
 
 logger = logging.getLogger("WebChannel")
 
-POLL_INTERVAL = 0.05  # 50ms
-
 
 @ChannelRegistry.register("web")
 class WebChannel(ChannelAdapter):
-    """
-    Web Chat channel that wraps the existing IPC queues.
-    ...
+    """Web Chat channel — reads from the shared asyncio.Queue written by
+    Admin API WebSocket/REST handlers, and broadcasts agent responses
+    directly to connected WebSocket clients (same process).
     """
 
     channel_name = "web"
 
     @classmethod
     def from_config(cls, config: Any, **kwargs: Any) -> Optional["ChannelAdapter"]:
-        ipc_input = kwargs.get("ipc_input")
-        ipc_output = kwargs.get("ipc_output")
         ui_queue = kwargs.get("ui_queue")
-        if ipc_input:
-            return cls(ipc_input, ipc_output, ui_queue=ui_queue)
-        return None
+        return cls(ui_queue=ui_queue)
 
     def _is_sender_authorized(self, sender_id: str) -> bool:
-        """Web console is the deployer's local interface -- always authorized."""
         return True
 
-    def __init__(
-        self,
-        ipc_input: Queue,
-        ipc_output: Optional[Queue] = None,
-        ui_queue: Optional[Queue] = None,
-    ) -> None:
+    def __init__(self, ui_queue=None) -> None:
         super().__init__()
-        self.ipc_input = ipc_input
-        self.ipc_output = ipc_output
         self.ui_queue = ui_queue
         self._running = False
+
+    def _get_input_queue(self) -> Optional[asyncio.Queue]:
+        import tools.admin.state as _state
+        return _state.API_QUEUES.get("input")
 
     # ------------------------------------------------------------------
     # ChannelAdapter interface
@@ -55,8 +44,15 @@ class WebChannel(ChannelAdapter):
         self._running = True
         logger.info("WebChannel started.")
         while self._running:
+            q = self._get_input_queue()
+            if q is None:
+                await asyncio.sleep(0.5)
+                continue
             try:
-                msg = self.ipc_input.get_nowait()
+                msg = await asyncio.wait_for(q.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            try:
                 if msg.get("type") == "chat":
                     self._update_ui("Typing...")
                     media = msg.get("media", [])
@@ -72,42 +68,35 @@ class WebChannel(ChannelAdapter):
                         media=media,
                         metadata=metadata,
                     )
-            except Empty:
-                pass
             except Exception as exc:
-                logger.warning(f"WebChannel poll failed: {exc}")
-            await asyncio.sleep(POLL_INTERVAL)
+                logger.warning("WebChannel dispatch failed: %s", exc)
 
     async def stop(self) -> None:
         self._running = False
         logger.info("WebChannel stopped.")
 
     async def send(self, msg: OutboundMessage) -> None:
+        from tools.admin.websockets import chat_manager, manager
+
         if msg.is_partial:
             metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
             if metadata.get("stream_event") == "tool_call":
-                if self.ipc_output:
-                    self.ipc_output.put(
-                        {
-                            "type": "tool_call_event",
-                            "chat_id": msg.chat_id,
-                            "event_type": str(metadata.get("event_type", "")),
-                            "payload": dict(metadata.get("payload", {}) or {}),
-                        }
-                    )
+                await chat_manager.broadcast(msg.chat_id, {
+                    "type": "tool_call_event",
+                    "chat_id": msg.chat_id,
+                    "event_type": str(metadata.get("event_type", "")),
+                    "payload": dict(metadata.get("payload", {}) or {}),
+                })
                 return
-            # Forward streaming chunks so the web frontend can display them
-            if self.ipc_output:
-                self.ipc_output.put(
-                    {"type": "chat_stream", "content": msg.content, "chat_id": msg.chat_id}
-                )
+            await chat_manager.broadcast(msg.chat_id, {
+                "type": "chat_stream", "content": msg.content, "chat_id": msg.chat_id,
+            })
             self._update_ui(msg.content)
             return
 
-        if self.ipc_output:
-            self.ipc_output.put(
-                {"type": "chat_end", "content": msg.content, "chat_id": msg.chat_id}
-            )
+        await chat_manager.broadcast(msg.chat_id, {
+            "type": "chat_end", "content": msg.content, "chat_id": msg.chat_id,
+        })
         self._update_ui("Sent")
 
     async def _on_typing(self, event: TypingEvent) -> None:
