@@ -24,6 +24,7 @@ class GazerContextBuilder(ContextBuilder):
         self.memory_manager = memory_manager
         self.skill_loader: Optional[SkillLoader] = None
         self._companion_context: Optional[str] = None
+        self._persona_enrichment: Optional[str] = None
         self._memory_context_stats: Dict[str, Any] = {
             "memory_context_chars": 0,
             "recall_count": 0,
@@ -115,6 +116,10 @@ class GazerContextBuilder(ContextBuilder):
                 "working_memory_count": 0,
             }
 
+    def set_persona_enrichment(self, text: str) -> None:
+        """Set live persona state (OCEAN traits, affect, motivation, trust) for prompt injection."""
+        self._persona_enrichment = text.strip() if text else None
+
     def get_memory_context_stats(self) -> Dict[str, Any]:
         return dict(self._memory_context_stats)
 
@@ -200,6 +205,9 @@ class GazerContextBuilder(ContextBuilder):
         gazer_persona = f"\n## Persona\n{persona_text}\n"
 
         parts = [base_prompt, gazer_persona]
+
+        if self._persona_enrichment:
+            parts.append(f"\n## Personality State\n{self._persona_enrichment}\n")
 
         if self._companion_context:
             parts.append(f"\n## Memory & Context\n{self._companion_context}\n")

@@ -1,23 +1,31 @@
+# User Profile
+
+This file records what Gazer knows about the user.
+Gazer should update this file as it learns new information through conversations.
+
+## Basic Info
+
+- **Name:** _(not yet known)_
+- **Preferred name:** _(not yet known)_
+- **Timezone:** _(not yet known)_
+- **Primary language:** _(not yet known)_
+
+## Working Context
+
+_(What projects are they working on? What tools do they use? What's their workflow?)_
+
+## Preferences
+
+_(Communication style preferences, things they care about, pet peeves.)_
+
+## Notes
+
+_(Anything else worth remembering. Build this over time through natural conversation.)_
+
 ---
-summary: "User profile record"
-read_when:
-  - Bootstrapping a workspace manually
----
 
-# USER.md - About Your Human
-
-_Learn about the person you're helping. Update this as you go._
-
-- **Name:**
-- **What to call them:**
-- **Pronouns:** _(optional)_
-- **Timezone:**
-- **Notes:**
-
-## Context
-
-_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
-
----
-
-The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.
+Update rules:
+- Only record information the user has explicitly shared or clearly implied.
+- Do not speculate or fill in blanks with guesses.
+- Respect privacy: skip anything the user wouldn't want stored.
+- Keep entries concise and factual.

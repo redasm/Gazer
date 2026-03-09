@@ -116,6 +116,41 @@ class GazerAgent(MultiAgentMixin):
             str(payload.get("session_key", "")),
             int(payload.get("history_len", 0) or 0),
         )
+        self._inject_persona_enrichment(payload)
+
+    def _inject_persona_enrichment(self, payload: Dict[str, Any]) -> None:
+        """Build live persona state from GazerPersonality and inject into context builder."""
+        try:
+            parts = []
+
+            # OCEAN personality traits
+            parts.append(self.personality.personality.to_prompt())
+
+            # Current affective state
+            affect = self.personality.affect_manager.current_affect()
+            parts.append(
+                f"当前情绪：{affect.to_label()}"
+                f"（valence={affect.valence:.2f}, arousal={affect.arousal:.2f}）"
+            )
+
+            # Mental state
+            parts.append(f"认知状态：{self.personality.current_state.description}")
+
+            # Drives & goals
+            motivation = self.personality._build_motivation_context()
+            if motivation:
+                parts.append(motivation)
+
+            # Trust context for current sender
+            sender_id = str(payload.get("sender_id", "") or "").strip()
+            if sender_id:
+                trust_prompt = self.personality.trust_system.get_relationship_prompt(sender_id)
+                parts.append(f"用户关系：{trust_prompt}")
+
+            enrichment = "\n".join(parts)
+            self.context_builder.set_persona_enrichment(enrichment)
+        except Exception:
+            logger.debug("Failed to inject persona enrichment", exc_info=True)
 
     async def _hook_after_tool_result(self, payload: Dict[str, Any]) -> None:
         tool_name = str(payload.get("tool_name", "") or "").strip()
@@ -789,10 +824,40 @@ class GazerAgent(MultiAgentMixin):
             await self.memory_manager.save_entry(
                 MemoryEntry(sender="Gazer", content=assistant_text, metadata=metadata)
             )
+            self._feed_personality_after_turn(msg, user_content, assistant_text)
             return True
         except Exception as e:
             logger.error("Failed to persist turn memory: %s", e)
             return False
+
+    def _feed_personality_after_turn(
+        self, msg: InboundMessage, user_content: str, assistant_text: str,
+    ) -> None:
+        """Feed turn results back into GazerPersonality state machine."""
+        try:
+            # Mental state transition (IDLE → INTERACTING on input)
+            p = self.personality
+            next_name = p._on_input_transition.get(p.current_state.name.upper())
+            if next_name and next_name in p._states:
+                p.transition_to(p._states[next_name])
+
+            # Goal progress tracking
+            p._update_goal_progress(user_content, assistant_text)
+
+            # Trust observation
+            sender_id = str(msg.sender_id or "").strip()
+            if sender_id:
+                from security.owner import get_owner_manager
+                is_owner = False
+                try:
+                    is_owner = get_owner_manager().is_owner_sender(
+                        str(msg.channel or ""), sender_id,
+                    )
+                except Exception:
+                    pass
+                p.trust_system.observe(sender_id, is_primary=is_owner)
+        except Exception:
+            logger.debug("Failed to feed personality after turn", exc_info=True)
 
 
 
