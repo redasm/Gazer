@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 from contextlib import asynccontextmanager
 from typing import Optional
 from pathlib import Path
@@ -70,7 +69,6 @@ for _router, _prefix, _tags in _ADMIN_ROUTERS:
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _WEB_DIST_DIR = _PROJECT_ROOT / "web" / "dist"
-_FAVICON_ICO_PATH = _PROJECT_ROOT / "web" / "public" / "favicon.ico"
 
 # --- Serve built React frontend from web/dist (production / Docker) ---
 if _WEB_DIST_DIR.is_dir():
@@ -90,20 +88,8 @@ if _WEB_DIST_DIR.is_dir():
             return FileResponse(str(_index_html), media_type="text/html")
 
 
-def _resolve_favicon_file() -> tuple[Optional[Path], Optional[str]]:
-    """Resolve favicon file path and media type."""
-    if _FAVICON_ICO_PATH.is_file():
-        return _FAVICON_ICO_PATH, "image/x-icon"
-    return None, None
-
-
 # --- Dynamic CORS middleware (reads config on every request) ---
 from tools.admin.auth import _get_cors_config
-
-# Request size guardrails (defensive defaults; configurable via api.* settings)
-_MAX_WS_MESSAGE_BYTES = int(config.get("api.max_ws_message_bytes", 256 * 1024))
-_MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
-_MAX_UPLOAD_BYTES = int(config.get("api.max_upload_bytes", 10 * 1024 * 1024))
 
 
 @app.middleware("http")
@@ -137,29 +123,10 @@ from tools.admin.error_handlers import install_exception_handlers
 install_exception_handlers(app)
 
 
-
-# --- Memory Management API ---
-from memory import MemoryManager
-from memory.quality_eval import build_memory_quality_report
-from memory.recall_regression import build_memory_recall_regression_report
-
-_memory_manager: Optional[MemoryManager] = None
-
-
-SKILLS_BUILTIN = os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills")
-SKILLS_EXTENSION = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "skills")
-SKILLS_BUILTIN_PATH = Path(SKILLS_BUILTIN)
-SKILLS_EXTENSION_PATH = Path(SKILLS_EXTENSION)
-
-
-from datetime import datetime
 from tools.admin.error_handlers import install_log_handler
-from perception.sources.screen_remote import RemoteScreenSource
-from security.pairing import get_pairing_manager
 from tools.admin.websockets import ConnectionManager as _ConnectionManager
 
 _gazer_handler = install_log_handler(_state._log_buffer, _state._llm_history)
-_latest_satellite_image = None
 canvas_ws_manager = _ConnectionManager()
 
 

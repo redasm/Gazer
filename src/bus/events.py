@@ -4,9 +4,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, List, Dict, Optional
 
-# Python 3.10 compatibility: List/Dict types for dataclasses if needed, but 3.10 supports list[str]
-# However, to be safe and consistent with typical 3.10 codebases, we'll keep standard typing or verify.
-# Python 3.9+ supports list[str], so 3.10 is fine.
 
 @dataclass
 class InboundMessage:

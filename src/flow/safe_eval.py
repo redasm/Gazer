@@ -74,7 +74,7 @@ _SAFE_METHOD_NAMES = frozenset({
     # str methods
     "lower", "upper", "strip", "lstrip", "rstrip", "split", "join",
     "replace", "startswith", "endswith", "find", "rfind",
-    "format", "encode", "decode", "isdigit", "isalpha", "isalnum",
+    "encode", "decode", "isdigit", "isalpha", "isalnum",
     # set methods
     "union", "intersection", "difference",
 })
@@ -130,16 +130,6 @@ class _SafeEvaluator(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> Any:
         return node.value
 
-    # Python 3.7 compatibility
-    def visit_Num(self, node: ast.Num) -> Any:
-        return node.n
-
-    def visit_Str(self, node: ast.Str) -> Any:
-        return node.s
-
-    def visit_NameConstant(self, node: ast.NameConstant) -> Any:
-        return node.value
-
     def visit_Name(self, node: ast.Name) -> Any:
         name = node.id
         if name in self._names:
@@ -164,11 +154,7 @@ class _SafeEvaluator(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript) -> Any:
         value = self.visit(node.value)
-        # Handle different slice types
-        if isinstance(node.slice, ast.Index):  # Python 3.8
-            index = self.visit(node.slice.value)
-        else:
-            index = self.visit(node.slice)
+        index = self.visit(node.slice)
         try:
             return value[index]
         except (KeyError, IndexError, TypeError):
