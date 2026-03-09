@@ -1454,7 +1454,7 @@ const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelCl
 };
 
 /* ================================================================== */
-/*  Tab: Persona (Personality + Visual)                                */
+/*  Tab: Persona (Identity + Visual)                                   */
 /* ================================================================== */
 const TabPersona = ({ config, handleUpdate, inputClass, labelClass, sectionClass, t }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

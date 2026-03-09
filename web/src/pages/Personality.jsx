@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
     Brain, Zap, ThumbsUp, ThumbsDown, PenLine, Send,
@@ -40,7 +40,7 @@ const OceanSlider = ({ label, labelZh, value, onChange, color }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
         <div style={{ width: 110, flexShrink: 0 }}>
             <div style={{ fontSize: 13, color: '#e5e7eb', fontWeight: 500 }}>{label}</div>
-            <div style={{ fontSize: 11, color: '#6b7280' }}>{labelZh}</div>
+            {labelZh && <div style={{ fontSize: 11, color: '#6b7280' }}>{labelZh}</div>}
         </div>
         <input
             type="range" min="0" max="1" step="0.01"
@@ -58,12 +58,13 @@ const OceanSlider = ({ label, labelZh, value, onChange, color }) => (
 /*  Main Personality Page                                               */
 /* ------------------------------------------------------------------ */
 
-const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
+const Personality = ({ t, showToast }) => {
     const [state, setState] = useState(null);
     const [ocean, setOcean] = useState(null);
     const [promptText, setPromptText] = useState('');
     const [promptDirty, setPromptDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const promptDirtyRef = useRef(false);
 
     // Evolution state
     const [stats, setStats] = useState(null);
@@ -72,12 +73,12 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
     const [submitting, setSubmitting] = useState(false);
     const [optimizing, setOptimizing] = useState(false);
     const [historyItems, setHistoryItems] = useState([]);
-    const [message, setMessage] = useState(null);
 
-    const showMessage = (text, type = 'success') => {
-        setMessage({ text, type });
-        setTimeout(() => setMessage(null), 4000);
-    };
+    const showMessage = useCallback((text, type = 'success') => {
+        if (showToast) {
+            showToast(text, type);
+        }
+    }, [showToast]);
 
     const fetchState = useCallback(async () => {
         try {
@@ -85,12 +86,12 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
             if (res.data?.status === 'ok') {
                 setState(res.data);
                 setOcean(res.data.ocean);
-                if (!promptDirty) {
+                if (!promptDirtyRef.current) {
                     setPromptText(res.data.system_prompt || '');
                 }
             }
         } catch { /* backend offline */ }
-    }, [promptDirty]);
+    }, []);
 
     const fetchEvolution = useCallback(async () => {
         try {
@@ -124,6 +125,7 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
         try {
             await axios.post(`${API_BASE}/personality/state`, { system_prompt: promptText });
             setPromptDirty(false);
+            promptDirtyRef.current = false;
             showMessage(t.promptSaved || 'System prompt saved');
         } catch {
             showMessage(t.promptSaveFailed || 'Failed to save prompt', 'error');
@@ -154,6 +156,7 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
             if (res.data.updated) {
                 showMessage(t.optimizeSuccess || 'System prompt optimized!');
                 setPromptDirty(false);
+                promptDirtyRef.current = false;
                 fetchState();
                 fetchEvolution();
             } else {
@@ -216,21 +219,21 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
                 {ocean ? (
                     <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 32px' }}>
-                            <OceanSlider label="Openness" labelZh="开放性" value={ocean.openness} color="#8b5cf6"
+                        <OceanSlider label="Openness" labelZh={t.oceanOpenness} value={ocean.openness} color="#8b5cf6"
                                 onChange={(v) => setOcean({ ...ocean, openness: v })} />
-                            <OceanSlider label="Conscientiousness" labelZh="尽责性" value={ocean.conscientiousness} color="#3b82f6"
+                            <OceanSlider label="Conscientiousness" labelZh={t.oceanConscientiousness} value={ocean.conscientiousness} color="#3b82f6"
                                 onChange={(v) => setOcean({ ...ocean, conscientiousness: v })} />
-                            <OceanSlider label="Extraversion" labelZh="外倾性" value={ocean.extraversion} color="#22c55e"
+                            <OceanSlider label="Extraversion" labelZh={t.oceanExtraversion} value={ocean.extraversion} color="#22c55e"
                                 onChange={(v) => setOcean({ ...ocean, extraversion: v })} />
-                            <OceanSlider label="Agreeableness" labelZh="宜人性" value={ocean.agreeableness} color="#f59e0b"
+                            <OceanSlider label="Agreeableness" labelZh={t.oceanAgreeableness} value={ocean.agreeableness} color="#f59e0b"
                                 onChange={(v) => setOcean({ ...ocean, agreeableness: v })} />
-                            <OceanSlider label="Neuroticism" labelZh="神经质" value={ocean.neuroticism} color="#ef4444"
+                            <OceanSlider label="Neuroticism" labelZh={t.oceanNeuroticism} value={ocean.neuroticism} color="#ef4444"
                                 onChange={(v) => setOcean({ ...ocean, neuroticism: v })} />
-                            <OceanSlider label="Humor" labelZh="幽默感" value={ocean.humor_level} color="#ec4899"
+                            <OceanSlider label="Humor" labelZh={t.oceanHumor} value={ocean.humor_level} color="#ec4899"
                                 onChange={(v) => setOcean({ ...ocean, humor_level: v })} />
-                            <OceanSlider label="Verbosity" labelZh="话语量" value={ocean.verbosity} color="#14b8a6"
+                            <OceanSlider label="Verbosity" labelZh={t.oceanVerbosity} value={ocean.verbosity} color="#14b8a6"
                                 onChange={(v) => setOcean({ ...ocean, verbosity: v })} />
-                            <OceanSlider label="Formality" labelZh="正式度" value={ocean.formality} color="#6366f1"
+                            <OceanSlider label="Formality" labelZh={t.oceanFormality} value={ocean.formality} color="#6366f1"
                                 onChange={(v) => setOcean({ ...ocean, formality: v })} />
                         </div>
                         <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
@@ -262,7 +265,7 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
                 </p>
                 <textarea
                     value={promptText}
-                    onChange={(e) => { setPromptText(e.target.value); setPromptDirty(true); }}
+                    onChange={(e) => { setPromptText(e.target.value); setPromptDirty(true); promptDirtyRef.current = true; }}
                     rows={10}
                     style={{
                         width: '100%', background: 'rgba(0,0,0,0.3)',
@@ -386,6 +389,19 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {/* Header row */}
+                        <div style={{
+                            display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1fr',
+                            gap: 10, fontSize: 11, fontWeight: 600, color: '#8899ac',
+                            textTransform: 'uppercase', letterSpacing: 1,
+                            padding: '0 14px 4px',
+                            borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        }}>
+                            <div>{t.historyColTimestamp || 'Timestamp'}</div>
+                            <div>{t.historyColEvent || 'Event'}</div>
+                            <div>{t.historyColStatus || 'Status'}</div>
+                            <div>{t.historyColReason || 'Reason'}</div>
+                        </div>
                         {recentHistory.map((item, idx) => {
                             const ts = String(item.timestamp || '');
                             return (
@@ -408,22 +424,6 @@ const Personality = ({ config: appConfig, handleUpdate, saveConfig, t }) => {
                     </div>
                 )}
             </div>
-
-            {/* Toast */}
-            {message && (
-                <div style={{
-                    position: 'fixed', bottom: 32, right: 32, zIndex: 9999,
-                    padding: '14px 28px', borderRadius: 12,
-                    background: message.type === 'error' ? 'rgba(239,68,68,0.85)'
-                        : message.type === 'info' ? 'rgba(59,130,246,0.85)'
-                            : 'rgba(34,197,94,0.85)',
-                    backdropFilter: 'blur(12px)',
-                    color: '#fff', fontWeight: 600, fontSize: 14,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                }}>
-                    {message.text}
-                </div>
-            )}
 
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>

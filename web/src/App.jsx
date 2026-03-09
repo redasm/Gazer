@@ -213,10 +213,8 @@ function App() {
           <Route path="personality" element={
             <Suspense fallback={<PageFallback />}>
               <Personality
-                config={config}
-                handleUpdate={(key, val) => setConfig(prev => ({ ...prev, [key]: val }))}
-                saveConfig={saveConfig}
                 t={t}
+                showToast={showToast}
               />
             </Suspense>
           } />

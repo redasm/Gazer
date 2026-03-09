@@ -750,6 +750,10 @@ export const translations = {
         promptSaveFailed: "Failed to save prompt",
         trainingSection: "Training",
         personalityPageRedirect: "System prompt, OCEAN personality, and training have moved to the Personality page.",
+        historyColTimestamp: "Timestamp",
+        historyColEvent: "Event",
+        historyColStatus: "Status",
+        historyColReason: "Reason",
 
         // Nav groups
         navGroupChat: "Chat",
@@ -1515,6 +1519,18 @@ export const translations = {
         promptSaveFailed: "保存提示词失败",
         trainingSection: "训练",
         personalityPageRedirect: "系统提示词、OCEAN 人格向量和训练功能已移至「人格定制」页面。",
+        oceanOpenness: "开放性",
+        oceanConscientiousness: "尽责性",
+        oceanExtraversion: "外倾性",
+        oceanAgreeableness: "宜人性",
+        oceanNeuroticism: "神经质",
+        oceanHumor: "幽默感",
+        oceanVerbosity: "话语量",
+        oceanFormality: "正式度",
+        historyColTimestamp: "时间",
+        historyColEvent: "事件",
+        historyColStatus: "状态",
+        historyColReason: "原因",
 
         // Nav groups
         navGroupChat: "聊天",

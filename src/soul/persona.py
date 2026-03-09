@@ -218,6 +218,10 @@ class GazerPersonality:
                 mentions[goal] = int(mentions.get(goal, 0) or 0) + 1
         state["goal_mentions"] = mentions
 
+    def get_goal_progress(self) -> dict:
+        """Return a snapshot of goal progress state (public API)."""
+        return dict(self._goal_progress_state)
+
     def reset_goal_progress(self) -> None:
         """Reset goal progress counters (useful for tests)."""
         self._goal_progress_state = {

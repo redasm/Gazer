@@ -4,15 +4,51 @@ from __future__ import annotations
 
 import csv
 import io
+import math
+from pathlib import Path
 from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field, field_validator
 
 from tools.admin.state import config, logger, get_trajectory_store, get_evolution, get_personality
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["evolution"])
+
+MAX_SYSTEM_PROMPT_CHARS = 32_000
+
+
+def _clamp(value: Any, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Convert *value* to float, reject non-finite, and clamp to [lo, hi]."""
+    f = float(value)
+    if not math.isfinite(f):
+        raise ValueError(f"non-finite value: {value!r}")
+    return max(lo, min(hi, f))
+
+
+class OceanUpdate(BaseModel):
+    openness: Optional[float] = None
+    conscientiousness: Optional[float] = None
+    extraversion: Optional[float] = None
+    agreeableness: Optional[float] = None
+    neuroticism: Optional[float] = None
+    humor_level: Optional[float] = None
+    verbosity: Optional[float] = None
+    formality: Optional[float] = None
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def clamp_zero_one(cls, v: Any) -> Any:
+        if v is None:
+            return v
+        return _clamp(v)
+
+
+class UpdatePersonalityRequest(BaseModel):
+    ocean: Optional[OceanUpdate] = None
+    system_prompt: Optional[str] = Field(None, max_length=MAX_SYSTEM_PROMPT_CHARS)
 
 
 @router.get("/personality/state", dependencies=[Depends(verify_admin_token)])
@@ -34,31 +70,31 @@ async def get_personality_state():
             "name": personality.current_state.name,
             "description": personality.current_state.description,
         },
-        "goal_progress": dict(personality._goal_progress_state),
+        "goal_progress": personality.get_goal_progress(),
         "system_prompt": str(config.get("personality.system_prompt", "") or ""),
     }
 
 
 @router.post("/personality/state", dependencies=[Depends(verify_admin_token)])
-async def update_personality_state(data: Dict[str, Any]):
-    """Update OCEAN personality vector sliders."""
+async def update_personality_state(data: UpdatePersonalityRequest):
+    """Update OCEAN personality vector and/or system prompt."""
     personality = get_personality()
     if personality is None:
         return {"status": "unavailable", "reason": "personality_not_initialized"}
 
-    ocean = data.get("ocean", {})
-    if isinstance(ocean, dict) and ocean:
+    if data.ocean is not None:
+        ocean = data.ocean
         from soul.personality.personality_vector import PersonalityVector
         current = personality.personality
         personality.personality = PersonalityVector(
-            openness=float(ocean.get("openness", current.openness)),
-            conscientiousness=float(ocean.get("conscientiousness", current.conscientiousness)),
-            extraversion=float(ocean.get("extraversion", current.extraversion)),
-            agreeableness=float(ocean.get("agreeableness", current.agreeableness)),
-            neuroticism=float(ocean.get("neuroticism", current.neuroticism)),
-            humor_level=float(ocean.get("humor_level", current.humor_level)),
-            verbosity=float(ocean.get("verbosity", current.verbosity)),
-            formality=float(ocean.get("formality", current.formality)),
+            openness=ocean.openness if ocean.openness is not None else current.openness,
+            conscientiousness=ocean.conscientiousness if ocean.conscientiousness is not None else current.conscientiousness,
+            extraversion=ocean.extraversion if ocean.extraversion is not None else current.extraversion,
+            agreeableness=ocean.agreeableness if ocean.agreeableness is not None else current.agreeableness,
+            neuroticism=ocean.neuroticism if ocean.neuroticism is not None else current.neuroticism,
+            humor_level=ocean.humor_level if ocean.humor_level is not None else current.humor_level,
+            verbosity=ocean.verbosity if ocean.verbosity is not None else current.verbosity,
+            formality=ocean.formality if ocean.formality is not None else current.formality,
             learning_rate=current.learning_rate,
         )
         # Recompute affect baseline from updated personality
@@ -66,11 +102,30 @@ async def update_personality_state(data: Dict[str, Any]):
             personality.personality.to_affect_baseline()
         )
 
-    prompt = data.get("system_prompt")
-    if isinstance(prompt, str):
-        config.set("personality.system_prompt", prompt.strip())
+    if data.system_prompt is not None:
+        prompt = data.system_prompt.strip()
+        config.set("personality.system_prompt", prompt)
+        # Sync back to SOUL.md so restarts don't revert the change
+        _sync_prompt_to_soul_md(prompt)
 
     return {"status": "ok", "ocean": personality.personality.to_dict()}
+
+
+def _sync_prompt_to_soul_md(prompt: str) -> None:
+    """Best-effort write-back of system_prompt to assets/SOUL.md."""
+    import os
+    candidates = [
+        Path(os.getcwd()) / "assets" / "SOUL.md",
+        Path(__file__).resolve().parents[3] / "assets" / "SOUL.md",
+    ]
+    for path in candidates:
+        if path.is_file():
+            try:
+                path.write_text(prompt, encoding="utf-8")
+                logger.info("System prompt synced back to %s", path)
+            except OSError as exc:
+                logger.warning("Failed to sync prompt to %s: %s", path, exc)
+            return
 
 
 @router.post("/feedback", dependencies=[Depends(verify_admin_token)])
