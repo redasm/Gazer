@@ -9,6 +9,7 @@ from typing import Any, Dict
 import pytest
 
 from tools.admin import api_facade as admin_api
+import tools.admin.observability as _observability
 
 
 class _FakeConfig:
@@ -163,13 +164,12 @@ async def test_product_health_weekly_build_and_export(monkeypatch, tmp_path: Pat
     )
 
     monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore(now_ts=now_ts))
-    monkeypatch.setattr(
-        admin_api,
-        "USAGE_TRACKER",
-        SimpleNamespace(summary=lambda: {"prompt_tokens": 1000, "completion_tokens": 3300, "total_tokens": 4300}),
-    )
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _FakeRouter())
+    _fake_traj = _FakeTrajectoryStore(now_ts=now_ts)
+    _fake_usage = SimpleNamespace(summary=lambda: {"prompt_tokens": 1000, "completion_tokens": 3300, "total_tokens": 4300})
+    _fake_router = _FakeRouter()
+    monkeypatch.setattr(_observability, "get_trajectory_store", lambda: _fake_traj)
+    monkeypatch.setattr(_observability, "get_usage_tracker", lambda: _fake_usage)
+    monkeypatch.setattr(_observability, "get_llm_router", lambda: _fake_router)
     monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager(backend_dir))
     monkeypatch.setattr(admin_api.time, "time", lambda: now_ts)
     monkeypatch.setattr(

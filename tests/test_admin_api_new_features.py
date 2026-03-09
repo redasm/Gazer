@@ -19,6 +19,7 @@ import tools.admin.observability_helpers as _observability_helpers
 import tools.admin.debug as _debug
 import tools.admin.state as _state
 import tools.admin.workflow_helpers as _workflow_helpers
+import tools.admin.mcp_routes as _mcp_routes
 
 
 
@@ -427,7 +428,8 @@ async def test_mcp_initialize_tools_list_and_call(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
+    _fake_reg = _FakeRegistry()
+    monkeypatch.setattr(_mcp_routes, "get_tool_registry", lambda: _fake_reg)
     _patch_config(monkeypatch,
         _FakeConfig(
             {
@@ -518,7 +520,8 @@ async def test_mcp_policy_rate_limit_and_access_controls(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mcp_audit_and_policy_simulate(monkeypatch):
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
+    _fake_reg = _FakeRegistry()
+    monkeypatch.setattr(_mcp_routes, "get_tool_registry", lambda: _fake_reg)
     _patch_config(monkeypatch,
         _FakeConfig(
             {

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.adapter import GazerContextBuilder
+from agent.context_builder import GazerContextBuilder
 from soul.core import WorkingMemory
 
 

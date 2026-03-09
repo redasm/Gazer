@@ -75,39 +75,8 @@ from devices.satellite_session import SatelliteSessionManager, create_satellite_
 
 logger = logging.getLogger("GazerAdminAPI")
 
-# ---------------------------------------------------------------------------
-# Shared globals -- canonical home is tools.admin._shared
-# brain.py injects into _shared; we re-export here for backward compat.
-# ---------------------------------------------------------------------------
 import tools.admin.state as _state  # noqa: E402
-
-API_QUEUES = _state.API_QUEUES
-
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from tools.canvas import CanvasState
-    from scheduler.cron import CronScheduler
-    from bus.queue import MessageBus
-    from tools.registry import ToolRegistry
-
-# Re-export eval/training managers (still module-level globals in state.py)
-EVAL_BENCHMARK_MANAGER = _state.EVAL_BENCHMARK_MANAGER
-TRAINING_JOB_MANAGER = _state.TRAINING_JOB_MANAGER
-TRAINING_BRIDGE_MANAGER = _state.TRAINING_BRIDGE_MANAGER
-ONLINE_POLICY_LOOP_MANAGER = _state.ONLINE_POLICY_LOOP_MANAGER
-PERSONA_EVAL_MANAGER = _state.PERSONA_EVAL_MANAGER
-PERSONA_RUNTIME_MANAGER = _state.PERSONA_RUNTIME_MANAGER
-
-# Satellite
-SATELLITE_SOURCES = _state.SATELLITE_SOURCES
-SATELLITE_SESSION_MANAGER = _state.SATELLITE_SESSION_MANAGER
-
-
-_MISSING = object()
-_ATOMIC_OBJECT_UPDATE_PATHS: Tuple[str, ...] = (
-    # This map is edited as raw JSON in web UI and must support key deletion.
-    "security.owner_channel_ids",
-)
+from tools.admin.utils import _read_jsonl_tail
 
 
 # --- Lifespan (replaces deprecated @app.on_event) ---
@@ -180,27 +149,6 @@ if _WEB_DIST_DIR.is_dir():
         async def _spa_fallback(path: str):
             # Let API routes take priority (they're registered before this catch-all)
             return FileResponse(str(_index_html), media_type="text/html")
-_WORKFLOW_GRAPH_DIR = _PROJECT_ROOT / "workflows" / "graphs"
-_POLICY_AUDIT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "policy_audit.jsonl"
-_STRATEGY_SNAPSHOT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "strategy_snapshot.jsonl"
-_WEB_ONBOARDING_GUIDE_PATH = _PROJECT_ROOT / "assets" / "WEB_ONBOARDING_GUIDE.md"
-_MEMORY_TURN_HEALTH_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "memory_turn_health.jsonl"
-_TOOL_PERSIST_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "tool_result_persistence.jsonl"
-_EXPORT_DEFAULT_DIR = "data/reports"
-_EXPORT_DEFAULT_ALLOWED_DIRS = ["data/reports", ".tmp_pytest", "exports"]
-_PROTECTED_EXPORT_TARGETS = {
-    (_PROJECT_ROOT / "config" / "settings.yaml").resolve(),
-    (_PROJECT_ROOT / "config" / "owner.json").resolve(),
-}
-
-
-from runtime.task_store import TaskExecutionStore
-from tools.admin.coding_helpers import TASK_RUN_STORE
-_coding_quality_history = collections.deque(maxlen=400)
-_coding_benchmark_history = collections.deque(maxlen=200)
-_coding_benchmark_scheduler_state: Dict[str, Any] = {"last_run_ts": 0.0, "last_result": None}
-_gui_simple_benchmark_history = collections.deque(maxlen=200)
-_TOOL_ERROR_PATTERN = re.compile(r"^Error\s+\[([A-Z0-9_]+)\]:\s*(.*)$", re.IGNORECASE)
 
 
 def _resolve_favicon_file() -> tuple[Optional[Path], Optional[str]]:
@@ -265,59 +213,14 @@ SKILLS_BUILTIN_PATH = Path(SKILLS_BUILTIN)
 SKILLS_EXTENSION_PATH = Path(SKILLS_EXTENSION)
 
 
-# --- Cron API ---
-
-# --- Logs API ---
 from datetime import datetime
-
-# Buffers are canonical in state; re-export for backward compat
-_log_buffer = _state._log_buffer
-_policy_audit_buffer = _state._policy_audit_buffer
-_strategy_change_history = _state._strategy_change_history
-_alert_buffer = _state._alert_buffer
-_mcp_audit_buffer = _state._mcp_audit_buffer
-_mcp_rate_counts = _state._mcp_rate_counts
-_mcp_request_ctx = _state._mcp_request_ctx
-
-# Pre-load policy audit and strategy snapshot history from JSONL files
-from tools.admin.utils import _read_jsonl_tail
-for _entry in _read_jsonl_tail(_state._POLICY_AUDIT_LOG_PATH, limit=500):
-    if isinstance(_entry, dict):
-        _policy_audit_buffer.append(_entry)
-for _entry in _read_jsonl_tail(_state._STRATEGY_SNAPSHOT_LOG_PATH, limit=500):
-    if isinstance(_entry, dict):
-        _strategy_change_history.append(_entry)
-
-# In-memory LLM call history (circular buffer)
-_llm_history = _state._llm_history
-# In-memory workflow run history (circular buffer)
-_workflow_run_history = _state._workflow_run_history
-
-
-
-# --- Structured Log Handler ---
 from tools.admin.error_handlers import install_log_handler
-_gazer_handler = install_log_handler(_log_buffer, _llm_history)
-
-
-# --- Satellite API ---
 from perception.sources.screen_remote import RemoteScreenSource
-
-_latest_satellite_image = None
-
-
-# --- Pairing Management API (inspired by OpenClaw's DM pairing) ---
 from security.pairing import get_pairing_manager
-
-
-# --- Health / Doctor API (inspired by OpenClaw's `doctor` command) ---
-
-
-
-# --- Canvas / A2UI API ---
-
-# Separate connection manager for canvas WebSocket clients
 from tools.admin.websockets import ConnectionManager as _ConnectionManager
+
+_gazer_handler = install_log_handler(_state._log_buffer, _state._llm_history)
+_latest_satellite_image = None
 canvas_ws_manager = _ConnectionManager()
 
 
@@ -330,9 +233,6 @@ async def _canvas_on_change(canvas_state, extra=None):
     if extra:
         payload.update(extra)
     
-    # Serialize securely without crashing on datetime etc., then send text manually
-    import json
-    from tools.admin_api import canvas_ws_manager
     raw_text = json.dumps(payload, default=str, ensure_ascii=False)
     
     disconnected = []
@@ -340,22 +240,23 @@ async def _canvas_on_change(canvas_state, extra=None):
         try:
             await connection.send_text(raw_text)
         except Exception as exc:
-            logger.warning(f"Canvas WS broadcast failed: {exc}")
+            logger.warning("Canvas WS broadcast failed: %s", exc)
             disconnected.append(connection)
     for conn in disconnected:
         canvas_ws_manager.disconnect(conn)
 
 
-# --- Webhook / Hooks API (inspired by OpenClaw's webhook surface) ---
+def _preload_history_buffers() -> None:
+    """Load persisted JSONL audit/strategy history into in-memory buffers."""
+    for entry in _read_jsonl_tail(_state._POLICY_AUDIT_LOG_PATH, limit=500):
+        if isinstance(entry, dict):
+            _state._policy_audit_buffer.append(entry)
+    for entry in _read_jsonl_tail(_state._STRATEGY_SNAPSHOT_LOG_PATH, limit=500):
+        if isinstance(entry, dict):
+            _state._strategy_change_history.append(entry)
 
-# --- Gmail Pub/Sub Webhook ---
 
-# --- Git API ---
-
-
-# --- Debug API ---
-
-def init_admin_api(ctx: AppContext) -> None:
+def init_admin_api
     """Initialise Admin API state for in-process operation.
 
     Called by brain.py before starting uvicorn as an asyncio task.
@@ -368,6 +269,8 @@ def init_admin_api(ctx: AppContext) -> None:
 
     set_app_context(ctx)
     app.state.ctx = ctx
+
+    _preload_history_buffers()
 
     _origins, _creds = _get_cors_config()
     logger.info(

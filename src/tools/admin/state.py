@@ -1,13 +1,10 @@
 """Runtime globals and in-memory buffers for the Admin API layer.
 
-All module-level globals that ``brain.py`` injects at startup live here.
-Router sub-modules should import from this module (via ``_shared``) instead
-of ``admin_api.py`` to avoid circular dependencies.
-
 Convention:
     * UPPER_CASE names are *injected at runtime* by ``brain.py``.
       They start as ``None`` and are set once during startup.
     * ``_lowercase`` buffers are shared circular buffers used across routers.
+    * ``get_xxx()`` accessor functions read from :class:`AppContext`.
 """
 
 from __future__ import annotations
@@ -185,30 +182,3 @@ _mcp_request_ctx: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars
     "mcp_request_ctx",
     default=None,
 )
-
-# ---------------------------------------------------------------------------
-# Backward-compat: module-level __getattr__ for removed globals
-# ---------------------------------------------------------------------------
-_COMPAT_GETTERS = {
-    'CANVAS_STATE': get_canvas_state,
-    'GMAIL_PUSH_MANAGER': get_gmail_push_manager,
-    'CRON_SCHEDULER': get_cron_scheduler,
-    '_LOCAL_CRON_SCHEDULER_ACTIVE': lambda: False,
-    'TOOL_REGISTRY': get_tool_registry,
-    'LLM_ROUTER': get_llm_router,
-    'PROMPT_CACHE_TRACKER': get_prompt_cache_tracker,
-    'TOOL_BATCHING_TRACKER': get_tool_batching_tracker,
-    'TRAJECTORY_STORE': get_trajectory_store,
-    'HOOK_BUS': get_hook_bus,
-    'HOOK_TOKEN': get_hook_token,
-    'WHATSAPP_CHANNEL': get_whatsapp_channel,
-    'TEAMS_CHANNEL': get_teams_channel,
-    'GOOGLE_CHAT_CHANNEL': get_google_chat_channel,
-    'USAGE_TRACKER': get_usage_tracker,
-}
-
-def __getattr__(name: str):
-    fn = _COMPAT_GETTERS.get(name)
-    if fn is not None:
-        return fn()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

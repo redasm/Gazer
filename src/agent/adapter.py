@@ -29,9 +29,8 @@ from security.owner import get_owner_manager
 from soul.models import ModelRegistry
 from multi_agent.models import MultiAgentExecutionContext
 
-# Extracted modules — re-exported for backward compatibility
-from agent.context_builder import GazerContextBuilder, DEFAULT_CONTEXT_MAX_TOKENS  # noqa: F401
-from agent.multi_agent import _MultiAgentWorkerBudget, MultiAgentMixin  # noqa: F401
+from agent.context_builder import GazerContextBuilder
+from agent.multi_agent import _MultiAgentWorkerBudget, MultiAgentMixin
 
 logger = logging.getLogger("GazerAdapter")
 
@@ -632,9 +631,9 @@ class GazerAgent(MultiAgentMixin):
                     api_key=fb_key, api_base=fb_base, default_model=fb_model,
                 )
                 self._fast_model = fb_model
-                logger.info(f"Fast brain initialized: {fb_model}")
+                logger.info("Fast brain initialized: %s", fb_model)
         except Exception as e:
-            logger.warning(f"Fast brain unavailable: {e}")
+            logger.warning("Fast brain unavailable: %s", e)
 
     async def _handle_outbound(self, msg: OutboundMessage) -> None:
         """Handle outbound messages and resolve pending futures."""
@@ -770,7 +769,7 @@ class GazerAgent(MultiAgentMixin):
                 MemoryEntry(sender="Gazer", content=assistant_content)
             )
         except Exception as e:
-            logger.error(f"Failed to save stream response to memory: {e}")
+            logger.error("Failed to save stream response to memory: %s", e)
 
     async def _persist_turn_memory(self, msg: InboundMessage, assistant_content: str) -> bool:
         """Persist a normal bus-driven turn into long-term memory."""
@@ -792,7 +791,7 @@ class GazerAgent(MultiAgentMixin):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to persist turn memory: {e}")
+            logger.error("Failed to persist turn memory: %s", e)
             return False
 
 

@@ -1,6 +1,6 @@
 """Gazer Admin API -- modular router package.
 
-Shared state (globals injected by ``brain.py``) lives in ``_shared.py``.
+Shared state lives in ``tools.admin.state``; helpers in sibling modules.
 """
 
 from tools.admin import (

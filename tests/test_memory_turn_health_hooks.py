@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.adapter import GazerContextBuilder
+from agent.context_builder import GazerContextBuilder
 from agent.turn_hooks import TurnHookManager
 from soul.core import WorkingMemory
 from tools.admin import api_facade as admin_api

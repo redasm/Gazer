@@ -52,17 +52,11 @@ class GazerContextBuilder(ContextBuilder):
                     "include_emotion_context": bool(guard.get("include_emotion_context", True)),
                     "include_recent_observation": bool(guard.get("include_recent_observation", True)),
                 }
-            try:
-                self._companion_context = await self.memory_manager.get_companion_context(
-                    current_message,
-                    working_memory,
-                    **kwargs,
-                )
-            except TypeError:
-                self._companion_context = await self.memory_manager.get_companion_context(
-                    current_message,
-                    working_memory,
-                )
+            self._companion_context = await self.memory_manager.get_companion_context(
+                current_message,
+                working_memory,
+                **kwargs,
+            )
             if not self._companion_context and working_memory.memories:
                 recent_lines: List[str] = []
                 for item in working_memory.memories[-4:]:

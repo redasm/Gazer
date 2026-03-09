@@ -177,7 +177,7 @@ class SecureFileStorage:
         
         os.replace(temp_path, self.file_path)
         
-        logger.info(f"Saved encrypted data to {self.file_path}")
+        logger.info("Saved encrypted data to %s", self.file_path)
     
     def load(self) -> Dict[str, Any]:
         """Load and decrypt data from file.
@@ -244,8 +244,8 @@ class SecureFileStorage:
             backup_path = f"{plaintext_file}.plaintext.bak"
             os.replace(plaintext_file, backup_path)
             
-            logger.info(f"Migrated {plaintext_file} to encrypted storage")
+            logger.info("Migrated %s to encrypted storage", plaintext_file)
             return True
         except Exception as e:
-            logger.error(f"Migration failed: {e}")
+            logger.error("Migration failed: %s", e)
             return False

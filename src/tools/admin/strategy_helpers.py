@@ -21,8 +21,9 @@ from tools.admin.state import (
     _mcp_audit_buffer,
     _POLICY_AUDIT_LOG_PATH,
     _STRATEGY_SNAPSHOT_LOG_PATH,
+    get_llm_router,
 )
-from tools.admin.utils import _append_jsonl_record
+from tools.admin.utils import _append_jsonl_record, _read_jsonl_tail
 
 logger = logging.getLogger('GazerAdminAPI')
 
@@ -145,25 +146,26 @@ def _apply_strategy_snapshot(snapshot: Dict[str, Any], mode: str = "rollback") -
     _save_config_if_supported()
 
     router_updated = False
-    if LLM_ROUTER is not None:
+    llm_router = get_llm_router()
+    if llm_router is not None:
         strategy = filtered_values.get("models.router.strategy")
-        if strategy is not None and hasattr(LLM_ROUTER, "set_strategy"):
+        if strategy is not None and hasattr(llm_router, "set_strategy"):
             try:
-                LLM_ROUTER.set_strategy(str(strategy))
+                llm_router.set_strategy(str(strategy))
                 router_updated = True
             except Exception:
                 logger.debug("Failed to apply router strategy rollback", exc_info=True)
         budget_policy = filtered_values.get("models.router.budget")
-        if isinstance(budget_policy, dict) and hasattr(LLM_ROUTER, "set_budget_policy"):
+        if isinstance(budget_policy, dict) and hasattr(llm_router, "set_budget_policy"):
             try:
-                LLM_ROUTER.set_budget_policy(dict(budget_policy))
+                llm_router.set_budget_policy(dict(budget_policy))
                 router_updated = True
             except Exception:
                 logger.debug("Failed to apply router budget rollback", exc_info=True)
         outlier_policy = filtered_values.get("models.router.outlier_ejection")
-        if isinstance(outlier_policy, dict) and hasattr(LLM_ROUTER, "set_outlier_policy"):
+        if isinstance(outlier_policy, dict) and hasattr(llm_router, "set_outlier_policy"):
             try:
-                LLM_ROUTER.set_outlier_policy(dict(outlier_policy))
+                llm_router.set_outlier_policy(dict(outlier_policy))
                 router_updated = True
             except Exception:
                 logger.debug("Failed to apply router outlier rollback", exc_info=True)
