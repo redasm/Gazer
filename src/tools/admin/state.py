@@ -90,6 +90,10 @@ def get_hook_token():
     ctx = _ctx()
     return ctx.hook_token if ctx else None
 
+def get_personality():
+    ctx = _ctx()
+    return ctx.personality if ctx else None
+
 def get_gmail_push_manager():
     ctx = _ctx()
     return ctx.gmail_push_manager if ctx else None

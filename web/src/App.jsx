@@ -10,7 +10,6 @@ axios.defaults.withCredentials = true;
 // Route-level code splitting via React.lazy
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Settings = React.lazy(() => import('./pages/Settings'));
-const Evolution = React.lazy(() => import('./pages/Evolution'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Skills = React.lazy(() => import('./pages/Skills'));
 const MemoryGalaxy = React.lazy(() => import('./pages/MemoryGalaxy'));
@@ -28,8 +27,8 @@ const ReleaseGate = React.lazy(() => import('./pages/ReleaseGate'));
 const OptimizationTasks = React.lazy(() => import('./pages/OptimizationTasks'));
 const TrainerJobs = React.lazy(() => import('./pages/TrainerJobs'));
 const Observability = React.lazy(() => import('./pages/Observability'));
-const PersonaEval = React.lazy(() => import('./pages/PersonaEval'));
 const WorkflowStudio = React.lazy(() => import('./pages/WorkflowStudio'));
+const Personality = React.lazy(() => import('./pages/Personality'));
 
 const PageFallback = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh', color: '#888' }}>
@@ -211,7 +210,16 @@ function App() {
               />
             </Suspense>
           } />
-          <Route path="evolution" element={<Suspense fallback={<PageFallback />}><Evolution t={t} /></Suspense>} />
+          <Route path="personality" element={
+            <Suspense fallback={<PageFallback />}>
+              <Personality
+                config={config}
+                handleUpdate={(key, val) => setConfig(prev => ({ ...prev, [key]: val }))}
+                saveConfig={saveConfig}
+                t={t}
+              />
+            </Suspense>
+          } />
           <Route path="chat" element={<Suspense fallback={<PageFallback />}><Chat t={t} /></Suspense>} />
           <Route path="multi-agent" element={
             <Suspense fallback={<PageFallback />}>
@@ -256,7 +264,6 @@ function App() {
           <Route path="policy/optimization-tasks" element={<Suspense fallback={<PageFallback />}><OptimizationTasks t={t} /></Suspense>} />
           <Route path="policy/trainer-jobs" element={<Suspense fallback={<PageFallback />}><TrainerJobs t={t} /></Suspense>} />
           <Route path="policy/observability" element={<Suspense fallback={<PageFallback />}><Observability t={t} /></Suspense>} />
-          <Route path="policy/persona-eval" element={<Suspense fallback={<PageFallback />}><PersonaEval t={t} /></Suspense>} />
           <Route path="workflow" element={<Suspense fallback={<PageFallback />}><WorkflowStudio t={t} showNotice={showToast} /></Suspense>} />
           <Route path="policy/audit" element={<Suspense fallback={<PageFallback />}><PolicyAudit t={t} /></Suspense>} />
 

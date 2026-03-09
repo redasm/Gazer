@@ -70,6 +70,7 @@ class GazerBrain:
         self.app_context.prompt_cache_tracker = self.agent.loop.prompt_cache
         self.app_context.tool_batching_tracker = self.agent.loop.tool_batching_tracker
         self.app_context.trajectory_store = self.agent.loop.trajectory_store
+        self.app_context.personality = self.agent.personality
 
         self.canvas_state = init_canvas(
             config, self.app_context, self._get_canvas_on_change(),

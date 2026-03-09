@@ -1458,7 +1458,7 @@ const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelCl
 /* ================================================================== */
 const TabPersona = ({ config, handleUpdate, inputClass, labelClass, sectionClass, t }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {/* Personality */}
+        {/* Basic Identity */}
         <section className={sectionClass}>
             <SectionHeader icon={<User size={20} />} color="#c084fc" title={t.personalitySection} desc={t.personalityDesc} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1481,88 +1481,9 @@ const TabPersona = ({ config, handleUpdate, inputClass, labelClass, sectionClass
                     </div>
                 </div>
             </div>
-            <div>
-                <label className={labelClass}>{t.systemPrompt}</label>
-                <textarea className={inputClass}
-                    rows={6}
-                    style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}
-                    value={config.personality?.system_prompt || ""}
-                    onChange={(e) => handleUpdate("personality.system_prompt", e.target.value)} />
-            </div>
-            <div style={{ marginTop: 8, padding: 14, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, background: 'rgba(0,0,0,0.22)' }}>
-                <h4 style={{ margin: 0, marginBottom: 10, color: '#e9d5ff', fontSize: 14, fontWeight: 700 }}>
-                    {t.autoOptimizeSection || 'Auto Optimize'}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                        <ToggleRow
-                            label={t.autoEnabled || 'Enable auto optimize'}
-                            checked={Boolean(config.personality?.evolution?.auto_optimize?.enabled)}
-                            onChange={(v) => handleUpdate("personality.evolution.auto_optimize.enabled", v)}
-                        />
-                    </div>
-                </div>
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                    <h5 style={{ margin: 0, marginBottom: 10, color: '#c4b5fd', fontSize: 13, fontWeight: 700 }}>
-                        {t.publishGateSection || 'Publish Gate'}
-                    </h5>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2">
-                            <ToggleRow
-                                label={t.publishGateEnabled || 'Enable publish gate'}
-                                checked={Boolean(config.personality?.evolution?.publish_gate?.enabled)}
-                                onChange={(v) => handleUpdate("personality.evolution.publish_gate.enabled", v)}
-                            />
-                            <ToggleRow
-                                label={t.publishGateRequireName || 'Require personality name'}
-                                checked={Boolean(config.personality?.evolution?.publish_gate?.require_personality_name ?? true)}
-                                onChange={(v) => handleUpdate("personality.evolution.publish_gate.require_personality_name", v)}
-                            />
-                            <ToggleRow
-                                label={t.publishGateRespectRelease || 'Respect release gate'}
-                                checked={Boolean(config.personality?.evolution?.publish_gate?.respect_release_gate ?? true)}
-                                onChange={(v) => handleUpdate("personality.evolution.publish_gate.respect_release_gate", v)}
-                            />
-                        </div>
-                    </div>
-                </div>
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                    <h5 style={{ margin: 0, marginBottom: 10, color: '#c4b5fd', fontSize: 13, fontWeight: 700 }}>
-                        {t.prePublishEvalSection || 'Pre-publish Eval'}
-                    </h5>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2">
-                            <ToggleRow
-                                label={t.prePublishEvalEnabled || 'Enable pre-publish eval'}
-                                checked={Boolean(config.personality?.evolution?.pre_publish_eval?.enabled ?? true)}
-                                onChange={(v) => handleUpdate("personality.evolution.pre_publish_eval.enabled", v)}
-                            />
-                            <ToggleRow
-                                label={t.prePublishEvalBlockOnFail || 'Block on fail'}
-                                checked={Boolean(config.personality?.evolution?.pre_publish_eval?.block_on_fail ?? true)}
-                                onChange={(v) => handleUpdate("personality.evolution.pre_publish_eval.block_on_fail", v)}
-                            />
-                            <ToggleRow
-                                label={t.prePublishEvalSetGate || 'Set release gate on fail'}
-                                checked={Boolean(config.personality?.evolution?.pre_publish_eval?.set_release_gate_on_fail ?? true)}
-                                onChange={(v) => handleUpdate("personality.evolution.pre_publish_eval.set_release_gate_on_fail", v)}
-                            />
-                        </div>
-                        <div>
-                            <label className={labelClass}>{t.prePublishEvalMinScore || 'Min score (0-1)'}</label>
-                            <input
-                                type="number"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                className={inputClass}
-                                value={config.personality?.evolution?.pre_publish_eval?.min_score ?? 0.55}
-                                onChange={(e) => handleUpdate("personality.evolution.pre_publish_eval.min_score", Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)))}
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <p style={{ color: '#6b7280', fontSize: 12, margin: '8px 0 0' }}>
+                {t.personalityPageRedirect || 'System prompt, OCEAN personality, and training have moved to the Personality page.'}
+            </p>
         </section>
 
         {/* Visual */}

@@ -58,14 +58,13 @@ const Layout = ({ lang, setLang, status }) => {
                 { path: '/policy/optimization-tasks', icon: <Activity size={18} />, label: t.optimizationTasks || 'Optimization Tasks' },
                 { path: '/policy/trainer-jobs', icon: <Cpu size={18} />, label: t.trainerJobs || 'Trainer Jobs' },
                 { path: '/policy/observability', icon: <Activity size={18} />, label: t.observability || 'Observability' },
-                { path: '/policy/persona-eval', icon: <Brain size={18} />, label: t.personaEval || 'Persona Eval' },
                 { path: '/policy/audit', icon: <Activity size={18} />, label: t.policyAudit || 'Policy Audit' },
             ],
         },
         {
             label: t.navGroupSoul || 'Soul',
             items: [
-                { path: '/evolution', icon: <Brain size={18} />, label: t.tabEvolution },
+                { path: '/personality', icon: <Brain size={18} />, label: t.personalityPage || 'Personality' },
             ],
         },
         {

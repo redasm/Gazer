@@ -9,10 +9,68 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
-from tools.admin.state import config, logger, get_trajectory_store, get_evolution
+from tools.admin.state import config, logger, get_trajectory_store, get_evolution, get_personality
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["evolution"])
+
+
+@router.get("/personality/state", dependencies=[Depends(verify_admin_token)])
+async def get_personality_state():
+    """Return live personality state: OCEAN vector, affect, mental state, goals."""
+    personality = get_personality()
+    if personality is None:
+        return {"status": "unavailable", "reason": "personality_not_initialized"}
+
+    affect = personality.affect_manager.current_affect()
+    return {
+        "status": "ok",
+        "ocean": personality.personality.to_dict(),
+        "affect": {
+            "label": affect.to_label(),
+            **affect.to_dict(),
+        },
+        "mental_state": {
+            "name": personality.current_state.name,
+            "description": personality.current_state.description,
+        },
+        "goal_progress": dict(personality._goal_progress_state),
+        "system_prompt": str(config.get("personality.system_prompt", "") or ""),
+    }
+
+
+@router.post("/personality/state", dependencies=[Depends(verify_admin_token)])
+async def update_personality_state(data: Dict[str, Any]):
+    """Update OCEAN personality vector sliders."""
+    personality = get_personality()
+    if personality is None:
+        return {"status": "unavailable", "reason": "personality_not_initialized"}
+
+    ocean = data.get("ocean", {})
+    if isinstance(ocean, dict) and ocean:
+        from soul.personality.personality_vector import PersonalityVector
+        current = personality.personality
+        personality.personality = PersonalityVector(
+            openness=float(ocean.get("openness", current.openness)),
+            conscientiousness=float(ocean.get("conscientiousness", current.conscientiousness)),
+            extraversion=float(ocean.get("extraversion", current.extraversion)),
+            agreeableness=float(ocean.get("agreeableness", current.agreeableness)),
+            neuroticism=float(ocean.get("neuroticism", current.neuroticism)),
+            humor_level=float(ocean.get("humor_level", current.humor_level)),
+            verbosity=float(ocean.get("verbosity", current.verbosity)),
+            formality=float(ocean.get("formality", current.formality)),
+            learning_rate=current.learning_rate,
+        )
+        # Recompute affect baseline from updated personality
+        personality.affect_manager.update_baseline(
+            personality.personality.to_affect_baseline()
+        )
+
+    prompt = data.get("system_prompt")
+    if isinstance(prompt, str):
+        config.set("personality.system_prompt", prompt.strip())
+
+    return {"status": "ok", "ocean": personality.personality.to_dict()}
 
 
 @router.post("/feedback", dependencies=[Depends(verify_admin_token)])

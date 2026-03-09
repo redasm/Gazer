@@ -40,6 +40,9 @@ class AppContext:
     prompt_cache_tracker: Any = None
     tool_batching_tracker: Any = None
 
+    # --- Soul / Personality ---
+    personality: Any = None  # GazerPersonality instance
+
     # --- Optional services ---
     canvas_state: Any = None
     cron_scheduler: Any = None
