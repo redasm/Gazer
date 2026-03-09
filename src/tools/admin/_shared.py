@@ -26,29 +26,14 @@ from runtime.config_manager import config
 # ---------------------------------------------------------------------------
 from tools.admin.state import (  # noqa: F401
     logger,
-    # Runtime globals
+    # Runtime globals (still module-level)
     API_QUEUES,
-    CANVAS_STATE,
-    GMAIL_PUSH_MANAGER,
-    CRON_SCHEDULER,
-    _LOCAL_CRON_SCHEDULER_ACTIVE,
-    TOOL_REGISTRY,
-    LLM_ROUTER,
-    PROMPT_CACHE_TRACKER,
-    TOOL_BATCHING_TRACKER,
-    TRAJECTORY_STORE,
     EVAL_BENCHMARK_MANAGER,
     TRAINING_JOB_MANAGER,
     TRAINING_BRIDGE_MANAGER,
     ONLINE_POLICY_LOOP_MANAGER,
     PERSONA_EVAL_MANAGER,
     PERSONA_RUNTIME_MANAGER,
-    HOOK_BUS,
-    HOOK_TOKEN,
-    WHATSAPP_CHANNEL,
-    TEAMS_CHANNEL,
-    GOOGLE_CHAT_CHANNEL,
-    USAGE_TRACKER,
     # Accessor functions
     get_usage_tracker,
     get_llm_router,
@@ -57,6 +42,13 @@ from tools.admin.state import (  # noqa: F401
     get_tool_batching_tracker,
     get_tool_registry,
     get_canvas_state,
+    get_cron_scheduler,
+    get_hook_bus,
+    get_hook_token,
+    get_gmail_push_manager,
+    get_whatsapp_channel,
+    get_teams_channel,
+    get_google_chat_channel,
     # Satellite
     SATELLITE_SOURCES,
     SATELLITE_SESSION_MANAGER,
@@ -278,3 +270,31 @@ def _latest_persona_consistency_signal(*args, **kwargs):
 def _build_coding_quality_metrics(*args, **kwargs):
     from tools.admin.system import _build_coding_quality_metrics as _impl
     return _impl(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat: module-level __getattr__ for removed globals
+# ---------------------------------------------------------------------------
+_COMPAT_GETTERS = {
+    'CANVAS_STATE': 'get_canvas_state',
+    'GMAIL_PUSH_MANAGER': 'get_gmail_push_manager',
+    'CRON_SCHEDULER': 'get_cron_scheduler',
+    'TOOL_REGISTRY': 'get_tool_registry',
+    'LLM_ROUTER': 'get_llm_router',
+    'PROMPT_CACHE_TRACKER': 'get_prompt_cache_tracker',
+    'TOOL_BATCHING_TRACKER': 'get_tool_batching_tracker',
+    'TRAJECTORY_STORE': 'get_trajectory_store',
+    'HOOK_BUS': 'get_hook_bus',
+    'HOOK_TOKEN': 'get_hook_token',
+    'WHATSAPP_CHANNEL': 'get_whatsapp_channel',
+    'TEAMS_CHANNEL': 'get_teams_channel',
+    'GOOGLE_CHAT_CHANNEL': 'get_google_chat_channel',
+    'USAGE_TRACKER': 'get_usage_tracker',
+}
+
+def __getattr__(name: str):
+    getter_name = _COMPAT_GETTERS.get(name)
+    if getter_name is not None:
+        from tools.admin import state as _st
+        return getattr(_st, getter_name)()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

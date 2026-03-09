@@ -8,7 +8,8 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import _is_subpath, logger
+from tools.admin.state import logger
+from tools.admin.utils import _is_subpath
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["skills"])

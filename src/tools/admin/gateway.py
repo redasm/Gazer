@@ -28,11 +28,9 @@ from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from ._shared import (
-    API_QUEUES,
-    CANVAS_STATE,
-    _MAX_WS_MESSAGE_BYTES,
-    _MAX_CHAT_MESSAGE_CHARS,
+from tools.admin.state import (
+    API_QUEUES, get_canvas_state,
+    _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS,
     logger,
 )
 from .auth import _verify_ws_auth

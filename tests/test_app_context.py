@@ -21,30 +21,21 @@ def test_app_context_singleton():
         _app_context_module._ctx = old_ctx
 
 def test_state_getters_delegate_to_app_context():
-    # Setup
     import runtime.app_context as _app_context_module
     old_ctx = _app_context_module._ctx
-    
+
     ctx = AppContext(
         llm_router="context_router",
         usage_tracker=None,
     )
     _app_context_module._ctx = ctx
-    
+
     try:
-        # Check delegation
         assert admin_state.get_llm_router() == "context_router"
-        
-        # Check fallback when AppContext doesn't have the field
-        # wait, the getter logic says: `ctx.usage_tracker if (ctx and ctx.usage_tracker is not None) else USAGE_TRACKER`
-        admin_state.USAGE_TRACKER = "global_usage"
-        # since AppContext usage_tracker is None, it should fall back to global
-        assert admin_state.get_usage_tracker() == "global_usage"
-        
-        # Check fallback when AppContext is None entirely
+        # usage_tracker is None in AppContext -> returns None
+        assert admin_state.get_usage_tracker() is None
+        # No AppContext -> returns None
         _app_context_module._ctx = None
-        admin_state.LLM_ROUTER = "global_router"
-        assert admin_state.get_llm_router() == "global_router"
-        
+        assert admin_state.get_llm_router() is None
     finally:
         _app_context_module._ctx = old_ctx

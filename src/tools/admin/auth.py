@@ -66,8 +66,6 @@ def _get_cors_config():
     return origins, credentials
 
 
-cors_origins, cors_credentials = _get_cors_config()
-
 
 # ---------------------------------------------------------------------------
 # Token extraction helpers
@@ -103,18 +101,15 @@ def _is_loopback(request: Request) -> bool:
 
 def _is_allowed_origin(origin: str) -> bool:
     """Check if Origin header is allowed by API CORS settings.
-    
-    Enhanced security:
-    - Rejects wildcard "*" in strict mode
-    - Requires exact origin match (no subdomain wildcards)
-    - Validates scheme and host structure
+
+    Reads config dynamically so runtime changes take effect without restart.
     """
+    origins, _ = _get_cors_config()
+
     if not origin:
-        # Missing Origin header: allow only if not in strict mode
         return not bool(config.get("api.cors_strict_mode", True))
-    
-    # Reject wildcard in strict mode (production safety)
-    if "*" in cors_origins:
+
+    if "*" in origins:
         if bool(config.get("api.cors_strict_mode", True)):
             logger.warning(
                 "Wildcard CORS origin detected in strict mode. "
@@ -130,7 +125,7 @@ def _is_allowed_origin(origin: str) -> bool:
         return False
     normalized_origin = f"{origin_scheme}://{origin_host}"
 
-    for allowed in cors_origins:
+    for allowed in origins:
         parsed_allowed = urlparse(allowed)
         allowed_scheme = parsed_allowed.scheme.lower().strip()
         allowed_host = parsed_allowed.netloc.lower().strip()

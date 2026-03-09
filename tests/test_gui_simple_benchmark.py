@@ -45,7 +45,7 @@ class _FakeToolRegistry:
 async def test_gui_simple_benchmark_observability_endpoints(monkeypatch):
     admin_api._gui_simple_benchmark_history.clear()
     fake_registry = _FakeToolRegistry()
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", fake_registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: fake_registry)
 
     run_payload = await admin_api.run_gui_simple_benchmark(
         {"target": "local-desktop", "stop_on_failure": False}

@@ -45,6 +45,12 @@ class AppContext:
     cron_scheduler: Any = None
     hook_bus: Any = None
     hook_token: Optional[str] = None
+    gmail_push_manager: Any = None
+
+    # --- Channel instances (for webhook routing) ---
+    whatsapp_channel: Any = None
+    teams_channel: Any = None
+    google_chat_channel: Any = None
 
 
 # ---------------------------------------------------------------------------

@@ -80,7 +80,7 @@ async def test_context_builder_exposes_memory_stats(monkeypatch, tmp_path: Path)
             }
         }
     )
-    monkeypatch.setattr("agent.adapter.config", fake_cfg)
+    monkeypatch.setattr("agent.context_builder.config", fake_cfg)
     builder = GazerContextBuilder(workspace=tmp_path, memory_manager=_FakeMemoryManager())
     await builder.prepare_memory_context("hello")
     stats = builder.get_memory_context_stats()

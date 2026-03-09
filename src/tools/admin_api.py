@@ -29,7 +29,6 @@ import psutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, UploadFile, File
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse, FileResponse, PlainTextResponse
 from fastapi import Request
 from runtime.app_context import AppContext, get_app_context, set_app_context
@@ -80,10 +79,9 @@ logger = logging.getLogger("GazerAdminAPI")
 # Shared globals -- canonical home is tools.admin._shared
 # brain.py injects into _shared; we re-export here for backward compat.
 # ---------------------------------------------------------------------------
-import tools.admin._shared as _shared  # noqa: E402
-import tools.admin.state as _state  # noqa: E402  -- mutations go here
+import tools.admin.state as _state  # noqa: E402
 
-API_QUEUES = _shared.API_QUEUES
+API_QUEUES = _state.API_QUEUES
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -92,38 +90,17 @@ if TYPE_CHECKING:
     from bus.queue import MessageBus
     from tools.registry import ToolRegistry
 
-# Re-export mutable globals as module-level names.
-# NOTE: Because these are reassigned by brain.py via _shared, code that reads
-# ``admin_api.CANVAS_STATE`` must go through ``_shared.<name>`` to see
-# the injected value.  For the transition period we keep these aliases so
-# existing ``from tools.admin_api import X`` statements continue to resolve
-# at import time; runtime access should prefer ``_shared.<name>``.
-CANVAS_STATE = _shared.CANVAS_STATE
-GMAIL_PUSH_MANAGER = _shared.GMAIL_PUSH_MANAGER
-CRON_SCHEDULER = _shared.CRON_SCHEDULER
-_LOCAL_CRON_SCHEDULER_ACTIVE = _shared._LOCAL_CRON_SCHEDULER_ACTIVE
-TOOL_REGISTRY = _shared.TOOL_REGISTRY
-LLM_ROUTER = _shared.LLM_ROUTER
-PROMPT_CACHE_TRACKER = _shared.PROMPT_CACHE_TRACKER
-TOOL_BATCHING_TRACKER = _shared.TOOL_BATCHING_TRACKER
-TRAJECTORY_STORE = _shared.TRAJECTORY_STORE
-EVAL_BENCHMARK_MANAGER = _shared.EVAL_BENCHMARK_MANAGER
-TRAINING_JOB_MANAGER = _shared.TRAINING_JOB_MANAGER
-TRAINING_BRIDGE_MANAGER = _shared.TRAINING_BRIDGE_MANAGER
-ONLINE_POLICY_LOOP_MANAGER = _shared.ONLINE_POLICY_LOOP_MANAGER
-PERSONA_EVAL_MANAGER = _shared.PERSONA_EVAL_MANAGER
-PERSONA_RUNTIME_MANAGER = _shared.PERSONA_RUNTIME_MANAGER
+# Re-export eval/training managers (still module-level globals in state.py)
+EVAL_BENCHMARK_MANAGER = _state.EVAL_BENCHMARK_MANAGER
+TRAINING_JOB_MANAGER = _state.TRAINING_JOB_MANAGER
+TRAINING_BRIDGE_MANAGER = _state.TRAINING_BRIDGE_MANAGER
+ONLINE_POLICY_LOOP_MANAGER = _state.ONLINE_POLICY_LOOP_MANAGER
+PERSONA_EVAL_MANAGER = _state.PERSONA_EVAL_MANAGER
+PERSONA_RUNTIME_MANAGER = _state.PERSONA_RUNTIME_MANAGER
 
 # Satellite
-SATELLITE_SOURCES = _shared.SATELLITE_SOURCES
-SATELLITE_SESSION_MANAGER = _shared.SATELLITE_SESSION_MANAGER
-
-# Webhook
-HOOK_BUS = _shared.HOOK_BUS
-HOOK_TOKEN = _shared.HOOK_TOKEN
-
-# Usage
-USAGE_TRACKER = _shared.USAGE_TRACKER
+SATELLITE_SOURCES = _state.SATELLITE_SOURCES
+SATELLITE_SESSION_MANAGER = _state.SATELLITE_SESSION_MANAGER
 
 
 _MISSING = object()
@@ -140,7 +117,8 @@ async def _coding_benchmark_scheduler_worker():
     loop = asyncio.get_running_loop()
     while True:
         try:
-            await loop.run_in_executor(None, _shared._maybe_run_scheduled_coding_benchmark)
+            from tools.admin.coding_helpers import _maybe_run_scheduled_coding_benchmark
+            await loop.run_in_executor(None, _maybe_run_scheduled_coding_benchmark)
         except Exception:
             logger.debug("Coding benchmark scheduler tick failed", exc_info=True)
         await asyncio.sleep(5)
@@ -151,11 +129,13 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan handler -- starts background workers on startup."""
     bench_task = asyncio.create_task(_coding_benchmark_scheduler_worker())
     cron_task: Optional[asyncio.Task] = None
-    if _state.CRON_SCHEDULER is not None:
-        cron_task = asyncio.create_task(_state.CRON_SCHEDULER.start())
+    cron = _state.get_cron_scheduler()
+    if cron is not None:
+        cron_task = asyncio.create_task(cron.start())
     yield
-    if _state.CRON_SCHEDULER is not None:
-        _state.CRON_SCHEDULER.stop()
+    cron = _state.get_cron_scheduler()
+    if cron is not None:
+        cron.stop()
     if cron_task is not None:
         cron_task.cancel()
     bench_task.cancel()
@@ -214,8 +194,8 @@ _PROTECTED_EXPORT_TARGETS = {
 }
 
 
-TaskExecutionStore = _shared.TaskExecutionStore
-TASK_RUN_STORE = _shared.TASK_RUN_STORE
+from runtime.task_store import TaskExecutionStore
+from tools.admin.coding_helpers import TASK_RUN_STORE
 _coding_quality_history = collections.deque(maxlen=400)
 _coding_benchmark_history = collections.deque(maxlen=200)
 _coding_benchmark_scheduler_state: Dict[str, Any] = {"last_run_ts": 0.0, "last_result": None}
@@ -230,24 +210,39 @@ def _resolve_favicon_file() -> tuple[Optional[Path], Optional[str]]:
     return None, None
 
 
-# --- CORS Configuration ---
-# Canonical implementation lives in tools.admin.auth; import to avoid DRY violation.
+# --- Dynamic CORS middleware (reads config on every request) ---
 from tools.admin.auth import _get_cors_config
-
-_cors_origins, _cors_credentials = _get_cors_config()
 
 # Request size guardrails (defensive defaults; configurable via api.* settings)
 _MAX_WS_MESSAGE_BYTES = int(config.get("api.max_ws_message_bytes", 256 * 1024))
 _MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
 _MAX_UPLOAD_BYTES = int(config.get("api.max_upload_bytes", 10 * 1024 * 1024))
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=_cors_credentials,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+
+@app.middleware("http")
+async def _dynamic_cors(request: Request, call_next):
+    origin = request.headers.get("origin", "")
+    origins, credentials = _get_cors_config()
+    is_allowed = origin and ("*" in origins or origin in origins)
+
+    if request.method == "OPTIONS":
+        headers = {"Vary": "Origin"}
+        if is_allowed:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            headers["Access-Control-Max-Age"] = "600"
+            if credentials:
+                headers["Access-Control-Allow-Credentials"] = "true"
+        return Response(status_code=200, headers=headers)
+
+    response = await call_next(request)
+    if is_allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        if credentials:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers.setdefault("Vary", "Origin")
+    return response
 
 
 # --- Global Exception Handlers ---
@@ -275,27 +270,28 @@ SKILLS_EXTENSION_PATH = Path(SKILLS_EXTENSION)
 # --- Logs API ---
 from datetime import datetime
 
-# Buffers are canonical in _shared; re-export for backward compat
-_log_buffer = _shared._log_buffer
-_policy_audit_buffer = _shared._policy_audit_buffer
-_strategy_change_history = _shared._strategy_change_history
-_alert_buffer = _shared._alert_buffer
-_mcp_audit_buffer = _shared._mcp_audit_buffer
-_mcp_rate_counts = _shared._mcp_rate_counts
-_mcp_request_ctx = _shared._mcp_request_ctx
+# Buffers are canonical in state; re-export for backward compat
+_log_buffer = _state._log_buffer
+_policy_audit_buffer = _state._policy_audit_buffer
+_strategy_change_history = _state._strategy_change_history
+_alert_buffer = _state._alert_buffer
+_mcp_audit_buffer = _state._mcp_audit_buffer
+_mcp_rate_counts = _state._mcp_rate_counts
+_mcp_request_ctx = _state._mcp_request_ctx
 
 # Pre-load policy audit and strategy snapshot history from JSONL files
-for _entry in _shared._read_jsonl_tail(_shared._POLICY_AUDIT_LOG_PATH, limit=500):
+from tools.admin.utils import _read_jsonl_tail
+for _entry in _read_jsonl_tail(_state._POLICY_AUDIT_LOG_PATH, limit=500):
     if isinstance(_entry, dict):
         _policy_audit_buffer.append(_entry)
-for _entry in _shared._read_jsonl_tail(_shared._STRATEGY_SNAPSHOT_LOG_PATH, limit=500):
+for _entry in _read_jsonl_tail(_state._STRATEGY_SNAPSHOT_LOG_PATH, limit=500):
     if isinstance(_entry, dict):
         _strategy_change_history.append(_entry)
 
 # In-memory LLM call history (circular buffer)
-_llm_history = _shared._llm_history
+_llm_history = _state._llm_history
 # In-memory workflow run history (circular buffer)
-_workflow_run_history = _shared._workflow_run_history
+_workflow_run_history = _state._workflow_run_history
 
 
 
@@ -373,8 +369,9 @@ def init_admin_api(ctx: AppContext) -> None:
     set_app_context(ctx)
     app.state.ctx = ctx
 
+    _origins, _creds = _get_cors_config()
     logger.info(
         "Admin API initialised (in-process). CORS origins=%s, credentials=%s",
-        _cors_origins,
-        _cors_credentials,
+        _origins,
+        _creds,
     )

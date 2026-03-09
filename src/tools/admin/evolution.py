@@ -9,11 +9,7 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
-from ._shared import (
-    config, logger,
-    TRAJECTORY_STORE,
-    get_evolution,
-)
+from tools.admin.state import config, logger, get_trajectory_store, get_evolution
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["evolution"])
@@ -34,15 +30,15 @@ async def submit_feedback(data: Dict[str, Any]):
 
     attached = False
     attached_run_id: Optional[str] = None
-    if TRAJECTORY_STORE is not None:
+    if get_trajectory_store() is not None:
         if not run_id:
-            run_id = TRAJECTORY_STORE.resolve_latest_run(
+            run_id = get_trajectory_store().resolve_latest_run(
                 session_key=session_key or None,
                 chat_id=chat_id or None,
             ) or ""
         if run_id:
             attached = bool(
-                TRAJECTORY_STORE.add_feedback(
+                get_trajectory_store().add_feedback(
                     run_id,
                     label=label,
                     feedback=feedback_text,

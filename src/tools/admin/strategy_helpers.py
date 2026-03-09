@@ -410,7 +410,8 @@ def _consume_satellite_frame_budget(
 
 def _get_tool_governance_snapshot(limit: int = 50) -> Dict[str, Any]:
     safe_limit = max(1, min(int(limit), 500))
-    if _state.TOOL_REGISTRY is None:
+    registry = _state.get_tool_registry()
+    if registry is None:
         return {
             "available": False,
             "budget": {},
@@ -419,14 +420,14 @@ def _get_tool_governance_snapshot(limit: int = 50) -> Dict[str, Any]:
 
     budget: Dict[str, Any] = {}
     recent_rejections: List[Dict[str, Any]] = []
-    if hasattr(_state.TOOL_REGISTRY, "get_budget_runtime_status"):
+    if hasattr(registry, "get_budget_runtime_status"):
         try:
-            budget = _state.TOOL_REGISTRY.get_budget_runtime_status()
+            budget = registry.get_budget_runtime_status()
         except Exception:
             logger.debug("Failed to read tool budget runtime status", exc_info=True)
-    if hasattr(_state.TOOL_REGISTRY, "get_recent_rejection_events"):
+    if hasattr(registry, "get_recent_rejection_events"):
         try:
-            recent_rejections = _state.TOOL_REGISTRY.get_recent_rejection_events(limit=safe_limit)
+            recent_rejections = registry.get_recent_rejection_events(limit=safe_limit)
         except Exception:
             logger.debug("Failed to read tool rejection events", exc_info=True)
 

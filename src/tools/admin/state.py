@@ -20,6 +20,10 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 from runtime.app_context import get_app_context
 from runtime.config_manager import config
 
+# Request size guardrails (read once at import time)
+_MAX_WS_MESSAGE_BYTES = int(config.get("api.max_ws_message_bytes", 256 * 1024))
+_MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
+
 if TYPE_CHECKING:
     from tools.canvas import CanvasState
     from scheduler.cron import CronScheduler
@@ -27,23 +31,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger("GazerAdminAPI")
 
 # ---------------------------------------------------------------------------
-# Runtime globals -- injected by brain.py at startup
+# Runtime globals
 # ---------------------------------------------------------------------------
 
 # In-process asyncio.Queue for Web → Agent chat messages.
 API_QUEUES: Dict[str, Any] = {"input": None}
 
-CANVAS_STATE: Optional["CanvasState"] = None
-GMAIL_PUSH_MANAGER: Optional[Any] = None
-CRON_SCHEDULER: Optional["CronScheduler"] = None
-_LOCAL_CRON_SCHEDULER_ACTIVE: bool = False
-TOOL_REGISTRY: Optional[Any] = None
-LLM_ROUTER: Optional[Any] = None
-PROMPT_CACHE_TRACKER: Optional[Any] = None
-TOOL_BATCHING_TRACKER: Optional[Any] = None
-TRAJECTORY_STORE: Optional[Any] = None
-
-# Eval / training managers (lazy-init)
+# Eval / training managers (lazy-init, not in AppContext)
 EVAL_BENCHMARK_MANAGER: Optional[Any] = None
 TRAINING_JOB_MANAGER: Optional[Any] = None
 TRAINING_BRIDGE_MANAGER: Optional[Any] = None
@@ -51,61 +45,96 @@ ONLINE_POLICY_LOOP_MANAGER: Optional[Any] = None
 PERSONA_EVAL_MANAGER: Optional[Any] = None
 PERSONA_RUNTIME_MANAGER: Optional[Any] = None
 
-# Webhook / hooks
-HOOK_BUS: Optional[Any] = None
-HOOK_TOKEN: Optional[str] = None
-
-# Channel instances (injected by brain.py)
-WHATSAPP_CHANNEL: Optional[Any] = None
-TEAMS_CHANNEL: Optional[Any] = None
-GOOGLE_CHAT_CHANNEL: Optional[Any] = None
-
-# Usage / tracking
-USAGE_TRACKER: Optional[Any] = None
-
 
 # ---------------------------------------------------------------------------
-# Accessor functions for runtime-injected globals
+# Accessor functions — canonical reads go through AppContext
 # ---------------------------------------------------------------------------
-# Using ``from _shared import X`` captures the value at import time. If X is
-# None when the importing module is loaded and brain.py injects it later,
-# the local binding never updates.  These getters always return the *current*
-# module-level value.
-# ---------------------------------------------------------------------------
+
+def _ctx():
+    return get_app_context()
 
 def get_usage_tracker():
-    ctx = get_app_context()
-    return ctx.usage_tracker if (ctx and ctx.usage_tracker is not None) else USAGE_TRACKER
+    ctx = _ctx()
+    return ctx.usage_tracker if ctx else None
 
 def get_llm_router():
-    ctx = get_app_context()
-    return ctx.llm_router if (ctx and ctx.llm_router is not None) else LLM_ROUTER
+    ctx = _ctx()
+    return ctx.llm_router if ctx else None
 
 def get_trajectory_store():
-    ctx = get_app_context()
-    return ctx.trajectory_store if (ctx and ctx.trajectory_store is not None) else TRAJECTORY_STORE
+    ctx = _ctx()
+    return ctx.trajectory_store if ctx else None
 
 def get_prompt_cache_tracker():
-    ctx = get_app_context()
-    return ctx.prompt_cache_tracker if (ctx and ctx.prompt_cache_tracker is not None) else PROMPT_CACHE_TRACKER
+    ctx = _ctx()
+    return ctx.prompt_cache_tracker if ctx else None
 
 def get_tool_batching_tracker():
-    ctx = get_app_context()
-    return ctx.tool_batching_tracker if (ctx and ctx.tool_batching_tracker is not None) else TOOL_BATCHING_TRACKER
+    ctx = _ctx()
+    return ctx.tool_batching_tracker if ctx else None
 
 def get_tool_registry():
-    ctx = get_app_context()
-    return ctx.tool_registry if (ctx and ctx.tool_registry is not None) else TOOL_REGISTRY
+    ctx = _ctx()
+    return ctx.tool_registry if ctx else None
 
 def get_canvas_state():
-    ctx = get_app_context()
-    return ctx.canvas_state if (ctx and ctx.canvas_state is not None) else CANVAS_STATE
+    ctx = _ctx()
+    return ctx.canvas_state if ctx else None
+
+def get_cron_scheduler():
+    ctx = _ctx()
+    return ctx.cron_scheduler if ctx else None
+
+def get_hook_bus():
+    ctx = _ctx()
+    return ctx.hook_bus if ctx else None
+
+def get_hook_token():
+    ctx = _ctx()
+    return ctx.hook_token if ctx else None
+
+def get_gmail_push_manager():
+    ctx = _ctx()
+    return ctx.gmail_push_manager if ctx else None
+
+def get_whatsapp_channel():
+    ctx = _ctx()
+    return ctx.whatsapp_channel if ctx else None
+
+def get_teams_channel():
+    ctx = _ctx()
+    return ctx.teams_channel if ctx else None
+
+def get_google_chat_channel():
+    ctx = _ctx()
+    return ctx.google_chat_channel if ctx else None
 
 
 # Satellite
 from devices.satellite_session import create_satellite_session_manager
 SATELLITE_SOURCES: Dict[str, Any] = {}
 SATELLITE_SESSION_MANAGER = create_satellite_session_manager(config)
+
+
+# ---------------------------------------------------------------------------
+# Lazy service accessors (avoid circular imports at module load time)
+# ---------------------------------------------------------------------------
+
+def get_provider_registry():
+    from runtime.provider_registry import get_provider_registry as _impl
+    return _impl()
+
+def get_deployment_orchestrator():
+    from runtime.deployment_orchestrator import get_deployment_orchestrator as _impl
+    return _impl()
+
+def get_evolution():
+    from soul.evolution import get_evolution as _impl
+    return _impl()
+
+def get_owner_manager():
+    from security.owner import get_owner_manager as _impl
+    return _impl()
 
 
 # ---------------------------------------------------------------------------
@@ -156,3 +185,30 @@ _mcp_request_ctx: contextvars.ContextVar[Optional[Dict[str, Any]]] = contextvars
     "mcp_request_ctx",
     default=None,
 )
+
+# ---------------------------------------------------------------------------
+# Backward-compat: module-level __getattr__ for removed globals
+# ---------------------------------------------------------------------------
+_COMPAT_GETTERS = {
+    'CANVAS_STATE': get_canvas_state,
+    'GMAIL_PUSH_MANAGER': get_gmail_push_manager,
+    'CRON_SCHEDULER': get_cron_scheduler,
+    '_LOCAL_CRON_SCHEDULER_ACTIVE': lambda: False,
+    'TOOL_REGISTRY': get_tool_registry,
+    'LLM_ROUTER': get_llm_router,
+    'PROMPT_CACHE_TRACKER': get_prompt_cache_tracker,
+    'TOOL_BATCHING_TRACKER': get_tool_batching_tracker,
+    'TRAJECTORY_STORE': get_trajectory_store,
+    'HOOK_BUS': get_hook_bus,
+    'HOOK_TOKEN': get_hook_token,
+    'WHATSAPP_CHANNEL': get_whatsapp_channel,
+    'TEAMS_CHANNEL': get_teams_channel,
+    'GOOGLE_CHAT_CHANNEL': get_google_chat_channel,
+    'USAGE_TRACKER': get_usage_tracker,
+}
+
+def __getattr__(name: str):
+    fn = _COMPAT_GETTERS.get(name)
+    if fn is not None:
+        return fn()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

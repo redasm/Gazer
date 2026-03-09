@@ -304,7 +304,11 @@ def test_default_cors_origins_allow_vite_preview_port(monkeypatch):
     assert "http://localhost:4173" in admin_auth._DEFAULT_CORS_ORIGINS
     assert "http://127.0.0.1:4173" in admin_auth._DEFAULT_CORS_ORIGINS
 
-    monkeypatch.setattr(admin_auth, "cors_origins", list(admin_auth._DEFAULT_CORS_ORIGINS))
+    monkeypatch.setattr(
+        admin_auth,
+        "_get_cors_config",
+        lambda: (list(admin_auth._DEFAULT_CORS_ORIGINS), True),
+    )
     monkeypatch.setattr(
         admin_auth,
         "config",
@@ -1280,7 +1284,7 @@ async def test_agent_loop_release_gate_allows_safe_tools(monkeypatch, tmp_path):
 async def test_policy_explain_endpoint_reports_reason(monkeypatch):
     registry = ToolRegistry()
     registry.register(_DummyTool("priv_tool", True, provider="desktop"))
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: registry)
     monkeypatch.setattr(
         admin_api,
         "config",
@@ -1298,7 +1302,7 @@ async def test_policy_simulate_endpoint_with_request_policy(monkeypatch):
     registry = ToolRegistry()
     registry.register(_DummyTool("read_file", False, provider="coding"))
     registry.register(_DummyTool("web_search", False, provider="web"))
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: registry)
     fake_cfg = _FakeConfig({"security": {"tool_groups": {"coding": ["read_file"]}}})
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
@@ -1315,7 +1319,7 @@ async def test_policy_simulate_endpoint_with_request_policy(monkeypatch):
 async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_path: Path):
     registry = ToolRegistry()
     registry.register(_DummyTool("web_search", False, provider="web"))
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: registry)
 
     workspace = tmp_path / "workspace"
     (workspace / "apps").mkdir(parents=True)
@@ -1361,7 +1365,7 @@ async def test_policy_explain_endpoint_reports_layer_conflicts(monkeypatch, tmp_
 async def test_policy_explain_endpoint_with_model_context(monkeypatch):
     registry = ToolRegistry()
     registry.register(_DummyTool("web_search", False, provider="web"))
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: registry)
     fake_cfg = _FakeConfig({"security": {"tool_groups": {}}, "agents": {"list": []}})
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
@@ -1419,7 +1423,7 @@ async def test_policy_effective_endpoint_includes_directory_conflicts(monkeypatc
 async def test_policy_effective_endpoint_preview_with_model_context(monkeypatch):
     registry = ToolRegistry()
     registry.register(_DummyTool("web_search", False, provider="web"))
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", registry)
+    monkeypatch.setattr(admin_api, "get_tool_registry", lambda: registry)
 
     fake_cfg = _FakeConfig(
         {
@@ -1452,7 +1456,7 @@ async def test_policy_effective_endpoint_preview_with_model_context(monkeypatch)
 @pytest.mark.asyncio
 async def test_debug_trajectory_endpoints(monkeypatch):
     store = _FakeTrajectoryStore()
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", store)
+    monkeypatch.setattr(admin_api, "get_trajectory_store", lambda: store)
 
     listing = await admin_api.list_trajectories(limit=10)
     assert listing["total"] == 1
@@ -1469,7 +1473,7 @@ async def test_debug_trajectory_endpoints(monkeypatch):
 @pytest.mark.asyncio
 async def test_feedback_attaches_to_trajectory_and_exports_eval_samples(monkeypatch):
     store = _FakeTrajectoryStore()
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", store)
+    monkeypatch.setattr(admin_api, "get_trajectory_store", lambda: store)
 
     class _Evolution:
         def __init__(self):
@@ -1568,7 +1572,7 @@ async def test_eval_benchmark_api_endpoints(monkeypatch, tmp_path):
             "metadata": {},
         }
     )
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", store)
+    monkeypatch.setattr(admin_api, "get_trajectory_store", lambda: store)
     manager = EvalBenchmarkManager(base_dir=tmp_path / "eval")
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: manager)
 
@@ -1725,12 +1729,11 @@ async def test_observability_metrics_endpoint(monkeypatch):
                 }
             ][:limit]
 
-    monkeypatch.setattr("tools.admin.observability.get_llm_router", lambda: _Router())
-    monkeypatch.setattr("tools.admin.observability.get_trajectory_store", lambda: _Store())
-    monkeypatch.setattr("tools.admin.observability.get_tool_registry", lambda: _Registry())
-    monkeypatch.setattr("tools.admin.observability.TOOL_REGISTRY", _Registry())
-    monkeypatch.setattr("tools.admin._shared.TOOL_REGISTRY", _Registry())
-    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(
+        llm_router=_Router(), trajectory_store=_Store(), tool_registry=_Registry(),
+    ))
     monkeypatch.setattr(
         "tools.admin.system._build_training_bridge_policy_scoreboard",
         lambda limit=50, dataset_id=None: {
@@ -1763,8 +1766,9 @@ async def test_tool_governance_health_endpoint(monkeypatch):
         def get_recent_rejection_events(self, limit=50):
             return [{"code": "TOOL_NOT_PERMITTED", "tool": "priv_tool"}][:limit]
 
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _Registry())
-    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(tool_registry=_Registry()))
 
     payload = await admin_api.get_tool_governance_health(limit=5)
     assert payload["status"] == "ok"
@@ -1815,9 +1819,11 @@ async def test_tool_governance_slo_endpoint_and_export(monkeypatch, tmp_path: Pa
         lambda limit=200: {"p95_latency_ms": 1000.0, "success_timestamps_by_tool": {"echo": [31.0]}}
     )
 
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _Store())
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _Registry())
-    monkeypatch.setattr("tools.admin.strategy_helpers._state.TOOL_REGISTRY", _Registry())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(
+        trajectory_store=_Store(), tool_registry=_Registry(),
+    ))
     monkeypatch.setattr(
         admin_api,
         "config",
@@ -1872,8 +1878,9 @@ async def test_trace_spec_baseline_panel_and_self_evolution_exports(monkeypatch,
                 ]
             }
 
-    monkeypatch.setattr("tools.admin.observability.get_trajectory_store", lambda: _Store())
-    monkeypatch.setattr("tools.admin.observability.TRAJECTORY_STORE", _Store())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(trajectory_store=_Store()))
     monkeypatch.setattr(
         "tools.admin.observability._build_tool_governance_slo",
         lambda limit=200: {"metrics": {"tool_success_rate": 0.98}, "checks": {"tool_success_rate_ok": True}, "passed": True},
@@ -1971,7 +1978,9 @@ async def test_deployment_target_crud_and_status_endpoints(monkeypatch):
 
     registry = _Registry()
     monkeypatch.setattr(admin_api, "get_provider_registry", lambda: registry)
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", _Router())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(llm_router=_Router()))
 
     created = await admin_api.create_deployment_target(
         {
@@ -2022,7 +2031,9 @@ async def test_deployment_target_health_endpoint(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("tools.admin.deployment.LLM_ROUTER", _Router())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(llm_router=_Router()))
     payload = await admin_api.probe_deployment_targets(active=True, timeout_seconds=1.5)
     assert payload["status"] == "ok"
     assert payload["active"] is True

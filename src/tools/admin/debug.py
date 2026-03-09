@@ -21,7 +21,7 @@ from tools.admin.state import (
     PERSONA_RUNTIME_MANAGER,
     TRAINING_BRIDGE_MANAGER,
     TRAINING_JOB_MANAGER,
-    TRAJECTORY_STORE,
+    get_trajectory_store,
     config,
     _coding_benchmark_history,
     _coding_benchmark_scheduler_state,
@@ -362,17 +362,17 @@ async def get_llm_history(limit: int = 50):
 @app.get("/debug/trajectories", dependencies=[Depends(verify_admin_token)])
 async def list_trajectories(limit: int = 50, session_key: Optional[str] = None):
     """List recent agent trajectories for replay/debugging."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return {"items": [], "total": 0, "note": "Trajectory store not injected yet."}
-    items = TRAJECTORY_STORE.list_recent(limit=limit, session_key=session_key)
+    items = get_trajectory_store().list_recent(limit=limit, session_key=session_key)
     return {"items": items, "total": len(items)}
 
 @app.get("/debug/trajectories/{run_id}", dependencies=[Depends(verify_admin_token)])
 async def get_trajectory(run_id: str):
     """Get one full trajectory for replay."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
     return payload
@@ -380,9 +380,9 @@ async def get_trajectory(run_id: str):
 @app.get("/debug/trajectories/{run_id}/task-view", dependencies=[Depends(verify_admin_token)])
 async def get_trajectory_task_view(run_id: str):
     """Get task-level observability summary for one trajectory."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
     return _build_task_view(payload)
@@ -390,9 +390,9 @@ async def get_trajectory_task_view(run_id: str):
 @app.get("/debug/trajectories/{run_id}/replay-preview", dependencies=[Depends(verify_admin_token)])
 async def get_trajectory_replay_preview(run_id: str, compare_run_id: Optional[str] = None):
     """Build normalized replay steps and optional diff against another run."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
 
@@ -413,7 +413,7 @@ async def get_trajectory_replay_preview(run_id: str, compare_run_id: Optional[st
     if not compare_run_id:
         return {"replay": replay}
 
-    baseline = TRAJECTORY_STORE.get_trajectory(compare_run_id)
+    baseline = get_trajectory_store().get_trajectory(compare_run_id)
     if baseline is None:
         raise HTTPException(status_code=404, detail="Compare trajectory not found")
     baseline_steps = _normalize_trajectory_steps(baseline)
@@ -424,9 +424,9 @@ async def get_trajectory_replay_preview(run_id: str, compare_run_id: Optional[st
 @app.get("/debug/trajectories/{run_id}/resume", dependencies=[Depends(verify_admin_token)])
 async def get_trajectory_resume(run_id: str):
     """Get resume draft payload for continuing a previous trajectory."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
     return _build_resume_payload(payload)
@@ -434,10 +434,10 @@ async def get_trajectory_resume(run_id: str):
 @app.post("/debug/trajectories/{run_id}/resume/send", dependencies=[Depends(verify_admin_token)])
 async def send_trajectory_resume(run_id: str, data: Dict[str, Any]):
     """Enqueue trajectory resume draft into a chat session."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
 
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
     resume = _build_resume_payload(payload)
@@ -480,9 +480,9 @@ async def auto_resume_trajectory(run_id: str, data: Dict[str, Any]):
 @app.post("/debug/trajectories/{run_id}/replay-execute", dependencies=[Depends(verify_admin_token)])
 async def replay_execute_trajectory(run_id: str, data: Dict[str, Any]):
     """Execute a replay prompt derived from trajectory tool timeline."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
-    payload = TRAJECTORY_STORE.get_trajectory(run_id)
+    payload = get_trajectory_store().get_trajectory(run_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Trajectory not found")
 
@@ -491,7 +491,7 @@ async def replay_execute_trajectory(run_id: str, data: Dict[str, Any]):
     replay = _normalize_trajectory_steps(payload)
     compare_summary = ""
     if compare_run_id:
-        baseline = TRAJECTORY_STORE.get_trajectory(compare_run_id)
+        baseline = get_trajectory_store().get_trajectory(compare_run_id)
         if baseline is None:
             raise HTTPException(status_code=404, detail="Compare trajectory not found")
         cmp = _compare_replay_steps(replay, _normalize_trajectory_steps(baseline))
@@ -681,15 +681,15 @@ async def run_coding_benchmark_scheduler_now():
 @app.get("/debug/eval-samples", dependencies=[Depends(verify_admin_token)])
 async def get_eval_samples(limit: int = 100, label: Optional[str] = None):
     """Export feedback-linked regression samples from trajectories."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return {"samples": [], "total": 0, "note": "Trajectory store not injected yet."}
-    samples = TRAJECTORY_STORE.list_feedback_samples(limit=limit, label=label)
+    samples = get_trajectory_store().list_feedback_samples(limit=limit, label=label)
     return {"samples": samples, "total": len(samples)}
 
 @app.post("/debug/eval-benchmarks/build", dependencies=[Depends(verify_admin_token)])
 async def build_eval_benchmark(payload: Dict[str, Any]):
     """Build a benchmark dataset from feedback-linked eval samples."""
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
     name = str(payload.get("name", "feedback_benchmark")).strip() or "feedback_benchmark"
     label = str(payload.get("label", "")).strip().lower() or None
@@ -699,7 +699,7 @@ async def build_eval_benchmark(payload: Dict[str, Any]):
     except (TypeError, ValueError):
         limit = 200
 
-    samples = TRAJECTORY_STORE.list_feedback_samples(limit=limit, label=label)
+    samples = get_trajectory_store().list_feedback_samples(limit=limit, label=label)
     manager = _get_eval_benchmark_manager()
     dataset = manager.build_dataset(name=name, samples=samples, source="trajectory_feedback")
     return {"status": "ok", "dataset": dataset}

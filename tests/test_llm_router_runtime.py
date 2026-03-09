@@ -1,5 +1,7 @@
 import pytest
 
+from runtime.app_context import AppContext
+import runtime.app_context as _app_ctx
 from llm.router import list_router_strategy_templates, resolve_router_strategy_template
 from tools.admin import api_facade as admin_api
 
@@ -56,8 +58,7 @@ async def test_admin_router_strategy_supports_template(monkeypatch):
             }
 
     fake_cfg = _FakeConfig()
-    monkeypatch.setattr("tools.admin.state.LLM_ROUTER", _Router())
-    monkeypatch.setattr("tools.admin.state.get_app_context", lambda: None)
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(llm_router=_Router()))
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
     result = await admin_api.set_llm_router_strategy({"template": "latency_first"})

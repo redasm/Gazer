@@ -1,10 +1,12 @@
 class Facade:
     _MODULES = [
         'system', 'workflows', 'memory', 'observability', 'debug', 'websockets',
-        '_shared', 'auth', 'config_routes', 'mcp_routes', 'persona_routes',
+        'state', 'auth', 'config_routes', 'mcp_routes', 'persona_routes',
         'training_routes', 'logs', 'error_handlers', 'gateway', 'evolution',
         'satellite', 'deployment', 'channel_webhooks', 'cron', 'git', 'plugins',
-        'policy', 'skills', 'utils',
+        'policy', 'skills', 'utils', 'validation',
+        'strategy_helpers', 'coding_helpers', 'workflow_helpers',
+        'training_helpers', 'observability_helpers',
     ]
 
     def __getattr__(self, name):
@@ -26,7 +28,7 @@ class Facade:
                 found = True
         
         if not found:
-            mod = importlib.import_module('tools.admin._shared')
+            mod = importlib.import_module('tools.admin.state')
             setattr(mod, name, value)
 
     def __dir__(self):

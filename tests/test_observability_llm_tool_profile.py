@@ -1,4 +1,6 @@
 from tools.admin import api_facade as admin_api
+from runtime.app_context import AppContext
+import runtime.app_context as _app_ctx
 
 
 class _FakeTrajectoryStore:
@@ -33,7 +35,7 @@ class _FakeTrajectoryStore:
 
 
 def test_build_llm_tool_failure_profile(monkeypatch):
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore())
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(trajectory_store=_FakeTrajectoryStore()))
     profile = admin_api._build_llm_tool_failure_profile(limit=20)
     assert profile["llm"]["calls"] == 2
     assert profile["llm"]["failures"] == 1

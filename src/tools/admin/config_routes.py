@@ -18,27 +18,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import (
-    config, logger,
-    _PROJECT_ROOT,
-    _WEB_ONBOARDING_GUIDE_PATH,
-    _is_subpath,
-    _redact_config,
-    _filter_masked_sensitive,
-    _flatten_config,
-    _MISSING,
-    _ATOMIC_OBJECT_UPDATE_PATHS,
-    _get_nested_payload_value,
-    _collect_atomic_object_updates,
-    _reject_provider_config_in_settings,
-    _validate_provider_entry,
-    _validate_deployment_target_entry,
-    _append_policy_audit,
-    _capture_strategy_snapshot,
-    get_owner_manager,
-    get_provider_registry,
-    TOOL_REGISTRY,
+from tools.admin.state import (
+    config, logger, _PROJECT_ROOT, _WEB_ONBOARDING_GUIDE_PATH,
+    _ATOMIC_OBJECT_UPDATE_PATHS, get_tool_registry,
+    get_owner_manager, get_provider_registry,
 )
+from tools.admin.utils import (
+    _is_subpath, _redact_config, _filter_masked_sensitive,
+    _flatten_config, _MISSING,
+)
+from tools.admin.validation import (
+    _get_nested_payload_value, _collect_atomic_object_updates,
+    _reject_provider_config_in_settings, _validate_provider_entry,
+    _validate_deployment_target_entry,
+)
+from tools.admin.strategy_helpers import _append_policy_audit, _capture_strategy_snapshot
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["config"])

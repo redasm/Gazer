@@ -17,7 +17,7 @@ from tools.admin.auth import verify_admin_token
 from tools.admin.state import (
     _MEMORY_TURN_HEALTH_LOG_PATH,
     _TOOL_PERSIST_LOG_PATH,
-    TRAJECTORY_STORE,
+    get_trajectory_store,
     config,
     logger,
 )

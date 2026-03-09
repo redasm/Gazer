@@ -8,17 +8,15 @@ import json
 import logging
 from datetime import datetime
 from runtime.resilience import classify_error_message
-# Backward-compat aliases for static helpers that are NOT runtime-injected
 from tools.admin.auth import verify_admin_token
-import tools.admin._shared as _shared
 from security.pairing import get_pairing_manager
 from tools.admin.coding_helpers import _parse_tool_error_result
 from tools.admin.state import (
-    CANVAS_STATE,
+    get_canvas_state,
     _FAVICON_ICO_PATH,
-    LLM_ROUTER,
-    TOOL_REGISTRY,
-    TRAJECTORY_STORE,
+    get_llm_router,
+    get_tool_registry,
+    get_trajectory_store,
     _WEB_ONBOARDING_GUIDE_PATH,
     _coding_benchmark_history,
     _coding_benchmark_scheduler_state,
@@ -41,7 +39,7 @@ from tools.admin.strategy_helpers import (
     _merge_error_code_counts,
 )
 from tools.admin.utils import _resolve_export_output_path
-from tools.admin._shared import get_owner_manager, get_provider_registry
+from tools.admin.state import get_owner_manager, get_provider_registry
 def _get_training_job_manager():
     global _TRAINING_JOB_MANAGER
     if _TRAINING_JOB_MANAGER is None:
@@ -189,7 +187,7 @@ def _build_coding_benchmark_observability(window: int = 60) -> Dict[str, Any]:
     }
 
 async def _invoke_gui_action_via_tool_registry(action: str, args: Dict[str, Any], target: str) -> Dict[str, Any]:
-    if TOOL_REGISTRY is None:
+    if get_tool_registry() is None:
         return {
             "ok": False,
             "code": "TOOL_REGISTRY_UNAVAILABLE",
@@ -199,7 +197,7 @@ async def _invoke_gui_action_via_tool_registry(action: str, args: Dict[str, Any]
     payload: Dict[str, Any] = {"action": str(action or "").strip(), "args": dict(args or {})}
     if str(target or "").strip():
         payload["target"] = str(target).strip()
-    text = await TOOL_REGISTRY.execute(
+    text = await get_tool_registry().execute(
         "node_invoke",
         payload,
     )
@@ -639,7 +637,7 @@ def _build_llm_tool_failure_profile(limit: int = 200) -> Dict[str, Any]:
         },
         "replan_hints": 0,
     }
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return profile
 
     llm_error_classes: Dict[str, int] = {}
@@ -654,12 +652,12 @@ def _build_llm_tool_failure_profile(limit: int = 200) -> Dict[str, Any]:
     attribution_source_counts: Dict[str, int] = {"llm_response": 0, "tool_result": 0}
     attribution_examples: List[Dict[str, Any]] = []
 
-    recent = TRAJECTORY_STORE.list_recent(limit=max(1, min(limit, 1000)))
+    recent = get_trajectory_store().list_recent(limit=max(1, min(limit, 1000)))
     for item in recent:
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id)
+        traj = get_trajectory_store().get_trajectory(run_id)
         if not isinstance(traj, dict):
             continue
         events = traj.get("events", [])
@@ -766,19 +764,19 @@ def _build_tool_timing_profile(limit: int = 200) -> Dict[str, Any]:
         "by_tool": [],
         "success_timestamps_by_tool": {},
     }
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return profile
 
     latencies: List[float] = []
     by_tool_values: Dict[str, List[float]] = {}
     success_timestamps: Dict[str, List[float]] = {}
 
-    recent = TRAJECTORY_STORE.list_recent(limit=max(1, min(limit, 1000)))
+    recent = get_trajectory_store().list_recent(limit=max(1, min(limit, 1000)))
     for item in recent:
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id)
+        traj = get_trajectory_store().get_trajectory(run_id)
         if not isinstance(traj, dict):
             continue
         events = list(traj.get("events") or [])
@@ -1088,10 +1086,10 @@ def _build_inbound_media_profile(limit: int = 200) -> Dict[str, Any]:
         "by_source": {},
         "by_type": {},
     }
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return profile
 
-    recent = TRAJECTORY_STORE.list_recent(limit=max(1, min(limit, 1000)))
+    recent = get_trajectory_store().list_recent(limit=max(1, min(limit, 1000)))
     by_source: Dict[str, int] = {}
     by_type: Dict[str, int] = {}
     events = 0
@@ -1107,7 +1105,7 @@ def _build_inbound_media_profile(limit: int = 200) -> Dict[str, Any]:
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id)
+        traj = get_trajectory_store().get_trajectory(run_id)
         if not isinstance(traj, dict):
             continue
         for event in list(traj.get("events") or []):
@@ -1326,7 +1324,7 @@ async def run_doctor():
     tool_denylist = config.get("security.tool_denylist", [])
     tool_allowlist = config.get("security.tool_allowlist", [])
     tool_groups = config.get("security.tool_groups", {})
-    owner_only_count = sum(1 for t in TOOL_REGISTRY._tools.values() if t.owner_only) if TOOL_REGISTRY else 0
+    owner_only_count = sum(1 for t in get_tool_registry()._tools.values() if t.owner_only) if get_tool_registry() else 0
     checks.append({
         "name": "tool_security",
         "status": "ok",

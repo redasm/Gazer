@@ -28,9 +28,9 @@ except ImportError:
 from tools.admin.state import (
     _PROJECT_ROOT,
     _WORKFLOW_GRAPH_DIR,
-    TOOL_REGISTRY,
-    LLM_ROUTER,
-    TRAJECTORY_STORE,
+    get_tool_registry,
+    get_llm_router,
+    get_trajectory_store,
 )
 from tools.admin.observability_helpers import _get_eval_benchmark_manager
 from tools.admin.utils import _is_subpath
@@ -929,8 +929,9 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
             if node_type == "prompt":
                 prompt = str(config.get("prompt", "{{prev}}"))
                 rendered = str(_render_workflow_template(prompt, node_ctx))
-                if LLM_ROUTER is not None and hasattr(LLM_ROUTER, "chat"):
-                    resp = await LLM_ROUTER.chat(
+                llm = get_llm_router()
+                if llm is not None and hasattr(llm, "chat"):
+                    resp = await llm.chat(
                         messages=[{"role": "user", "content": rendered}],
                         tools=[],
                     )
@@ -940,7 +941,8 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
                     return text, None
                 return rendered, None
             if node_type == "tool":
-                if TOOL_REGISTRY is None:
+                reg = get_tool_registry()
+                if reg is None:
                     raise RuntimeError("Tool registry unavailable")
                 tool_name = str(config.get("tool_name", "")).strip()
                 if not tool_name:
@@ -949,7 +951,7 @@ async def _execute_workflow_graph(graph: Dict[str, Any], *, input_text: str = ""
                 if not isinstance(raw_args, dict):
                     raw_args = {}
                 tool_args = _render_workflow_template(raw_args, node_ctx)
-                text = await TOOL_REGISTRY.execute(
+                text = await reg.execute(
                     tool_name,
                     tool_args,
                 )

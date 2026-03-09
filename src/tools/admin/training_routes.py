@@ -26,7 +26,7 @@ from tools.admin.state import (
     ONLINE_POLICY_LOOP_MANAGER,
     TRAINING_BRIDGE_MANAGER,
     TRAINING_JOB_MANAGER,
-    TRAJECTORY_STORE,
+    get_trajectory_store,
     config,
 )
 from tools.admin.strategy_helpers import _append_policy_audit, _capture_strategy_snapshot, _get_release_gate_health_thresholds
@@ -83,7 +83,7 @@ def _get_online_policy_loop_manager():
     return ONLINE_POLICY_LOOP_MANAGER
 
 def _collect_training_bridge_trajectories(*, run_ids: List[str], limit: int) -> List[Dict[str, Any]]:
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return []
     selected_ids: List[str] = []
     if run_ids:
@@ -92,14 +92,14 @@ def _collect_training_bridge_trajectories(*, run_ids: List[str], limit: int) -> 
             if rid and rid not in selected_ids:
                 selected_ids.append(rid)
     else:
-        recent = TRAJECTORY_STORE.list_recent(limit=limit)
+        recent = get_trajectory_store().list_recent(limit=limit)
         for item in recent:
             rid = str((item or {}).get("run_id", "")).strip()
             if rid and rid not in selected_ids:
                 selected_ids.append(rid)
     trajectories: List[Dict[str, Any]] = []
     for rid in selected_ids[:limit]:
-        payload = TRAJECTORY_STORE.get_trajectory(rid)
+        payload = get_trajectory_store().get_trajectory(rid)
         if isinstance(payload, dict):
             trajectories.append(payload)
     return trajectories
@@ -142,7 +142,7 @@ async def list_training_bridge_exports(limit: int = 50, dataset_id: Optional[str
 
 @app.post("/debug/training-bridge/exports", dependencies=[Depends(verify_admin_token)])
 async def create_training_bridge_export(payload: Dict[str, Any]):
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         raise HTTPException(status_code=503, detail="Trajectory store not available")
     dataset_id = str(payload.get("dataset_id", "bridge_manual")).strip() or "bridge_manual"
     source = str(payload.get("source", "trajectory_export")).strip() or "trajectory_export"

@@ -8,10 +8,10 @@ import collections
 import contextvars
 import logging
 from tools.admin.state import (
-    CANVAS_STATE,
+    get_canvas_state,
     EVAL_BENCHMARK_MANAGER,
-    LLM_ROUTER,
-    TOOL_REGISTRY,
+    get_llm_router,
+    get_tool_registry,
     TRAINING_JOB_MANAGER,
     config,
     _mcp_audit_buffer,
@@ -44,7 +44,7 @@ def _build_workflow_observability_metrics(limit: int = 200):
 from tools.admin.auth import verify_admin_token
 from tools.admin.auth import _verify_ws_auth, _extract_ws_token
 from urllib.parse import urlparse, parse_qs
-from ._shared import _redact_config
+from tools.admin.utils import _redact_config
 
 app = APIRouter()
 logger = logging.getLogger('mcp')
@@ -180,9 +180,9 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
         return _mcp_response_ok(request_id, {})
 
     if method == "tools/list":
-        if TOOL_REGISTRY is None:
+        if get_tool_registry() is None:
             return _mcp_response_error(request_id, -32000, "Tool registry unavailable")
-        definitions = TOOL_REGISTRY.get_definitions()
+        definitions = get_tool_registry().get_definitions()
         tools: List[Dict[str, Any]] = []
         for item in definitions:
             fn = item.get("function", {}) if isinstance(item, dict) else {}
@@ -196,7 +196,7 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
         return _mcp_response_ok(request_id, {"tools": tools})
 
     if method == "tools/call":
-        if TOOL_REGISTRY is None:
+        if get_tool_registry() is None:
             return _mcp_response_error(request_id, -32000, "Tool registry unavailable")
         tool_name = str(params.get("name", "")).strip()
         arguments = params.get("arguments", {})
@@ -204,7 +204,7 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
             return _mcp_response_error(request_id, -32602, "Invalid params: missing tool name")
         if not isinstance(arguments, dict):
             return _mcp_response_error(request_id, -32602, "Invalid params: arguments must be object")
-        result = await TOOL_REGISTRY.execute(
+        result = await get_tool_registry().execute(
             tool_name,
             arguments,
         )
@@ -293,8 +293,8 @@ async def mcp_jsonrpc(payload: Dict[str, Any], request: Request = None):
 
         if key == "llm/router/status":
             status = {"enabled": False, "strategy": "none", "providers": []}
-            if LLM_ROUTER is not None and hasattr(LLM_ROUTER, "get_status"):
-                status = dict(LLM_ROUTER.get_status() or {})
+            if get_llm_router() is not None and hasattr(get_llm_router(), "get_status"):
+                status = dict(get_llm_router().get_status() or {})
                 status["enabled"] = True
             return _mcp_response_ok(
                 request_id,

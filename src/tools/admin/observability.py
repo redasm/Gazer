@@ -5,9 +5,7 @@ from typing import Dict, Any, List, Optional
 import time
 import json
 from datetime import datetime
-# Backward-compat aliases for static references only
 from tools.admin.auth import verify_admin_token
-import tools.admin._shared as _shared
 from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary, _invoke_gui_action_via_tool_registry
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
 from runtime.resilience import classify_error_message
@@ -20,9 +18,9 @@ from tools.admin.observability_helpers import (
     _parse_tool_result_stats,
 )
 from tools.admin.state import (
-    LLM_ROUTER,
-    TOOL_REGISTRY,
-    TRAJECTORY_STORE,
+    get_llm_router,
+    get_tool_registry,
+    get_trajectory_store,
     _alert_buffer,
     config,
     get_llm_router,
@@ -326,9 +324,9 @@ def _build_efficiency_baseline_report(window_days: int = 7, limit: int = 400) ->
     safe_window_days = max(1, min(int(window_days or 7), 30))
     safe_limit = max(1, min(int(limit or 400), 5000))
     trajectories: List[Dict[str, Any]] = []
-    if TRAJECTORY_STORE is not None and hasattr(TRAJECTORY_STORE, "list_recent"):
+    if get_trajectory_store() is not None and hasattr(get_trajectory_store(), "list_recent"):
         try:
-            trajectories = TRAJECTORY_STORE.list_recent(limit=safe_limit)
+            trajectories = get_trajectory_store().list_recent(limit=safe_limit)
         except Exception:
             trajectories = []
 
@@ -354,9 +352,9 @@ def _build_efficiency_baseline_report(window_days: int = 7, limit: int = 400) ->
             continue
 
         payload = None
-        if TRAJECTORY_STORE is not None and hasattr(TRAJECTORY_STORE, "get_trajectory"):
+        if get_trajectory_store() is not None and hasattr(get_trajectory_store(), "get_trajectory"):
             try:
-                payload = TRAJECTORY_STORE.get_trajectory(run_id)
+                payload = get_trajectory_store().get_trajectory(run_id)
             except Exception:
                 payload = None
         final = payload.get("final", {}) if isinstance(payload, dict) else {}
@@ -734,9 +732,9 @@ def _build_tool_governance_slo(limit: int = 200) -> Dict[str, Any]:
         success_ts_by_tool = {}
 
     rejection_events: List[Dict[str, Any]] = []
-    if TOOL_REGISTRY is not None and hasattr(TOOL_REGISTRY, "get_recent_rejection_events"):
+    if get_tool_registry() is not None and hasattr(get_tool_registry(), "get_recent_rejection_events"):
         try:
-            rejection_events = list(TOOL_REGISTRY.get_recent_rejection_events(limit=max(50, min(limit * 5, 1000))))
+            rejection_events = list(get_tool_registry().get_recent_rejection_events(limit=max(50, min(limit * 5, 1000))))
         except Exception:
             rejection_events = []
 
@@ -848,18 +846,18 @@ def _build_unified_trace_spec(limit: int = 200) -> Dict[str, Any]:
         },
         "links": {"trace_count": 0, "full_chain_trace_count": 0, "samples": []},
     }
-    if TRAJECTORY_STORE is None:
+    if get_trajectory_store() is None:
         return spec
 
     by_trace: Dict[str, Dict[str, Any]] = {}
-    recent = TRAJECTORY_STORE.list_recent(limit=safe_limit)
+    recent = get_trajectory_store().list_recent(limit=safe_limit)
     for item in recent:
         if not isinstance(item, dict):
             continue
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        trajectory = TRAJECTORY_STORE.get_trajectory(run_id)
+        trajectory = get_trajectory_store().get_trajectory(run_id)
         if not isinstance(trajectory, dict):
             continue
         events = trajectory.get("events", [])
@@ -1096,9 +1094,9 @@ async def get_observability_gui_simple_benchmark(window: int = 20):
 
 @app.post("/observability/gui-simple-benchmark/run", dependencies=[Depends(verify_admin_token)])
 async def run_gui_simple_benchmark(payload: Optional[Dict[str, Any]] = None):
-    if TOOL_REGISTRY is None:
+    if get_tool_registry() is None:
         raise HTTPException(status_code=503, detail="Tool registry unavailable")
-    if TOOL_REGISTRY.get("node_invoke") is None:
+    if get_tool_registry().get("node_invoke") is None:
         raise HTTPException(status_code=503, detail="node_invoke tool unavailable")
     report = await _run_gui_simple_benchmark_suite(payload if isinstance(payload, dict) else {})
     _append_policy_audit(

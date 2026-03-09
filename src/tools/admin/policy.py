@@ -14,12 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import (
-    config, logger,
-    _PROJECT_ROOT,
-    _is_subpath,
-    TOOL_REGISTRY,
-)
+from tools.admin.state import config, logger, _PROJECT_ROOT, get_tool_registry
+from tools.admin.utils import _is_subpath
 from .auth import verify_admin_token
 from .config_routes import (
     _resolve_global_policy,
@@ -91,7 +87,7 @@ async def run_agents_md_lint(payload: Dict[str, Any]):
 @router.post("/policy/explain", dependencies=[Depends(verify_admin_token)])
 async def explain_policy(payload: Dict[str, Any]):
     """Explain why a tool is allowed/blocked under current policy inputs."""
-    if TOOL_REGISTRY is None:
+    if get_tool_registry() is None:
         raise HTTPException(status_code=503, detail="Tool registry not available")
 
     tool_name = str(payload.get("tool_name", "")).strip()
@@ -131,7 +127,7 @@ async def explain_policy(payload: Dict[str, Any]):
     if isinstance(overlay_conflicts, list) and overlay_conflicts:
         conflicts.extend(overlay_conflicts)
 
-    result = TOOL_REGISTRY.evaluate_tool_access(
+    result = get_tool_registry().evaluate_tool_access(
         tool_name,
         policy=effective_policy,
         model_provider=model_provider,
@@ -166,7 +162,7 @@ async def explain_policy(payload: Dict[str, Any]):
 @router.post("/policy/simulate", dependencies=[Depends(verify_admin_token)])
 async def simulate_policy(payload: Dict[str, Any]):
     """Simulate access outcomes for all (or selected) tools under a policy."""
-    if TOOL_REGISTRY is None:
+    if get_tool_registry() is None:
         raise HTTPException(status_code=503, detail="Tool registry not available")
 
     model_provider = str(payload.get("model_provider", "")).strip().lower()
@@ -176,7 +172,7 @@ async def simulate_policy(payload: Dict[str, Any]):
     policy = normalize_tool_policy(policy_raw or {}, groups if isinstance(groups, dict) else {})
     names_raw = payload.get("tool_names")
     names = [str(item).strip() for item in names_raw] if isinstance(names_raw, list) else None
-    results = TOOL_REGISTRY.simulate_access(
+    results = get_tool_registry().simulate_access(
         policy=policy,
         names=names,
         model_provider=model_provider,
@@ -217,7 +213,7 @@ async def get_effective_policy(
     result: Dict[str, Any] = {
         "status": "ok",
         "global": {
-            "owner_only_tools": sum(1 for t in TOOL_REGISTRY._tools.values() if t.owner_only) if TOOL_REGISTRY else 0,
+            "owner_only_tools": sum(1 for t in get_tool_registry()._tools.values() if t.owner_only) if get_tool_registry() else 0,
             "group_count": len(safe_groups),
             "groups": sorted(safe_groups.keys()),
             "policy": _policy_to_payload(global_policy),
@@ -249,8 +245,8 @@ async def get_effective_policy(
             allow_names=set(directory_policy.allow_names),
             deny_names=set(directory_policy.deny_names),
         )
-        if TOOL_REGISTRY is not None:
-            decision = TOOL_REGISTRY.evaluate_tool_access(
+        if get_tool_registry() is not None:
+            decision = get_tool_registry().evaluate_tool_access(
                 str(tool_name),
                 policy=merged_effective,
                 model_provider=str(model_provider or "").strip().lower(),

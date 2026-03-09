@@ -9,8 +9,8 @@ import time
 from tools.admin.auth import verify_admin_token
 from flow.flowise_interop import flowise_to_gazer, gazer_to_flowise, flowise_migration_suggestion
 from tools.admin.state import (
-    LLM_ROUTER,
-    TOOL_REGISTRY,
+    get_llm_router,
+    get_tool_registry,
     _WORKFLOW_GRAPH_DIR,
     _workflow_run_history,
 )

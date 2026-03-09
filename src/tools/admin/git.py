@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import logger
+from tools.admin.state import logger
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["git"])

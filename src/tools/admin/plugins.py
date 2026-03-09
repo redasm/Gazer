@@ -8,11 +8,12 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import (
-    config, logger,
-    _plugin_loader, _plugin_install_base, _scan_plugin_source_for_threats,
-    _plugin_market_snapshot, _append_policy_audit,
+from tools.admin.state import config, logger
+from tools.admin.workflow_helpers import (
+    _plugin_loader, _plugin_install_base,
+    _scan_plugin_source_for_threats, _plugin_market_snapshot,
 )
+from tools.admin.strategy_helpers import _append_policy_audit
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["plugins"])

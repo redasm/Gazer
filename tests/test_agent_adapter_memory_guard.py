@@ -78,8 +78,8 @@ async def test_context_builder_warning_signal_shrinks_injected_memory(monkeypatc
         "created_at": time.time(),
     }
     fake_mm = _FakeMemoryManager()
-    monkeypatch.setattr("agent.adapter.config", fake_cfg)
-    monkeypatch.setattr("agent.adapter.get_persona_runtime_manager", lambda: _FakePersonaRuntime(signal))
+    monkeypatch.setattr("agent.context_builder.config", fake_cfg)
+    monkeypatch.setattr("soul.persona_runtime.get_persona_runtime_manager", lambda: _FakePersonaRuntime(signal))
 
     builder = GazerContextBuilder(workspace=Path(tmp_path), memory_manager=fake_mm)
     await builder.prepare_memory_context("最近我有点焦虑")

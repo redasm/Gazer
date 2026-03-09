@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from runtime.config_manager import config
 from tools.admin.state import (
-    TRAJECTORY_STORE,
+    get_trajectory_store,
     _mcp_audit_buffer,
     _mcp_request_ctx,
 )
@@ -177,7 +177,7 @@ def _prepare_training_inputs(
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id) if TRAJECTORY_STORE is not None else None
+        traj = get_trajectory_store().get_trajectory(run_id) if get_trajectory_store() is not None else None
         quality_score = _score_sample(item, traj if isinstance(traj, dict) else None)
         bucket = _bucket_name(item, traj if isinstance(traj, dict) else None)
         candidates.append(

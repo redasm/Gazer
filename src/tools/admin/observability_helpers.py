@@ -10,8 +10,8 @@ from runtime.config_manager import config
 from runtime.resilience import classify_error_message
 from tools.admin.state import (
     _llm_history,
-    TOOL_REGISTRY,
-    TRAJECTORY_STORE,
+    get_tool_registry,
+    get_trajectory_store,
 )
 
 logger = logging.getLogger('GazerAdminAPI')
@@ -178,7 +178,8 @@ def _build_llm_tool_failure_profile(limit: int = 200) -> Dict[str, Any]:
         },
         "replan_hints": 0,
     }
-    if TRAJECTORY_STORE is None:
+    traj_store = get_trajectory_store()
+    if traj_store is None:
         return profile
 
     llm_error_classes: Dict[str, int] = {}
@@ -193,12 +194,12 @@ def _build_llm_tool_failure_profile(limit: int = 200) -> Dict[str, Any]:
     attribution_source_counts: Dict[str, int] = {"llm_response": 0, "tool_result": 0}
     attribution_examples: List[Dict[str, Any]] = []
 
-    recent = TRAJECTORY_STORE.list_recent(limit=max(1, min(limit, 1000)))
+    recent = traj_store.list_recent(limit=max(1, min(limit, 1000)))
     for item in recent:
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id)
+        traj = traj_store.get_trajectory(run_id)
         if not isinstance(traj, dict):
             continue
         events = traj.get("events", [])
@@ -305,19 +306,20 @@ def _build_tool_timing_profile(limit: int = 200) -> Dict[str, Any]:
         "by_tool": [],
         "success_timestamps_by_tool": {},
     }
-    if TRAJECTORY_STORE is None:
+    traj_store = get_trajectory_store()
+    if traj_store is None:
         return profile
 
     latencies: List[float] = []
     by_tool_values: Dict[str, List[float]] = {}
     success_timestamps: Dict[str, List[float]] = {}
 
-    recent = TRAJECTORY_STORE.list_recent(limit=max(1, min(limit, 1000)))
+    recent = traj_store.list_recent(limit=max(1, min(limit, 1000)))
     for item in recent:
         run_id = str(item.get("run_id", "")).strip()
         if not run_id:
             continue
-        traj = TRAJECTORY_STORE.get_trajectory(run_id)
+        traj = traj_store.get_trajectory(run_id)
         if not isinstance(traj, dict):
             continue
         events = list(traj.get("events") or [])

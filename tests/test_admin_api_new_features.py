@@ -35,20 +35,13 @@ def _patch_history(mp, history):
 
 
 def _patch_store(mp, store):
-    mp.setattr(admin_api, "TRAJECTORY_STORE", store)
-    mp.setattr(_admin_state, "TRAJECTORY_STORE", store)
-    if hasattr(_training_helpers, "TRAJECTORY_STORE"):
-        mp.setattr(_training_helpers, "TRAJECTORY_STORE", store)
-    if hasattr(_coding_helpers, "TRAJECTORY_STORE"):
-        mp.setattr(_coding_helpers, "TRAJECTORY_STORE", store)
-    if hasattr(_workflow_helpers, "TRAJECTORY_STORE"):
-        mp.setattr(_workflow_helpers, "TRAJECTORY_STORE", store)
-    if hasattr(_observability, "TRAJECTORY_STORE"):
-        mp.setattr(_observability, "TRAJECTORY_STORE", store)
-    if hasattr(_observability_helpers, "TRAJECTORY_STORE"):
-        mp.setattr(_observability_helpers, "TRAJECTORY_STORE", store)
-    if hasattr(_debug, "TRAJECTORY_STORE"):
-        mp.setattr(_debug, "TRAJECTORY_STORE", store)
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    old = _app_ctx._ctx
+    if old is not None:
+        old.trajectory_store = store
+    else:
+        mp.setattr(_app_ctx, "_ctx", AppContext(trajectory_store=store))
 
 class _FakeConfig:
     def __init__(self, data):
@@ -179,6 +172,9 @@ class _FakeInputQueue:
     def put(self, item):
         self.items.append(item)
 
+    def put_nowait(self, item):
+        self.items.append(item)
+
 
 class _FakeTaskRunStore:
     def __init__(self):
@@ -233,7 +229,9 @@ class _FakeTaskRunStore:
 
 @pytest.mark.asyncio
 async def test_mcp_initialize_tools_list_and_call(monkeypatch):
-    monkeypatch.setattr(admin_api, "TOOL_REGISTRY", _FakeRegistry())
+    from runtime.app_context import AppContext
+    import runtime.app_context as _app_ctx
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(tool_registry=_FakeRegistry()))
     monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: _FakeMemoryManager())
     monkeypatch.setattr(admin_api, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
     monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
@@ -1205,7 +1203,7 @@ async def test_observability_failure_attribution_taxonomy(monkeypatch):
             }
 
     _patch_store(monkeypatch, _Store())
-    monkeypatch.setattr(admin_api, "LLM_ROUTER", None)
+    monkeypatch.setattr(admin_api, "get_llm_router", lambda: None)
     monkeypatch.setattr(
         admin_api,
         "_build_training_bridge_policy_scoreboard",

@@ -7,9 +7,9 @@ from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from ._shared import _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
+from tools.admin.state import _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
 from .auth import _verify_ws_auth
-from tools.admin.state import API_QUEUES, CANVAS_STATE
+from tools.admin.state import API_QUEUES, get_canvas_state
 
 router = APIRouter(tags=["websockets"])
 
@@ -182,8 +182,9 @@ async def canvas_endpoint(websocket: WebSocket):
     logger.info("Canvas WebSocket connection accepted and added to manager.")
     try:
         # Send initial state immediately upon connection
-        if CANVAS_STATE is not None:
-            raw_json = json.dumps({"type": "canvas_update", **CANVAS_STATE.to_dict()}, default=str, ensure_ascii=False)
+        cs = get_canvas_state()
+        if cs is not None:
+            raw_json = json.dumps({"type": "canvas_update", **cs.to_dict()}, default=str, ensure_ascii=False)
             await websocket.send_text(raw_json)
         else:
             raw_json = json.dumps({"type": "canvas_update", "panels": [], "version": 0}, default=str, ensure_ascii=False)

@@ -12,12 +12,11 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ._shared import (
+from tools.admin.state import (
     config, logger,
-    get_provider_registry, get_deployment_orchestrator,
-    _validate_provider_entry, _validate_deployment_target_entry,
-    LLM_ROUTER,
+    get_provider_registry, get_deployment_orchestrator, get_llm_router,
 )
+from tools.admin.validation import _validate_provider_entry, _validate_deployment_target_entry
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["deployment"])
@@ -110,9 +109,9 @@ async def get_deployment_targets_status():
         enabled_count = sum(1 for item in targets.values() if bool((item or {}).get("enabled", True)))
 
     router_status: Dict[str, Any] = {}
-    if LLM_ROUTER is not None and hasattr(LLM_ROUTER, "get_status"):
+    if get_llm_router() is not None and hasattr(get_llm_router(), "get_status"):
         try:
-            router_status = LLM_ROUTER.get_status()
+            router_status = get_llm_router().get_status()
         except Exception:
             logger.debug("Failed to read router status for deployment targets", exc_info=True)
 
@@ -120,16 +119,16 @@ async def get_deployment_targets_status():
         "status": "ok",
         "targets": targets,
         "enabled_targets": int(enabled_count),
-        "router_enabled": bool(LLM_ROUTER is not None),
+        "router_enabled": bool(get_llm_router() is not None),
         "router": router_status,
     }
 
 
 @router.get("/llm/deployment-targets/health", dependencies=[Depends(verify_admin_token)])
 async def probe_deployment_targets(active: bool = False, timeout_seconds: float = 3.0):
-    if LLM_ROUTER is None or not hasattr(LLM_ROUTER, "probe_routes"):
+    if get_llm_router() is None or not hasattr(get_llm_router(), "probe_routes"):
         return {"status": "ok", "active": bool(active), "probes": [], "note": "LLM router not enabled"}
-    probes = await LLM_ROUTER.probe_routes(active=bool(active), timeout_seconds=float(timeout_seconds))
+    probes = await get_llm_router().probe_routes(active=bool(active), timeout_seconds=float(timeout_seconds))
     return {"status": "ok", "active": bool(active), "probes": probes}
 
 
@@ -168,9 +167,9 @@ async def delete_deployment_target(target_id: str):
 
 def _sync_live_router_from_deployment_targets() -> None:
     """Best-effort live sync for LLM router route flags/weights."""
-    if LLM_ROUTER is None:
+    if get_llm_router() is None:
         return
-    routes = getattr(LLM_ROUTER, "_routes", None)
+    routes = getattr(get_llm_router(), "_routes", None)
     if not isinstance(routes, list):
         return
     try:
@@ -192,9 +191,9 @@ def _sync_live_router_from_deployment_targets() -> None:
         except (TypeError, ValueError):
             weight = 1.0
         setattr(route, "traffic_weight", max(0.01, weight))
-    if hasattr(LLM_ROUTER, "set_strategy"):
+    if hasattr(get_llm_router(), "set_strategy"):
         try:
-            LLM_ROUTER.set_strategy(str(config.get("models.router.strategy", "priority") or "priority"))
+            get_llm_router().set_strategy(str(config.get("models.router.strategy", "priority") or "priority"))
         except Exception:
             logger.debug("Failed to sync live router strategy from config", exc_info=True)
 
@@ -245,10 +244,10 @@ async def reconcile_deployment_orchestrator(payload: Dict[str, Any]):
     orchestrator = get_deployment_orchestrator()
     probes = payload.get("probes", None)
     if probes is None:
-        if LLM_ROUTER is not None and hasattr(LLM_ROUTER, "probe_routes"):
+        if get_llm_router() is not None and hasattr(get_llm_router(), "probe_routes"):
             active = bool(payload.get("active", False))
             timeout_seconds = float(payload.get("timeout_seconds", 3.0) or 3.0)
-            probes = await LLM_ROUTER.probe_routes(active=active, timeout_seconds=timeout_seconds)
+            probes = await get_llm_router().probe_routes(active=active, timeout_seconds=timeout_seconds)
         else:
             probes = []
     if not isinstance(probes, list):

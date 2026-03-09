@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from runtime.app_context import AppContext
+import runtime.app_context as _app_ctx
 from tools.admin import api_facade as admin_api
 
 
@@ -136,7 +138,7 @@ async def test_efficiency_baseline_build_and_export(monkeypatch, tmp_path: Path)
         }
     )
     monkeypatch.setattr(admin_api, "config", fake_cfg)
-    monkeypatch.setattr(admin_api, "TRAJECTORY_STORE", _FakeTrajectoryStore(now_ts=now_ts))
+    monkeypatch.setattr(_app_ctx, "_ctx", AppContext(trajectory_store=_FakeTrajectoryStore(now_ts=now_ts)))
     monkeypatch.setattr(admin_api.time, "time", lambda: now_ts)
 
     payload = await admin_api.get_observability_efficiency_baseline(window_days=7, limit=20)
