@@ -180,7 +180,7 @@ class TaskGraph:
             old = task.status
             task.status = TaskStatus.RUNNING
             task.assigned_to = agent_id
-            task.started_at = __import__("time").time()
+            task.started_at = time.time()
         self._change_event.set()
         await self._notify_watchers(task_id, old, TaskStatus.RUNNING)
 
@@ -237,7 +237,7 @@ class TaskGraph:
             task.result_ref = result_ref
             if artifacts:
                 task.artifacts.update(artifacts)
-            task.finished_at = __import__("time").time()
+            task.finished_at = time.time()
             self._promote_pending()
         self._change_event.set()
         await self._notify_watchers(task_id, old, TaskStatus.DONE)
@@ -299,34 +299,40 @@ class TaskGraph:
 
     async def mark_failed(self, task_id: str, error: str) -> bool:
         """Mark a task as failed. Returns True if the task will be retried."""
+        retry = False
         async with self._lock:
             task = self._tasks.get(task_id)
             if task is None:
                 raise ValueError(f"Unknown task: {task_id}")
 
             task.retry_count += 1
-            task.finished_at = __import__("time").time()
+            task.finished_at = time.time()
 
             if task.retry_count <= task.max_retries:
                 old = task.status
                 task.status = TaskStatus.PENDING
                 task.assigned_to = None
                 self._promote_pending()
-                await self._notify_watchers(task_id, old, TaskStatus.PENDING)
-                logger.warning(
-                    "Task %s failed (attempt %d/%d), will retry: %s",
-                    task_id, task.retry_count, task.max_retries, error,
-                )
-                return True
+                new_status = task.status  # may have been promoted to READY
+                retry = True
+            else:
+                old = task.status
+                task.status = TaskStatus.FAILED
+                task.result = f"FAILED: {error}"
+                self._cascade_block(task_id)
+                new_status = TaskStatus.FAILED
 
-            old = task.status
-            task.status = TaskStatus.FAILED
-            task.result = f"FAILED: {error}"
-            self._cascade_block(task_id)
-            self._change_event.set()
-            await self._notify_watchers(task_id, old, TaskStatus.FAILED)
-            logger.error("Task %s permanently FAILED: %s", task_id, error)
-            return False
+        self._change_event.set()
+        if retry:
+            await self._notify_watchers(task_id, old, new_status)
+            logger.warning(
+                "Task %s failed (attempt %d/%d), will retry: %s",
+                task_id, task.retry_count, task.max_retries, error,
+            )
+            return True
+        await self._notify_watchers(task_id, old, TaskStatus.FAILED)
+        logger.error("Task %s permanently FAILED: %s", task_id, error)
+        return False
 
     # ------------------------------------------------------------------
     # Internal helpers

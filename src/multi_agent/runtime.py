@@ -66,7 +66,8 @@ class MultiAgentRuntime:
         memory_manager = getattr(agent_core, "memory_manager", None)
         tool_registry = getattr(getattr(agent_core, "loop", None), "tools", None)
 
-        assert slow_provider is not None, "agent_core must have a .provider (slow brain)"
+        if slow_provider is None:
+            raise RuntimeError("agent_core must have a .provider (slow brain)")
 
         self._brain = DualBrain(
             slow_provider=slow_provider,

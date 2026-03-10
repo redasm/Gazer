@@ -39,6 +39,7 @@ class AgentMessageBus:
     def __init__(self) -> None:
         self._mailboxes: dict[str, asyncio.Queue[AgentMessage]] = {}
         self._pending_replies: dict[str, asyncio.Future[AgentMessage]] = {}
+        self._dropped_count: int = 0
 
     async def register_agent(self, agent_id: str) -> None:
         if agent_id not in self._mailboxes:
@@ -58,7 +59,8 @@ class AgentMessageBus:
                 try:
                     mbox.put_nowait(message)
                 except asyncio.QueueFull:
-                    logger.debug("Mailbox full for %s, dropping broadcast", aid)
+                    self._dropped_count += 1
+                    logger.debug("Mailbox full for %s, dropping broadcast (total dropped: %d)", aid, self._dropped_count)
         else:
             mbox = self._mailboxes.get(message.target_id)
             if mbox is None:
@@ -67,7 +69,8 @@ class AgentMessageBus:
             try:
                 mbox.put_nowait(message)
             except asyncio.QueueFull:
-                logger.debug("Mailbox full for %s, dropping message", message.target_id)
+                self._dropped_count += 1
+                logger.debug("Mailbox full for %s, dropping message (total dropped: %d)", message.target_id, self._dropped_count)
 
         # Resolve pending ask() futures for reply messages
         if message.msg_type == MessageType.REPLY and message.reply_to:

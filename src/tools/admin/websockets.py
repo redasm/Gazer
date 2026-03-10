@@ -260,9 +260,7 @@ async def canvas_endpoint(websocket: WebSocket):
 async def chat_endpoint(websocket: WebSocket):
     """Chat WebSocket -- relays messages between the web UI and the Brain.
 
-    .. deprecated::
-        Use ``/ws/gateway`` instead.  This endpoint exists for legacy clients
-        and may be removed in a future release.
+    TODO: migrate Chat.jsx to /ws/gateway protocol, then remove this endpoint.
     """
     if not await _verify_ws_auth(websocket):
         return
@@ -282,11 +280,9 @@ async def chat_endpoint(websocket: WebSocket):
             try:
                 payload = json.loads(raw)
                 if isinstance(payload, dict):
-                    # Handle application-level pings to keep the connection alive
                     if payload.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
                         continue
-                        
                     content = str(payload.get("content", "")).strip()
                     media, media_metadata = _decode_web_media_entries(payload)
                     metadata = dict(media_metadata)
@@ -304,10 +300,7 @@ async def chat_endpoint(websocket: WebSocket):
             _max_chars = int(_cfg.get("api.max_chat_message_chars", 8000))
             if len(content) > _max_chars:
                 await websocket.send_json(
-                    {
-                        "type": "error",
-                        "message": f"Message too long (max {_max_chars} characters)",
-                    }
+                    {"type": "error", "message": f"Message too long (max {_max_chars} characters)"}
                 )
                 continue
 

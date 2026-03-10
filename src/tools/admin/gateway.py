@@ -301,7 +301,7 @@ async def talk_endpoint(websocket: WebSocket) -> None:
                     input_q = API_QUEUES.get("input")
                     if input_q:
                         is_owner = getattr(websocket.state, "is_owner", False)
-                        input_q.put({
+                        input_q.put_nowait({
                             "type": "chat",
                             "content": text,
                             "source": "voice",

@@ -36,6 +36,7 @@ logger = logging.getLogger("multi_agent.Worker")
 
 MAX_TOOL_ITERATIONS = 10
 MAX_ERROR_RECOVERY_ROUNDS = 2
+MAX_TOOL_CALLS_PER_TASK = 50
 CONTEXT_TOKEN_WARNING_RATIO = 0.8
 
 
@@ -44,6 +45,7 @@ class WorkerConfig:
     skills: list[str] = field(default_factory=list)
     max_iterations: int = MAX_TOOL_ITERATIONS
     max_error_recovery: int = MAX_ERROR_RECOVERY_ROUNDS
+    max_tool_calls: int = MAX_TOOL_CALLS_PER_TASK
 
 
 class WorkerAgent:
@@ -186,6 +188,20 @@ class WorkerAgent:
             await self._execute_aggregation(task)
             return
 
+        try:
+            await asyncio.wait_for(
+                self._execute_task_inner(task),
+                timeout=task.timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "Worker %s task %s timed out after %.0fs",
+                self.agent_id, task.task_id, task.timeout_sec,
+            )
+            await self._graph.mark_failed(task.task_id, f"Task timed out after {task.timeout_sec:.0f}s")
+            await self._emit_log("error", f"Task timed out after {task.timeout_sec:.0f}s", task_id=task.task_id)
+
+    async def _execute_task_inner(self, task: Task) -> None:
         dep_results = self._load_dependency_context(task)
         hint = BrainHint(reasoning_depth=1)
 
@@ -254,6 +270,21 @@ class WorkerAgent:
 
                 for tc in response.tool_calls:
                     tool_call_count += 1
+                    if tool_call_count > self._config.max_tool_calls:
+                        logger.warning(
+                            "Worker %s task %s exceeded max tool calls (%d)",
+                            self.agent_id, task.task_id, self._config.max_tool_calls,
+                        )
+                        await self._graph.mark_failed(
+                            task.task_id,
+                            f"Exceeded max tool calls ({self._config.max_tool_calls})",
+                        )
+                        await self._emit_log(
+                            "error",
+                            f"Task failed: exceeded max tool calls ({self._config.max_tool_calls})",
+                            task_id=task.task_id,
+                        )
+                        return
                     await monitor_hub.task_tool_call(
                         session_key=self._session_key,
                         task_id=task.task_id,

@@ -14,9 +14,18 @@ const STORAGE = {
     msgs: (id) => `gazer_session_${id}`,
 };
 const MAX_MSGS = 200;
+const MAX_SESSIONS = 50;
 const genId = () => `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const loadSessions = () => { try { return JSON.parse(localStorage.getItem(STORAGE.sessions)) || []; } catch { return []; } };
-const persistSessions = (list) => localStorage.setItem(STORAGE.sessions, JSON.stringify(list));
+const persistSessions = (list) => {
+    // Prune oldest sessions beyond limit, cleaning up their stored messages
+    if (list.length > MAX_SESSIONS) {
+        const removed = list.slice(MAX_SESSIONS);
+        removed.forEach(s => { try { localStorage.removeItem(STORAGE.msgs(s.id)); } catch { /* ignore */ } });
+        list = list.slice(0, MAX_SESSIONS);
+    }
+    localStorage.setItem(STORAGE.sessions, JSON.stringify(list));
+};
 const loadMsgs = (id) => { try { return (JSON.parse(localStorage.getItem(STORAGE.msgs(id))) || []).map(m => ({ ...m, time: new Date(m.time) })); } catch { return []; } };
 const persistMsgs = (id, msgs) => {
     const data = msgs.filter(m => !m.streaming).slice(-MAX_MSGS).map(({ role, content, time }) => ({ role, content, time }));

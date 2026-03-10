@@ -90,7 +90,6 @@ class PlannerAgent:
         bus: AgentMessageBus,
         blackboard: Blackboard,
         memory_manager: Any = None,
-        emotion_vector: dict[str, float] | None = None,
         session_key: str = "",
     ) -> None:
         self._brain = dual_brain
@@ -99,11 +98,6 @@ class PlannerAgent:
         self._bus = bus
         self._bb = blackboard
         self._memory = memory_manager
-        self.emotion_vector = emotion_vector if emotion_vector is not None else {
-            "excitement": 0.0,
-            "frustration": 0.0,
-            "confidence": 0.5,
-        }
         self._user_goal = ""
         self._plan_summary = ""
         self._start_time = 0.0
@@ -301,20 +295,7 @@ class PlannerAgent:
 
     async def _monitor_loop(self) -> None:
         while not self._graph.is_complete():
-            summary = self._graph.get_summary()
-            total = sum(summary.values())
-            done = summary.get("done", 0)
-            failed = summary.get("failed", 0)
-
-            if total > 0:
-                self.emotion_vector["excitement"] = (done / total) * 0.5
-                self.emotion_vector["frustration"] = min(1.0, failed * 0.2)
-                self.emotion_vector["confidence"] = max(0.1, 1.0 - (failed / max(total, 1)))
-
-            logger.debug(
-                "Monitor: %s | emotion: excitement=%.2f frustration=%.2f",
-                summary, self.emotion_vector["excitement"], self.emotion_vector["frustration"],
-            )
+            logger.debug("Monitor: %s", self._graph.get_summary())
             await self._graph.wait_until_complete(poll_interval=_MONITOR_INTERVAL)
         logger.info("Monitor: all tasks terminal — %s", self._graph.get_summary())
 

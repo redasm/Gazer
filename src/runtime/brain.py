@@ -13,7 +13,7 @@ from hardware import create_body_driver, BodyDriver
 from memory import MemoryManager
 from memory.openviking_bootstrap import ensure_openviking_ready
 from agent.adapter import GazerAgent
-from tools.admin.state import SATELLITE_SESSION_MANAGER, SATELLITE_SOURCES
+from tools.admin.state import get_satellite_session_manager, SATELLITE_SOURCES
 from devices.registry import DeviceRegistry
 from runtime.app_context import AppContext, set_app_context
 
@@ -87,7 +87,7 @@ class GazerBrain:
         )
         self._rust_sidecar_client = init_devices(
             config, self.device_registry, self.capture_manager,
-            SATELLITE_SESSION_MANAGER, self.body, self.spatial,
+            get_satellite_session_manager(), self.body, self.spatial,
             self.audio, self.ui_queue, self._rust_sidecar_client,
         )
 

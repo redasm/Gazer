@@ -119,9 +119,15 @@ def get_google_chat_channel():
 
 
 # Satellite
-from devices.satellite_session import create_satellite_session_manager
 SATELLITE_SOURCES: Dict[str, Any] = {}
-SATELLITE_SESSION_MANAGER = create_satellite_session_manager(config)
+_SATELLITE_SESSION_MANAGER: Optional[Any] = None
+
+def get_satellite_session_manager():
+    global _SATELLITE_SESSION_MANAGER
+    if _SATELLITE_SESSION_MANAGER is None:
+        from devices.satellite_session import create_satellite_session_manager
+        _SATELLITE_SESSION_MANAGER = create_satellite_session_manager(config)
+    return _SATELLITE_SESSION_MANAGER
 
 
 # ---------------------------------------------------------------------------

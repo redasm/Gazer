@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -143,7 +144,7 @@ class AgentPool:
 
         # Scale down: excess idle workers and no ready tasks
         elif ready_count == 0 and idle_count > self._config.min_agents:
-            now = __import__("time").time()
+            now = time.time()
             for worker in idle_workers:
                 if len(self._workers) <= self._config.min_agents:
                     break
@@ -153,7 +154,7 @@ class AgentPool:
                     logger.info("Scaled down: removed idle worker %s", worker.agent_id)
 
         # Track idle start times
-        now = __import__("time").time()
+        now = time.time()
         for w in self._workers.values():
             if w.is_idle:
                 self._idle_since.setdefault(w.agent_id, now)

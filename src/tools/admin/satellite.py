@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import collections
@@ -23,7 +23,7 @@ from security.pairing import get_pairing_manager
 from tools.admin.auth import _extract_ws_token, _verify_ws_auth, verify_admin_token
 from tools.admin.state import (
     API_QUEUES,
-    SATELLITE_SESSION_MANAGER,
+    get_satellite_session_manager,
     SATELLITE_SOURCES,
     config,
 )
@@ -88,7 +88,7 @@ async def satellite_ws(websocket: WebSocket):
     logger.info("Satellite WS connected: source_id=%s ip=%s", source_id, client_ip)
     try:
         while True:
-            await SATELLITE_SESSION_MANAGER.prune_stale_sessions()
+            await get_satellite_session_manager().prune_stale_sessions()
             message = await websocket.receive()
             if message.get("type") == "websocket.disconnect":
                 break
@@ -122,7 +122,7 @@ async def satellite_ws(websocket: WebSocket):
                     if source is None:
                         await websocket.close(code=4001, reason=f"No RemoteScreenSource for '{authed_node_id}'")
                         return
-                    await SATELLITE_SESSION_MANAGER.register(
+                    await get_satellite_session_manager().register(
                         authed_node_id,
                         websocket,
                         SessionMetadata(
@@ -145,7 +145,7 @@ async def satellite_ws(websocket: WebSocket):
                 if frame_type == FRAME_TYPE_HEARTBEAT:
                     ts = frame.get("ts")
                     ts_float = float(ts) if isinstance(ts, (int, float)) else time.time()
-                    await SATELLITE_SESSION_MANAGER.touch_heartbeat(authed_node_id, ts=ts_float)
+                    await get_satellite_session_manager().touch_heartbeat(authed_node_id, ts=ts_float)
                     await websocket.send_json({"type": FRAME_TYPE_ACK, "message": "heartbeat_ok"})
                     continue
 
@@ -179,7 +179,7 @@ async def satellite_ws(websocket: WebSocket):
                     except SatelliteProtocolError as exc:
                         await websocket.send_json({"type": FRAME_TYPE_ERROR, "message": str(exc)})
                         continue
-                    await SATELLITE_SESSION_MANAGER.on_invoke_result(
+                    await get_satellite_session_manager().on_invoke_result(
                         node_id=authed_node_id,
                         request_id=result["request_id"],
                         ok=result["ok"],
@@ -220,17 +220,17 @@ async def satellite_ws(websocket: WebSocket):
         logger.error("Satellite WS error (%s): %s", source_id, exc)
     finally:
         if authed_node_id:
-            await SATELLITE_SESSION_MANAGER.unregister(authed_node_id)
+            await get_satellite_session_manager().unregister(authed_node_id)
 
 @app.get("/satellite/session/status", dependencies=[Depends(verify_admin_token)])
 async def get_satellite_session_status():
     """Runtime status for satellite transport and session health."""
-    await SATELLITE_SESSION_MANAGER.prune_stale_sessions()
-    nodes = SATELLITE_SESSION_MANAGER.list_nodes()
+    await get_satellite_session_manager().prune_stale_sessions()
+    nodes = get_satellite_session_manager().list_nodes()
     return {
         "status": "ok",
-        "backend": getattr(SATELLITE_SESSION_MANAGER, "backend", "python"),
-        "manager": SATELLITE_SESSION_MANAGER.get_runtime_status(),
+        "backend": getattr(get_satellite_session_manager(), "backend", "python"),
+        "manager": get_satellite_session_manager().get_runtime_status(),
         "nodes": {
             node_id: {
                 "version": meta.version,
