@@ -73,6 +73,7 @@ class OwnerManager:
             self._data.setdefault("created_at", time.time())
             self._save()
             logger.info("Admin token auto-generated and stored in encrypted owner storage.")
+        self._print_token_hint()
 
     def _ensure_session_store(self) -> None:
         sessions = self._data.get("sessions")
@@ -229,6 +230,18 @@ class OwnerManager:
             logger.info("Owner token loaded.")
         except (json.JSONDecodeError, OSError, ValueError) as e:
             logger.warning("Failed to load owner data: %s", e)
+
+    def _print_token_hint(self) -> None:
+        """Print the admin token to stdout so the user can copy it into the admin panel."""
+        tok = self._data.get("admin_token", "")
+        if tok:
+            print(
+                f"\n{'='*56}\n"
+                f"  Admin token: {tok}\n"
+                f"  (Enter this when the admin panel prompts for a token.)\n"
+                f"{'='*56}\n",
+                flush=True,
+            )
 
     def _save(self) -> None:
         try:

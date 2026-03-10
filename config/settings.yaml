@@ -306,7 +306,7 @@ runtime:
 feishu:
   enabled: true
   app_id: null
-  app_secret: 
+  app_secret: SZydlSxmRZau7thm6n4USgBXIiTYANlJ
   allowed_ids: []
   simulated_typing:
     enabled: true
@@ -589,7 +589,7 @@ sandbox:
 agents:
   defaults:
     model:
-      primary: gmn/gpt-5.2
+      primary: gmn/gpt-5.4
       fallbacks:
       - dashscope/qwen3-vl-plus
     models:
@@ -601,6 +601,9 @@ agents:
         alias: Qwen Max
       dashscope/qwen-turbo:
         alias: Qwen Turbo
+      gmn/gpt-5:
+        '2':
+          alias: GPT 5.2
     workspace: .
     compaction:
       mode: safeguard

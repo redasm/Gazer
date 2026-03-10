@@ -5,7 +5,6 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
-  ListTodo,
   MessageSquareText,
   PauseCircle,
   PlayCircle,
@@ -428,22 +427,6 @@ function taskProgress(task) {
   return 8;
 }
 
-function StatTile({ label, value, accent, icon: Icon }) {
-  return (
-    <div className="agent-kanban-stat-tile" style={{ '--agent-kanban-accent': accent }}>
-      <div className="agent-kanban-stat-head">
-        <div className="agent-kanban-stat-label">{label}</div>
-        {Icon && (
-          <div className="agent-kanban-stat-icon">
-            <Icon size={15} />
-          </div>
-        )}
-      </div>
-      <div className="agent-kanban-stat-value">{value}</div>
-    </div>
-  );
-}
-
 function TaskColumn({ column, tasks, selectedTaskId, onSelect, labels }) {
   return (
     <section className="agent-kanban-column" style={{ '--agent-kanban-accent': column.accent }}>
@@ -772,8 +755,8 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
 
   if (!config) {
     return (
-      <div className="agent-kanban-shell">
-        <div className="agent-kanban-empty-screen">{labels.sessionEmpty}</div>
+      <div style={{ color: '#889', padding: 16, textAlign: 'center', marginTop: 40 }}>
+        {labels.sessionEmpty}
       </div>
     );
   }
@@ -781,81 +764,82 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
   const allowMulti = Boolean(config.multi_agent?.allow_multi);
   const maxWorkers = config.multi_agent?.max_workers ?? 5;
   return (
-    <div className="agent-kanban-shell">
-      <header className="agent-kanban-topbar">
-        <div className="agent-kanban-brand">
-          <div className="agent-kanban-brand-mark">
-            <Bot size={16} />
-          </div>
-          <div className="agent-kanban-brand-copy">
-            <div className="agent-kanban-kicker">{t.agentKanbanSubtitle || labels.subtitle}</div>
-            <h1>{t.agentKanbanTitle || 'Multi-Agent Board'}</h1>
-          </div>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0 }}>
+            <Bot size={20} style={{ color: '#22d3ee' }} />
+            {t.agentKanbanTitle || 'Multi-Agent Board'}
+          </h2>
+          <p style={{ fontSize: 13, color: '#667', margin: '4px 0 0 0' }}>{t.agentKanbanSubtitle || labels.subtitle}</p>
         </div>
-        <div className="agent-kanban-topbar-actions">
-          <div className="agent-kanban-stats-rack">
-            <StatTile label={labels.total} value={formatCount(state.stats.total)} accent="#67e8f9" icon={ListTodo} />
-            <StatTile label={labels.done} value={formatCount(state.stats.done)} accent="#34d399" icon={CheckCircle2} />
-            <StatTile label={labels.failed} value={formatCount(state.stats.failed)} accent="#fb7185" icon={AlertTriangle} />
-            <StatTile label={labels.tokens} value={formatCount(state.stats.tokens)} accent="#f59e0b" icon={Clock3} />
-            <StatTile label={labels.statusLabel} value={formatPhase(state.phase, labels)} accent={phaseAccent(state.phase)} icon={Activity} />
+        <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>
+          <Settings2 size={14} />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        {[
+          { label: labels.total, value: formatCount(state.stats.total), color: '#67e8f9' },
+          { label: labels.done, value: formatCount(state.stats.done), color: '#34d399' },
+          { label: labels.failed, value: formatCount(state.stats.failed), color: '#fb7185' },
+          { label: labels.tokens, value: formatCount(state.stats.tokens), color: '#f59e0b' },
+          { label: labels.statusLabel, value: formatPhase(state.phase, labels), color: phaseAccent(state.phase) },
+        ].map((s) => (
+          <div key={s.label} style={{
+            padding: '8px 16px', borderRadius: 10,
+            border: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.02)',
+            minWidth: 90,
+          }}>
+            <div style={{ fontSize: 10, color: '#667', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{s.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: s.color, marginTop: 2 }}>{s.value}</div>
           </div>
-          <button type="button" className="btn-secondary agent-kanban-settings-trigger" onClick={() => setSettingsOpen(true)}>
-            <Settings2 size={16} />
-            {labels.settingsButton}
-          </button>
-        </div>
-      </header>
+        ))}
+      </div>
 
       {missionTasks.length > 0 && (
-        <section className="agent-kanban-mission-strip">
-          <div className="agent-kanban-mission-focus-panel">
-          <div className="agent-kanban-mission-tags">
-            {missionTasks.map((task) => (
-              <div
-                key={task.task_id}
-                className="agent-kanban-mission-tag"
-                style={{ '--agent-kanban-accent': accentForStatus(task.status) }}
-              >
-                <span className="agent-kanban-mission-tag-title">{previewText(task.title || labels.unnamedTask, 24)}</span>
-                <span className="agent-kanban-mission-tag-status">{translateStatus(task.status, labels)}</span>
-              </div>
-            ))}
-          </div>
-          </div>
-        </section>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
+          {missionTasks.map((task) => (
+            <div key={task.task_id} style={{
+              flex: '0 0 auto', padding: '6px 12px', borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)',
+              display: 'flex', gap: 10, alignItems: 'center', fontSize: 12,
+            }}>
+              <span style={{ color: '#d1d5db' }}>{previewText(task.title || labels.unnamedTask, 24)}</span>
+              <span style={{ color: accentForStatus(task.status), fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {translateStatus(task.status, labels)}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
-      <section className="agent-kanban-workbench">
-        <section className="agent-kanban-stage">
-          <div className="agent-kanban-board">
-            {localizedColumns.map((column) => (
-              <TaskColumn
-                key={column.key}
-                column={column}
-                tasks={tasksByColumn[column.key] || []}
-                selectedTaskId={selectedTask?.task_id || ''}
-                onSelect={(taskId) => dispatch({ type: 'select', taskId })}
-                labels={labels}
-              />
-            ))}
-          </div>
-        </section>
-
-        <aside className="agent-kanban-rail">
-          <div className="agent-kanban-detail-stack">
-            <TaskDetail
-              task={selectedTask}
-              commentText={commentText}
-              commentError={commentError}
-              submittingComment={submittingComment}
-              onCommentChange={setCommentText}
-              onCommentSubmit={handleSubmitComment}
+      <div className="agent-kanban-layout">
+        <div className="agent-kanban-board">
+          {localizedColumns.map((column) => (
+            <TaskColumn
+              key={column.key}
+              column={column}
+              tasks={tasksByColumn[column.key] || []}
+              selectedTaskId={selectedTask?.task_id || ''}
+              onSelect={(taskId) => dispatch({ type: 'select', taskId })}
               labels={labels}
             />
-          </div>
-        </aside>
-      </section>
+          ))}
+        </div>
+        <div style={{ position: 'sticky', top: 12 }}>
+          <TaskDetail
+            task={selectedTask}
+            commentText={commentText}
+            commentError={commentError}
+            submittingComment={submittingComment}
+            onCommentChange={setCommentText}
+            onCommentSubmit={handleSubmitComment}
+            labels={labels}
+          />
+        </div>
+      </div>
 
       <SettingsModal
         open={settingsOpen}

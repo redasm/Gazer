@@ -668,7 +668,7 @@ export const translations = {
         noticeSelectAtLeastTwoNodes: "Select at least 2 nodes",
         noticeSelectAtLeastThreeNodes: "Select at least 3 nodes",
         noticeCopiedNodes: "Copied selected nodes",
-        routerNotEnabled:
+        routerNotEnabled: "LLM router not enabled",
         routingStrategy: "Routing Strategy",
         allowNames: "Allow Names",
         denyNames: "Deny Names",
@@ -699,7 +699,7 @@ export const translations = {
         noticeInvalidProviderCostsJson: "Invalid provider costs JSON",
         noticeRouterBudgetSaved: "Router budget saved",
         noticeSaveRouterBudgetFailed: "Failed to save router budget",
-        noticeInvalidToolGroupsJson:
+        noticeInvalidToolGroupsJson: "Invalid tool groups JSON",
         noticeLoadEffectivePolicyFailed: "Failed to load effective policy",
         noticePolicyExplanationLoaded: "Policy explanation loaded",
         noticeExplainPolicyFailed: "Failed to explain policy",
@@ -1433,7 +1433,7 @@ export const translations = {
         noticeSelectAtLeastTwoNodes: "请至少选择 2 个节点",
         noticeSelectAtLeastThreeNodes: "请至少选择 3 个节点",
         noticeCopiedNodes: "已复制所选节点",
-        routerNotEnabled:
+        routerNotEnabled: "LLM 路由未启用",
         routingStrategy: "路由策略",
         allowNames: "允许工具名",
         denyNames: "禁止工具名",
@@ -1464,7 +1464,7 @@ export const translations = {
         noticeInvalidProviderCostsJson: "provider 成本 JSON 格式无效",
         noticeRouterBudgetSaved: "路由预算已保存",
         noticeSaveRouterBudgetFailed: "保存路由预算失败",
-        noticeInvalidToolGroupsJson:
+        noticeInvalidToolGroupsJson: "工具分组 JSON 格式无效",
         noticeLoadEffectivePolicyFailed: "加载生效策略失败",
         noticePolicyExplanationLoaded: "策略解释已加载",
         noticeExplainPolicyFailed: "策略解释失败",

@@ -51,10 +51,12 @@ const Logs = ({ t }) => {
     const scrollRef = useRef(null);
     const bottomRef = useRef(null);
 
+    const intervalRef = useRef(null);
+
     useEffect(() => {
         fetchLogs();
-        const interval = setInterval(fetchLogs, 3000);
-        return () => clearInterval(interval);
+        intervalRef.current = setInterval(fetchLogs, 3000);
+        return () => clearInterval(intervalRef.current);
     }, []);
 
     useEffect(() => {
@@ -76,8 +78,13 @@ const Logs = ({ t }) => {
             setLogs(res.data.logs || []);
             setError(null);
         } catch (err) {
-            console.error("Failed to fetch logs", err);
-            setError("Failed to fetch logs. Backend may be offline.");
+            if (err?.response?.status === 401) {
+                // Stop polling — user needs to authenticate first
+                clearInterval(intervalRef.current);
+                setError("Authentication required. Please log in.");
+            } else {
+                setError("Failed to fetch logs. Backend may be offline.");
+            }
         }
         setLoading(false);
     };
