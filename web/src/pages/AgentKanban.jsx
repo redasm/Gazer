@@ -606,77 +606,47 @@ function TaskDetail({ task, commentText, commentError, submittingComment, onComm
   );
 }
 
-function SettingsModal({
+function WorkersModal({
   open,
-  allowMulti,
   maxWorkers,
   labels,
   t,
   savingSettings,
   onClose,
   onConfigUpdate,
-  onRefresh,
   onSave,
 }) {
   if (!open) return null;
 
   return (
-    <div className="agent-kanban-settings-modal" role="dialog" aria-modal="true" aria-label={labels.settingsTitle} onClick={onClose}>
+    <div className="agent-kanban-settings-modal" role="dialog" aria-modal="true" aria-label={labels.maxWorkers} onClick={onClose}>
       <div className="agent-kanban-settings-modal-card" onClick={(event) => event.stopPropagation()}>
         <div className="agent-kanban-settings-modal-head">
-          <div>
-            <div className="agent-kanban-panel-kicker">{t.agentKanbanControlDeck || labels.controlDeck}</div>
-            <div className="agent-kanban-settings-modal-title">{labels.settingsTitle}</div>
-          </div>
+          <div className="agent-kanban-settings-modal-title">{labels.maxWorkers}</div>
           <button type="button" className="btn-ghost agent-kanban-settings-close" onClick={onClose} aria-label={labels.settingsClose}>
             <X size={16} />
           </button>
         </div>
 
-        <section className="agent-kanban-control-panel agent-kanban-control-panel-modal">
-          <div className="agent-kanban-control-copy">{t.agentKanbanExecutionControlDesc || labels.executionControlDesc}</div>
+        <div className="agent-kanban-field" style={{ marginTop: 0 }}>
+          <input
+            id="max-workers-modal"
+            type="number"
+            min="1"
+            max="20"
+            value={maxWorkers}
+            onChange={(event) => onConfigUpdate('multi_agent.max_workers', Math.min(20, Math.max(1, parseInt(event.target.value, 10) || 1)))}
+            className="agent-kanban-number-input"
+          />
+          <div className="agent-kanban-field-hint">{t.agentKanbanMaxWorkersHint || labels.maxWorkersHint}</div>
+        </div>
 
-          <div className="agent-kanban-control-row">
-            <div>
-              <div className="agent-kanban-control-title">{t.agentKanbanMultiAgent || labels.multiAgent}</div>
-              <div className="agent-kanban-control-subtitle">{t.agentKanbanMultiAgentDesc || labels.multiAgentDesc}</div>
-            </div>
-            <button
-              type="button"
-              className={`agent-kanban-switch${allowMulti ? ' is-on' : ''}`}
-              onClick={() => onConfigUpdate('multi_agent.allow_multi', !allowMulti)}
-              aria-pressed={allowMulti}
-            >
-              <span />
-            </button>
-          </div>
-
-          <div className="agent-kanban-field">
-            <label htmlFor="max-workers-modal" className="agent-kanban-field-label">{t.agentKanbanMaxWorkers || labels.maxWorkers}</label>
-            <input
-              id="max-workers-modal"
-              type="number"
-              min="1"
-              max="20"
-              value={maxWorkers}
-              disabled={!allowMulti}
-              onChange={(event) => onConfigUpdate('multi_agent.max_workers', Math.min(20, Math.max(1, parseInt(event.target.value, 10) || 1)))}
-              className="agent-kanban-number-input"
-            />
-            <div className="agent-kanban-field-hint">{t.agentKanbanMaxWorkersHint || labels.maxWorkersHint}</div>
-          </div>
-
-          <div className="agent-kanban-action-row">
-            <button type="button" onClick={onRefresh} className="btn-secondary agent-kanban-action-button">
-              <RefreshCw size={16} />
-              {t.refresh || 'Refresh'}
-            </button>
-            <button type="button" onClick={onSave} className="btn-primary agent-kanban-action-button" disabled={savingSettings}>
-              <Save size={16} />
-              {savingSettings ? (t.saving || 'Saving...') : (t.saveConfig || 'Save')}
-            </button>
-          </div>
-        </section>
+        <div className="agent-kanban-action-row">
+          <button type="button" onClick={onSave} className="btn-primary agent-kanban-action-button" disabled={savingSettings}>
+            <Save size={16} />
+            {savingSettings ? (t.saving || 'Saving...') : (t.saveConfig || 'Save')}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -724,6 +694,16 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
       setSavingSettings(false);
     }
   }, [saveConfig]);
+
+  const handleToggleMulti = useCallback(() => {
+    const next = !config?.multi_agent?.allow_multi;
+    setConfig((prev) => updateNestedConfig(prev, 'multi_agent.allow_multi', next));
+    if (next) {
+      setSettingsOpen(true);
+    } else {
+      setTimeout(() => saveConfig(), 0);
+    }
+  }, [config, setConfig, saveConfig]);
 
   useEffect(() => {
     if (!settingsOpen) return undefined;
@@ -773,9 +753,24 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
           </h2>
           <p style={{ fontSize: 13, color: '#667', margin: '4px 0 0 0' }}>{t.agentKanbanSubtitle || labels.subtitle}</p>
         </div>
-        <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>
-          <Settings2 size={14} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: allowMulti ? '#34d399' : '#667' }}>
+            {allowMulti ? labels.enabled : labels.disabled}
+          </span>
+          <button
+            type="button"
+            className={`agent-kanban-switch${allowMulti ? ' is-on' : ''}`}
+            onClick={handleToggleMulti}
+            aria-pressed={allowMulti}
+          >
+            <span />
+          </button>
+          {allowMulti && (
+            <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)} title={labels.maxWorkers}>
+              <Settings2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -841,16 +836,14 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
         </div>
       </div>
 
-      <SettingsModal
+      <WorkersModal
         open={settingsOpen}
-        allowMulti={allowMulti}
         maxWorkers={maxWorkers}
         labels={labels}
         t={t}
         savingSettings={savingSettings}
         onClose={() => setSettingsOpen(false)}
         onConfigUpdate={handleConfigUpdate}
-        onRefresh={fetchConfig}
         onSave={() => handleSaveSettings(true)}
       />
     </div>

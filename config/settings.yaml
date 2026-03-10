@@ -719,5 +719,5 @@ google_chat:
   project_id: ''
   dm_policy: pairing
 multi_agent:
-  allow_multi: false
+  allow_multi: true
   max_workers: 5
