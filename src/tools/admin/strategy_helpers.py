@@ -1,6 +1,7 @@
 """Policy audit, strategy snapshot, MCP, and various helper functions extracted from _shared.py."""
 
 from __future__ import annotations
+import base64
 import collections
 import copy
 import json
@@ -23,12 +24,10 @@ from tools.admin.state import (
     _STRATEGY_SNAPSHOT_LOG_PATH,
     get_llm_router,
 )
+from devices.satellite_protocol import SatelliteProtocolError
 from tools.admin.utils import _append_jsonl_record, _read_jsonl_tail
 
 logger = logging.getLogger('GazerAdminAPI')
-
-# Constants
-_MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
 
 # MCP rate-limit events per actor
 _mcp_rate_events = collections.defaultdict(collections.deque)
@@ -445,10 +444,11 @@ def _enqueue_chat_message(*, content: str, session_id: str, source: str, sender_
     text = str(content or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty message")
-    if len(text) > _MAX_CHAT_MESSAGE_CHARS:
+    _max_chars = int(config.get("api.max_chat_message_chars", 8000))
+    if len(text) > _max_chars:
         raise HTTPException(
             status_code=400,
-            detail=f"Message too long (max {_MAX_CHAT_MESSAGE_CHARS} characters)",
+            detail=f"Message too long (max {_max_chars} characters)",
         )
     _state.API_QUEUES["input"].put_nowait(
         {

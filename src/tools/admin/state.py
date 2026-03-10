@@ -17,9 +17,16 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 from runtime.app_context import get_app_context
 from runtime.config_manager import config
 
-# Request size guardrails (read once at import time)
-_MAX_WS_MESSAGE_BYTES = int(config.get("api.max_ws_message_bytes", 256 * 1024))
-_MAX_CHAT_MESSAGE_CHARS = int(config.get("api.max_chat_message_chars", 8000))
+
+def get_max_ws_message_bytes() -> int:
+    """Return the WebSocket message byte limit (reads config dynamically)."""
+    return int(config.get("api.max_ws_message_bytes", 256 * 1024))
+
+
+def get_max_chat_message_chars() -> int:
+    """Return the chat message character limit (reads config dynamically)."""
+    return int(config.get("api.max_chat_message_chars", 8000))
+
 
 if TYPE_CHECKING:
     from tools.canvas import CanvasState

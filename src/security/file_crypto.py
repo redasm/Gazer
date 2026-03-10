@@ -158,17 +158,25 @@ class SecureFileStorage:
         os.makedirs(os.path.dirname(self.file_path) or ".", exist_ok=True)
         temp_path = f"{self.file_path}.tmp"
 
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-
-        # Harden file permissions (owner read/write only)
         try:
-            os.chmod(temp_path, 0o600)
-        except Exception:
-            pass  # Windows doesn't support POSIX permissions
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
 
-        # Atomic replace — no .bak left behind to leak sensitive data
-        os.replace(temp_path, self.file_path)
+            # Harden file permissions (owner read/write only)
+            try:
+                os.chmod(temp_path, 0o600)
+            except Exception:
+                pass  # Windows doesn't support POSIX permissions
+
+            # Atomic replace — no .bak left behind to leak sensitive data
+            os.replace(temp_path, self.file_path)
+        except Exception:
+            # Clean up temp file on failure to avoid stale sensitive data on disk
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
 
         logger.info("Saved encrypted data to %s", self.file_path)
     

@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket
 from fastapi.responses import JSONResponse
 
 from runtime.config_manager import config
-from security.owner import get_owner_manager
+from security.owner import get_owner_manager, OwnerManager
 from tools.admin.state import logger
 
 
@@ -138,35 +138,18 @@ def _is_allowed_origin(origin: str) -> bool:
 
 
 
-def _owner_validate_admin_token(owner_manager: Any, token: str) -> bool:
+def _owner_validate_admin_token(owner_manager: "OwnerManager", token: str) -> bool:
     """Validate an admin token against the owner manager."""
-    validator = getattr(owner_manager, "validate_admin_token", None)
-    if callable(validator):
-        try:
-            return bool(validator(token))
-        except Exception:
-            return False
-    fallback = getattr(owner_manager, "validate_session", None)
-    if callable(fallback):
-        try:
-            return bool(fallback(token))
-        except Exception:
-            return False
-    return False
-
-
-def _owner_validate_session_token(owner_manager: Any, token: str) -> bool:
-    """Validate a session token against the owner manager."""
-    validator = getattr(owner_manager, "validate_session", None)
-    if not callable(validator):
-        return False
     try:
-        return bool(validator(token, allow_admin_token=False))
-    except TypeError:
-        try:
-            return bool(validator(token))
-        except Exception:
-            return False
+        return bool(owner_manager.validate_admin_token(token))
+    except Exception:
+        return False
+
+
+def _owner_validate_session_token(owner_manager: "OwnerManager", token: str) -> bool:
+    """Validate a session token against the owner manager."""
+    try:
+        return bool(owner_manager.validate_session(token, allow_admin_token=False))
     except Exception:
         return False
 
@@ -341,7 +324,7 @@ async def create_admin_session(payload: Dict[str, Any], request: Request):
             )
         )
     else:
-        session_token = token
+        raise RuntimeError("OwnerManager.create_session is unavailable")
 
     response = JSONResponse({"status": "ok"})
     response.set_cookie("admin_token", session_token, **cookie_cfg)

@@ -18,8 +18,8 @@ _SENSITIVE_PATTERNS: List[tuple[Pattern, str]] = [
     (re.compile(r'(bearer\s+)([a-zA-Z0-9_\-\.]{20,})', re.IGNORECASE), r'\1***REDACTED***'),
     
     # Passwords
-    (re.compile(r'(password["\']?\s*[:=]\s*["\']?)([^"\'\\s]{4,})(["\']?)', re.IGNORECASE), r'\1***REDACTED***\3'),
-    (re.compile(r'(pwd["\']?\s*[:=]\s*["\']?)([^"\'\\s]{4,})(["\']?)', re.IGNORECASE), r'\1***REDACTED***\3'),
+    (re.compile(r'(password["\']?\s*[:=]\s*["\']?)([^"\'\s]{4,})(["\']?)', re.IGNORECASE), r'\1***REDACTED***\3'),
+    (re.compile(r'(pwd["\']?\s*[:=]\s*["\']?)([^"\'\s]{4,})(["\']?)', re.IGNORECASE), r'\1***REDACTED***\3'),
     
     # Secrets
     (re.compile(r'(secret["\']?\s*[:=]\s*["\']?)([a-zA-Z0-9_\-]{8,})(["\']?)', re.IGNORECASE), r'\1***REDACTED***\3'),
@@ -102,26 +102,3 @@ def install_log_sanitizer(*, also_on_root: bool = True) -> None:
     
     logging.info("Log sanitization filter installed")
 
-
-def test_sanitizer():
-    """Test function to verify sanitization works."""
-    filter = SensitiveDataFilter()
-    
-    test_cases = [
-        "API_KEY=sk-1234567890abcdef1234567890abcdef",
-        "token: bearer_abc123def456ghi789jkl",
-        "password=MySecretP@ss123",
-        "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-        'secret="my_app_secret_key_here"',
-    ]
-    
-    print("Testing log sanitizer:")
-    for case in test_cases:
-        sanitized = filter._sanitize(case)
-        print(f"  Original:  {case}")
-        print(f"  Sanitized: {sanitized}")
-        print()
-
-
-if __name__ == "__main__":
-    test_sanitizer()

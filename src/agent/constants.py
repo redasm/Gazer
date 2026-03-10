@@ -75,7 +75,7 @@ _LANG_MESSAGES: Dict[str, Dict[str, str]] = {
             "不要调用任何工具。"
         ),
         "timeout": "抱歉，本次请求在 {seconds}s 后超时，请重试。",
-        "runtime_error": "抱歉，我处理请求时遇到错误：{error}",
+        "runtime_error": "抱歉，我处理请求时遇到内部错误，请稍后重试。",
         "llm_error": "抱歉，我暂时无法得到有效模型回复。详情：{detail}",
         "fake_tool_retry": (
             "错误：你声称已执行操作，但没有调用任何工具。"
@@ -99,7 +99,7 @@ _LANG_MESSAGES: Dict[str, Dict[str, str]] = {
             "the next actionable step. Do not call tools."
         ),
         "timeout": "Sorry, this request timed out after {seconds}s. Please try again.",
-        "runtime_error": "Sorry, I encountered an error: {error}",
+        "runtime_error": "Sorry, I encountered an internal error. Please try again.",
         "llm_error": "Sorry, I couldn't get a valid model response right now. Details: {detail}",
         "fake_tool_retry": (
             "ERROR: You claimed to perform an action but did NOT call any tool. "

@@ -7,11 +7,19 @@ from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from tools.admin.state import _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS, logger
+from tools.admin.state import logger, API_QUEUES, get_canvas_state
 from .auth import _verify_ws_auth
-from tools.admin.state import API_QUEUES, get_canvas_state
+from runtime.config_manager import config as _cfg
 
 router = APIRouter(tags=["websockets"])
+
+# Media intake limits
+_MAX_MEDIA_ENTRIES = 10
+_ALLOWED_MEDIA_EXTENSIONS = frozenset({
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg",
+    ".mp3", ".mp4", ".wav", ".ogg", ".m4a", ".aac", ".webm",
+    ".pdf", ".txt", ".csv", ".bin",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +95,16 @@ chat_manager = ChatConnectionManager()
 # ---------------------------------------------------------------------------
 
 def _decode_web_media_entries(payload: Dict[str, Any]):
-    from channels.media_utils import save_media
     import base64
+    import binascii
     import mimetypes
+    from channels.media_utils import save_media
     raw_media = payload.get("media")
     if not raw_media or not isinstance(raw_media, list):
         return [], {}
+    if len(raw_media) > _MAX_MEDIA_ENTRIES:
+        logger.warning("media entries (%d) exceeds limit (%d); truncating", len(raw_media), _MAX_MEDIA_ENTRIES)
+        raw_media = raw_media[:_MAX_MEDIA_ENTRIES]
 
     media_paths: List[str] = []
     metadata: Dict[str, Any] = {"web_media": []}
@@ -103,7 +115,13 @@ def _decode_web_media_entries(payload: Dict[str, Any]):
                 header, b64_str = entry.split(",", 1)
                 mime = header.split(";", 1)[0].split(":", 1)[1]
                 ext = mimetypes.guess_extension(mime) or ".bin"
-                path = save_media(base64.b64decode(b64_str), ext=ext, prefix="web")
+                if ext not in _ALLOWED_MEDIA_EXTENSIONS:
+                    ext = ".bin"
+                try:
+                    path = save_media(base64.b64decode(b64_str), ext=ext, prefix="web")
+                except (binascii.Error, ValueError) as exc:
+                    logger.warning("Failed to decode base64 media entry: %s", exc)
+                    continue
                 media_paths.append(path)
                 metadata["web_media"].append({"mime": mime})
             else:
@@ -112,10 +130,18 @@ def _decode_web_media_entries(payload: Dict[str, Any]):
             if "data_b64" in entry:
                 mime = entry.get("mime_type", "application/octet-stream")
                 ext = mimetypes.guess_extension(mime) or ".bin"
-                # If they passed an explicit filename it might have an extension
-                if "filename" in entry and "." in entry["filename"]:
-                    ext = "." + entry["filename"].split(".")[-1]
-                path = save_media(base64.b64decode(entry["data_b64"]), ext=ext, prefix="web")
+                # Validate extension from filename if provided, using whitelist
+                if "filename" in entry and "." in str(entry["filename"]):
+                    candidate = "." + str(entry["filename"]).rsplit(".", 1)[-1].lower()
+                    if candidate in _ALLOWED_MEDIA_EXTENSIONS:
+                        ext = candidate
+                if ext not in _ALLOWED_MEDIA_EXTENSIONS:
+                    ext = ".bin"
+                try:
+                    path = save_media(base64.b64decode(entry["data_b64"]), ext=ext, prefix="web")
+                except (binascii.Error, ValueError) as exc:
+                    logger.warning("Failed to decode base64 data_b64 entry: %s", exc)
+                    continue
                 media_paths.append(path)
                 entry_meta = {k: v for k, v in entry.items() if k not in ("data_b64", "url", "path", "data_url")}
                 entry_meta["mime"] = mime
@@ -127,7 +153,13 @@ def _decode_web_media_entries(payload: Dict[str, Any]):
                         header, b64_str = ref.split(",", 1)
                         mime = header.split(";", 1)[0].split(":", 1)[1]
                         ext = mimetypes.guess_extension(mime) or ".bin"
-                        path = save_media(base64.b64decode(b64_str), ext=ext, prefix="web")
+                        if ext not in _ALLOWED_MEDIA_EXTENSIONS:
+                            ext = ".bin"
+                        try:
+                            path = save_media(base64.b64decode(b64_str), ext=ext, prefix="web")
+                        except (binascii.Error, ValueError) as exc:
+                            logger.warning("Failed to decode base64 ref entry: %s", exc)
+                            continue
                         media_paths.append(path)
                         metadata["web_media"].append({"mime": mime})
                     else:
@@ -153,13 +185,18 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"type": "welcome", "data": "Gazer System Connected"})
         while True:
             data = await websocket.receive_text()
-            if len(data.encode("utf-8")) > _MAX_WS_MESSAGE_BYTES:
+            if len(data.encode("utf-8")) > int(_cfg.get("api.max_ws_message_bytes", 256 * 1024)):
                 await websocket.send_json({"type": "error", "message": "Message too large"})
                 continue
-            await websocket.send_json({"type": "pong", "data": data})
+            # Fixed: do not echo client data back (prevents reflection)
+            await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
+# ---------------------------------------------------------------------------
+# Routes (continued)
+# ---------------------------------------------------------------------------
 
 @router.websocket("/ws/canvas")
 async def canvas_endpoint(websocket: WebSocket):
@@ -193,7 +230,7 @@ async def canvas_endpoint(websocket: WebSocket):
         while True:
             try:
                 raw = await websocket.receive_text()
-                if len(raw.encode("utf-8")) > _MAX_WS_MESSAGE_BYTES:
+                if len(raw.encode("utf-8")) > int(_cfg.get("api.max_ws_message_bytes", 256 * 1024)):
                     continue
                 
                 # The Web UI sends user actions (from interactive A2UI components)
@@ -221,7 +258,12 @@ async def canvas_endpoint(websocket: WebSocket):
 
 @router.websocket("/ws/chat")
 async def chat_endpoint(websocket: WebSocket):
-    """Chat WebSocket -- relays messages between the web UI and the Brain."""
+    """Chat WebSocket -- relays messages between the web UI and the Brain.
+
+    .. deprecated::
+        Use ``/ws/gateway`` instead.  This endpoint exists for legacy clients
+        and may be removed in a future release.
+    """
     if not await _verify_ws_auth(websocket):
         return
     session_id = websocket.query_params.get("session_id", "web-main")
@@ -230,7 +272,7 @@ async def chat_endpoint(websocket: WebSocket):
     try:
         while True:
             raw = await websocket.receive_text()
-            if len(raw.encode("utf-8")) > _MAX_WS_MESSAGE_BYTES:
+            if len(raw.encode("utf-8")) > int(_cfg.get("api.max_ws_message_bytes", 256 * 1024)):
                 await websocket.send_json({"type": "error", "message": "Message too large"})
                 continue
             payload: Dict[str, Any] = {}
@@ -259,11 +301,12 @@ async def chat_endpoint(websocket: WebSocket):
             if not content and not media:
                 await websocket.send_json({"type": "error", "message": "Empty message"})
                 continue
-            if len(content) > _MAX_CHAT_MESSAGE_CHARS:
+            _max_chars = int(_cfg.get("api.max_chat_message_chars", 8000))
+            if len(content) > _max_chars:
                 await websocket.send_json(
                     {
                         "type": "error",
-                        "message": f"Message too long (max {_MAX_CHAT_MESSAGE_CHARS} characters)",
+                        "message": f"Message too long (max {_max_chars} characters)",
                     }
                 )
                 continue

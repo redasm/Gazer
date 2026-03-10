@@ -41,6 +41,21 @@ _SAFE_UNARYOPS = {
     ast.UAdd: operator.pos,
 }
 
+# Maximum number of elements range() may produce (prevents OOM via large ranges)
+_MAX_RANGE_SIZE = 100_000
+
+
+def _safe_range(*args: int) -> list:
+    """Range builtin with an upper bound on result size."""
+    try:
+        r = range(*args)
+    except TypeError as exc:
+        raise ValueError(f"range() invalid arguments: {exc}") from exc
+    if len(r) > _MAX_RANGE_SIZE:
+        raise ValueError(f"range() result too large (max {_MAX_RANGE_SIZE} elements)")
+    return list(r)
+
+
 # Safe built-in functions
 _SAFE_FUNCTIONS = {
     "len": len,
@@ -60,7 +75,7 @@ _SAFE_FUNCTIONS = {
     "reversed": lambda x: list(reversed(x)),
     "enumerate": lambda x: list(enumerate(x)),
     "zip": lambda *args: list(zip(*args)),
-    "range": lambda *args: list(range(*args)),
+    "range": _safe_range,
     "isinstance": isinstance,
 }
 

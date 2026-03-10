@@ -415,7 +415,7 @@ class AgentLoop(
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=self._msg(reply_language, "runtime_error", error=str(e)),
+                        content=self._msg(reply_language, "runtime_error"),
                     ))
             except Exception as e:
                 logger.error("Critical error in agent loop: %s", e, exc_info=True)

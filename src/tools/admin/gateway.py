@@ -31,9 +31,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from tools.admin.state import (
     API_QUEUES, get_canvas_state,
-    _MAX_WS_MESSAGE_BYTES, _MAX_CHAT_MESSAGE_CHARS,
     logger,
 )
+from runtime.config_manager import config as _cfg
 from .auth import _verify_ws_auth
 from .websockets import _decode_web_media_entries
 
@@ -132,9 +132,10 @@ async def _handle_chat_send(client: GatewayClient, payload: dict) -> None:
     if not content and not media:
         await client.ws.send_json({"type": "error", "message": "Empty message"})
         return
-    if len(content) > _MAX_CHAT_MESSAGE_CHARS:
+    _max_chat_chars = int(_cfg.get("api.max_chat_message_chars", 8000))
+    if len(content) > _max_chat_chars:
         await client.ws.send_json(
-            {"type": "error", "message": f"Message too long (max {_MAX_CHAT_MESSAGE_CHARS} chars)"}
+            {"type": "error", "message": f"Message too long (max {_max_chat_chars} chars)"}
         )
         return
 
@@ -343,7 +344,7 @@ async def gateway_endpoint(websocket: WebSocket) -> None:
 
         while True:
             raw = await websocket.receive_text()
-            if len(raw.encode("utf-8")) > _MAX_WS_MESSAGE_BYTES:
+            if len(raw.encode("utf-8")) > int(_cfg.get("api.max_ws_message_bytes", 256 * 1024)):
                 await websocket.send_json({"type": "error", "message": "Message too large"})
                 continue
 

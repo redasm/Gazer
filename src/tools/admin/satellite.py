@@ -1,27 +1,43 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect, File, UploadFile
-from typing import Dict, Any, List, Optional
-import time
-import json
 import asyncio
+import collections
+import io
+import json
 import logging
-from tools.admin.auth import verify_admin_token
-from tools.admin.auth import _verify_ws_auth, _extract_ws_token
-from security.pairing import get_pairing_manager
+import time
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from PIL import Image
+
 from devices.satellite_protocol import (
-    FRAME_TYPE_ACK, FRAME_TYPE_FRAME, FRAME_TYPE_HEARTBEAT,
-    FRAME_TYPE_HELLO, FRAME_TYPE_INVOKE_RESULT, FRAME_TYPE_ERROR,
-    ensure_frame, ensure_hello, ensure_invoke_result,
+    FRAME_TYPE_ACK, FRAME_TYPE_ERROR, FRAME_TYPE_FRAME, FRAME_TYPE_HEARTBEAT,
+    FRAME_TYPE_HELLO, FRAME_TYPE_INVOKE_RESULT,
     SatelliteProtocolError, SessionMetadata,
+    ensure_frame, ensure_hello, ensure_invoke_result,
 )
+from devices.satellite_session import SatelliteSessionManager, create_satellite_session_manager
+from security.pairing import get_pairing_manager
+from tools.admin.auth import _extract_ws_token, _verify_ws_auth, verify_admin_token
 from tools.admin.state import (
     API_QUEUES,
     SATELLITE_SESSION_MANAGER,
     SATELLITE_SOURCES,
     config,
 )
-from devices.satellite_session import SatelliteSessionManager, create_satellite_session_manager
+from tools.admin.strategy_helpers import (
+    _consume_satellite_frame_budget,
+    _decode_frame_payload,
+    _validate_satellite_node_auth,
+)
+
+# Maximum upload size (bytes); read dynamically so config changes take effect on restart.
+_MAX_UPLOAD_BYTES: int = int(config.get("api.max_upload_bytes", 10 * 1024 * 1024))
+
+# Last received satellite snapshot image (used by the debug view endpoint).
+_latest_satellite_image = None
 
 app = APIRouter()
 logger = logging.getLogger('satellite')
@@ -64,9 +80,10 @@ async def satellite_ws(websocket: WebSocket):
     authed_node_id = ""
     budget_state: Dict[str, Any] = {"frames": collections.deque(), "total_bytes": 0}
     frame_window_seconds = float(config.get("satellite.frame_window_seconds", 2.0) or 2.0)
+    _default_max_frame_bytes = 4 * int(config.get("api.max_ws_message_bytes", 256 * 1024))
     max_frame_bytes_per_window = int(
-        config.get("satellite.max_frame_bytes_per_window", 4 * _MAX_WS_MESSAGE_BYTES)
-        or (4 * _MAX_WS_MESSAGE_BYTES)
+        config.get("satellite.max_frame_bytes_per_window", _default_max_frame_bytes)
+        or _default_max_frame_bytes
     )
     logger.info("Satellite WS connected: source_id=%s ip=%s", source_id, client_ip)
     try:
