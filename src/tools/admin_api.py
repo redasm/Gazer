@@ -89,14 +89,14 @@ if _WEB_DIST_DIR.is_dir():
 
 
 # --- Dynamic CORS middleware (reads config on every request) ---
-from tools.admin.auth import _get_cors_config
+from tools.admin.auth import _get_cors_config, _is_allowed_origin
 
 
 @app.middleware("http")
 async def _dynamic_cors(request: Request, call_next):
     origin = request.headers.get("origin", "")
-    origins, credentials = _get_cors_config()
-    is_allowed = origin and ("*" in origins or origin in origins)
+    _, credentials = _get_cors_config()
+    is_allowed = bool(origin and _is_allowed_origin(origin))
 
     if request.method == "OPTIONS":
         headers = {"Vary": "Origin"}

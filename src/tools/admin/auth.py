@@ -216,19 +216,18 @@ async def verify_admin_token(request: Request):
     Enhanced security: enforces Origin validation for state-changing operations.
     """
     origin = request.headers.get("Origin", "")
-    is_loop = _is_loopback(request)
-    
+
     # Strict Origin validation for state-changing operations (POST/PUT/DELETE/PATCH)
     is_mutation = request.method in ("POST", "PUT", "DELETE", "PATCH")
     require_origin_mutations = bool(config.get("api.require_origin_for_mutations", True))
-    
+
     if is_mutation and require_origin_mutations and not origin:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Origin header required for state-changing operations"
         )
-    
-    if origin and not _is_allowed_origin(origin) and not is_loop:
+
+    if origin and not _is_allowed_origin(origin):
         raise HTTPException(status_code=403, detail="Origin not allowed")
 
     om = get_owner_manager()

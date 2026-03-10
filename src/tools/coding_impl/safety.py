@@ -82,6 +82,12 @@ _DANGEROUS_PATTERNS: List[re.Pattern] = [
     # --- Network exfiltration ---
     re.compile(r"\bnc\s+-e\b", re.IGNORECASE),                           # netcat reverse shell
     re.compile(r"\b/dev/tcp/", re.IGNORECASE),                           # bash /dev/tcp
+
+    # --- PowerShell native dangerous commands ---
+    re.compile(r"\bRemove-Item\b.*-Recurse\b.*\*", re.IGNORECASE),       # Remove-Item -Recurse *
+    re.compile(r"\bRemove-Item\b.*\*.*-Recurse\b", re.IGNORECASE),       # Remove-Item * -Recurse
+    re.compile(r"\bStop-Process\b.*-Name\s+\*", re.IGNORECASE),          # Stop-Process -Name * (all)
+    re.compile(r"\bSet-ExecutionPolicy\b.*(Bypass|Unrestricted)", re.IGNORECASE),  # weaken execution policy
 ]
 
 # Environment variable patterns that might expand to dangerous paths

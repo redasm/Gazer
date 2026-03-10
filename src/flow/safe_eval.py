@@ -79,6 +79,9 @@ _SAFE_METHOD_NAMES = frozenset({
     "union", "intersection", "difference",
 })
 
+# Types on which attribute access is permitted
+_SAFE_ATTR_TYPES = (dict, str, list, set, frozenset, tuple, int, float, bool)
+
 # Maximum recursion depth for nested expressions
 _MAX_DEPTH = 50
 
@@ -144,13 +147,21 @@ class _SafeEvaluator(ast.NodeVisitor):
         # Prevent access to dunder attributes
         if attr.startswith("_"):
             raise UnsafeExpressionError(f"Access to private attribute '{attr}' is forbidden")
-        # Allow safe bound-method access (e.g. args.get(...)) while still
-        # supporting dict key access via dot notation for plain fields.
+        # Only permit attribute access on safe built-in types to prevent
+        # method/attribute leakage from arbitrary user-provided objects.
+        if not isinstance(value, _SAFE_ATTR_TYPES):
+            raise UnsafeExpressionError(
+                f"Attribute access on type '{type(value).__name__}' is not allowed"
+            )
+        if isinstance(value, dict):
+            # For dicts: whitelisted method names go through getattr,
+            # everything else is treated as a key lookup.
+            if attr in _SAFE_METHOD_NAMES:
+                return getattr(value, attr)
+            return value.get(attr)
         if hasattr(value, attr):
             return getattr(value, attr)
-        if isinstance(value, dict):
-            return value.get(attr)
-        return getattr(value, attr, None)
+        return None
 
     def visit_Subscript(self, node: ast.Subscript) -> Any:
         value = self.visit(node.value)

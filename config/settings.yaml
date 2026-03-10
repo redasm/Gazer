@@ -601,9 +601,6 @@ agents:
         alias: Qwen Max
       dashscope/qwen-turbo:
         alias: Qwen Turbo
-      gmn/gpt-5:
-        '2':
-          alias: GPT 5.2
     workspace: .
     compaction:
       mode: safeguard
