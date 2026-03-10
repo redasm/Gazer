@@ -1,5 +1,6 @@
 import copy
 import os
+import threading
 import yaml
 import logging
 import tempfile
@@ -114,6 +115,7 @@ class ConfigManager:
         self._lock_path = f"{self.config_path}.lock"
         self.data: Dict[str, Any] = {}
         self._last_mtime = 0
+        self._rlock = threading.RLock()
         self._load()
 
     def _resolve_workspace_root(self) -> Path:
@@ -195,44 +197,45 @@ class ConfigManager:
 
     def _load(self):
         """Load config from file; use defaults and save if not found."""
-        config_dir = os.path.dirname(self.config_path)
-        if config_dir:
-            os.makedirs(config_dir, exist_ok=True)
-        if os.path.exists(self.config_path):
-            try:
-                mtime = os.path.getmtime(self.config_path)
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    loaded = yaml.safe_load(f) or {}
-                self.data = loaded if isinstance(loaded, dict) else {}
-                loaded_prompt = ""
-                if isinstance(loaded, dict):
-                    personality = loaded.get("personality", {})
-                    if isinstance(personality, dict):
-                        loaded_prompt = str(personality.get("system_prompt", "") or "")
-                self._last_mtime = mtime
-                self._validate_schema_strict()
-                # Merge defaults to ensure newly added config keys exist
-                self._merge_defaults(self.data, DEFAULT_CONFIG)
-                # Deprecated: privileged owner bypass is now unconditional for owner ids.
-                sec = self.data.get("security")
-                if isinstance(sec, dict) and "auto_approve_owner_privileged" in sec:
-                    sec.pop("auto_approve_owner_privileged", None)
-                    logger.warning(
-                        "Deprecated config key 'security.auto_approve_owner_privileged' "
-                        "found and removed. Owner bypass is now always enforced."
-                    )
-                # Restore sensitive fields from env-var defaults when stripped
-                self._restore_sensitive_from_defaults(self.data, DEFAULT_CONFIG)
-                # Keep persona prompt single-sourced from assets/SOUL.md.
-                self._sync_persona_system_prompt(loaded_prompt=loaded_prompt)
-                logger.info("Configuration loaded from %s", self.config_path)
-            except Exception as e:
-                logger.error("Failed to load config: %s.", e)
-                raise RuntimeError(f"Failed to load config '{self.config_path}': {e}") from e
-        else:
-            self.data = copy.deepcopy(DEFAULT_CONFIG)
-            self._sync_persona_system_prompt()
-            self.save()
+        with self._rlock:
+            config_dir = os.path.dirname(self.config_path)
+            if config_dir:
+                os.makedirs(config_dir, exist_ok=True)
+            if os.path.exists(self.config_path):
+                try:
+                    mtime = os.path.getmtime(self.config_path)
+                    with open(self.config_path, "r", encoding="utf-8") as f:
+                        loaded = yaml.safe_load(f) or {}
+                    self.data = loaded if isinstance(loaded, dict) else {}
+                    loaded_prompt = ""
+                    if isinstance(loaded, dict):
+                        personality = loaded.get("personality", {})
+                        if isinstance(personality, dict):
+                            loaded_prompt = str(personality.get("system_prompt", "") or "")
+                    self._last_mtime = mtime
+                    self._validate_schema_strict()
+                    # Merge defaults to ensure newly added config keys exist
+                    self._merge_defaults(self.data, DEFAULT_CONFIG)
+                    # Deprecated: privileged owner bypass is now unconditional for owner ids.
+                    sec = self.data.get("security")
+                    if isinstance(sec, dict) and "auto_approve_owner_privileged" in sec:
+                        sec.pop("auto_approve_owner_privileged", None)
+                        logger.warning(
+                            "Deprecated config key 'security.auto_approve_owner_privileged' "
+                            "found and removed. Owner bypass is now always enforced."
+                        )
+                    # Restore sensitive fields from env-var defaults when stripped
+                    self._restore_sensitive_from_defaults(self.data, DEFAULT_CONFIG)
+                    # Keep persona prompt single-sourced from assets/SOUL.md.
+                    self._sync_persona_system_prompt(loaded_prompt=loaded_prompt)
+                    logger.info("Configuration loaded from %s", self.config_path)
+                except Exception as e:
+                    logger.error("Failed to load config: %s.", e)
+                    raise RuntimeError(f"Failed to load config '{self.config_path}': {e}") from e
+            else:
+                self.data = copy.deepcopy(DEFAULT_CONFIG)
+                self._sync_persona_system_prompt()
+                self.save()
 
     def _validate_schema_strict(self) -> None:
         """Fail fast in development when deprecated config keys are present."""
@@ -262,11 +265,12 @@ class ConfigManager:
 
     def check_reload(self) -> bool:
         """Check if the config file has been modified and reload if so."""
-        if os.path.exists(self.config_path):
-            mtime = os.path.getmtime(self.config_path)
-            if mtime > self._last_mtime:
-                self._load()
-                return True
+        with self._rlock:
+            if os.path.exists(self.config_path):
+                mtime = os.path.getmtime(self.config_path)
+                if mtime > self._last_mtime:
+                    self._load()
+                    return True
         return False
 
     def _merge_defaults(self, target: dict, source: dict):
@@ -353,37 +357,38 @@ class ConfigManager:
         ``to_safe_dict()`` when
         exposing config through APIs to avoid leaking sensitive fields.
         """
-        try:
-            config_dir = os.path.dirname(self.config_path) or "."
-            os.makedirs(config_dir, exist_ok=True)
-            # Persist full effective config without pruning default-valued keys.
-            # This keeps settings.yaml explicit and avoids "missing key" surprises.
-            persist_data = copy.deepcopy(self.data) if isinstance(self.data, dict) else {}
-            for key_path in self.NON_PERSISTED_KEYS:
-                self._delete_dot_path(persist_data, key_path)
-            persist_data = self._order_for_persist(persist_data)
-            with file_lock(self._lock_path, timeout=5.0):
-                fd, tmp_path = tempfile.mkstemp(dir=config_dir, suffix=".yaml.tmp")
-                try:
-                    with os.fdopen(fd, "w", encoding="utf-8") as f:
-                        yaml.safe_dump(persist_data, f, allow_unicode=True, sort_keys=False)
-                        f.flush()
-                        os.fsync(f.fileno())
-                    os.replace(tmp_path, self.config_path)
-                except BaseException:
+        with self._rlock:
+            try:
+                config_dir = os.path.dirname(self.config_path) or "."
+                os.makedirs(config_dir, exist_ok=True)
+                # Persist full effective config without pruning default-valued keys.
+                # This keeps settings.yaml explicit and avoids "missing key" surprises.
+                persist_data = copy.deepcopy(self.data) if isinstance(self.data, dict) else {}
+                for key_path in self.NON_PERSISTED_KEYS:
+                    self._delete_dot_path(persist_data, key_path)
+                persist_data = self._order_for_persist(persist_data)
+                with file_lock(self._lock_path, timeout=5.0):
+                    fd, tmp_path = tempfile.mkstemp(dir=config_dir, suffix=".yaml.tmp")
                     try:
-                        os.unlink(tmp_path)
-                    except OSError:
-                        pass
-                    raise
-                self._last_mtime = os.path.getmtime(self.config_path)
-            logger.info("Configuration saved.")
-        except FileLockError as e:
-            logger.error("Failed to save config (lock timeout): %s", e)
-            raise RuntimeError(f"Failed to save config (lock timeout): {e}") from e
-        except Exception as e:
-            logger.error("Failed to save config: %s", e)
-            raise RuntimeError(f"Failed to save config: {e}") from e
+                        with os.fdopen(fd, "w", encoding="utf-8") as f:
+                            yaml.safe_dump(persist_data, f, allow_unicode=True, sort_keys=False)
+                            f.flush()
+                            os.fsync(f.fileno())
+                        os.replace(tmp_path, self.config_path)
+                    except BaseException:
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+                        raise
+                    self._last_mtime = os.path.getmtime(self.config_path)
+                logger.info("Configuration saved.")
+            except FileLockError as e:
+                logger.error("Failed to save config (lock timeout): %s", e)
+                raise RuntimeError(f"Failed to save config (lock timeout): {e}") from e
+            except Exception as e:
+                logger.error("Failed to save config: %s", e)
+                raise RuntimeError(f"Failed to save config: {e}") from e
 
     def _order_for_persist(self, value: Any, path: str = "") -> Any:
         """Return a copy of *value* with stable key ordering for YAML persistence."""
@@ -415,7 +420,6 @@ class ConfigManager:
                     "agents",
                     "plugins",
                     "skill_registry",
-                    "skills",
                     "canvas",
                     "trainer",
                     "observability",

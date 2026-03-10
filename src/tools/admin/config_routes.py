@@ -49,6 +49,8 @@ _PROTECTED_NAMESPACES = {
     "security.auto_approve_privileged",
     "api.cors_origins",
     "api.cors_credentials",
+    "api.cors_strict_mode",
+    "api.require_origin_for_mutations",
     "api.cookie_secure",
     "api.cookie_samesite",
     "api.allow_admin_bearer_token",

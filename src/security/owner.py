@@ -54,17 +54,6 @@ class OwnerManager:
         self._data: Dict = {}
         try:
             self._storage = SecureFileStorage(owner_file)
-            # Auto-migrate from plaintext if old file exists
-            if os.path.exists(owner_file):
-                try:
-                    with open(owner_file, "r", encoding="utf-8") as f:
-                        test_data = json.load(f)
-                    # Check if it's plaintext (no "version" or "encrypted" keys)
-                    if not isinstance(test_data.get("encrypted"), bool):
-                        logger.info("Migrating owner.json to encrypted storage...")
-                        self._storage.save(test_data)
-                except Exception:
-                    pass
         except Exception as e:
             logger.error("Failed to initialize encrypted owner storage: %s", e)
             raise RuntimeError("Encrypted owner storage initialization failed") from e

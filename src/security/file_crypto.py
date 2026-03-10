@@ -157,26 +157,19 @@ class SecureFileStorage:
         # Atomic write
         os.makedirs(os.path.dirname(self.file_path) or ".", exist_ok=True)
         temp_path = f"{self.file_path}.tmp"
-        
+
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        
+
         # Harden file permissions (owner read/write only)
         try:
             os.chmod(temp_path, 0o600)
         except Exception:
             pass  # Windows doesn't support POSIX permissions
-        
-        # Atomic rename
-        if os.path.exists(self.file_path):
-            backup_path = f"{self.file_path}.bak"
-            try:
-                os.replace(self.file_path, backup_path)
-            except Exception:
-                pass
-        
+
+        # Atomic replace — no .bak left behind to leak sensitive data
         os.replace(temp_path, self.file_path)
-        
+
         logger.info("Saved encrypted data to %s", self.file_path)
     
     def load(self) -> Dict[str, Any]:
@@ -222,30 +215,3 @@ class SecureFileStorage:
                 raise ValueError(f"Decryption failed: {e}") from e
         raise ValueError("Plaintext secure storage payloads are no longer supported")
     
-    def migrate_from_plaintext(self, plaintext_file: str) -> bool:
-        """Migrate existing plaintext JSON file to encrypted storage.
-        
-        Args:
-            plaintext_file: Path to existing plaintext JSON file
-            
-        Returns:
-            True if migration successful, False if file doesn't exist
-        """
-        if not os.path.exists(plaintext_file):
-            return False
-        
-        try:
-            with open(plaintext_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            
-            self.save(data)
-            
-            # Backup old file
-            backup_path = f"{plaintext_file}.plaintext.bak"
-            os.replace(plaintext_file, backup_path)
-            
-            logger.info("Migrated %s to encrypted storage", plaintext_file)
-            return True
-        except Exception as e:
-            logger.error("Migration failed: %s", e)
-            return False

@@ -132,7 +132,7 @@ class InteractiveCLI:
             self.agent.register_tool(CronTool(self._cron_scheduler))
 
         # Skill registry tools
-        registry_url = config.get("skills.registry_url", "")
+        registry_url = config.get("skill_registry.registry_url", "")
         skill_client = SkillRegistryClient(registry_url)
         self.agent.register_tool(SkillSearchTool(skill_client))
         self.agent.register_tool(SkillInstallTool(skill_client, ws / "skills"))

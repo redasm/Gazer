@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional, Set
 
@@ -179,6 +180,9 @@ async def _handle_session_clear(client: GatewayClient, payload: dict) -> None:
     if not session_key:
         await client.ws.send_json({"type": "error", "message": "session_key required"})
         return
+    if not _SESSION_KEY_RE.match(session_key):
+        await client.ws.send_json({"type": "error", "message": "Invalid session_key format"})
+        return
     # Send clear request to Brain via IPC
     input_q = API_QUEUES.get("input")
     if input_q:
@@ -215,6 +219,10 @@ async def _handle_subscribe(client: GatewayClient, payload: dict) -> None:
         "events": sorted(client.subscriptions),
         "chat_ids": sorted(client.chat_ids),
     })
+
+
+# Compiled regex for safe session key validation
+_SESSION_KEY_RE = re.compile(r"^[\w\-.]{1,128}$")
 
 
 # Handler dispatch table
@@ -291,12 +299,13 @@ async def talk_endpoint(websocket: WebSocket) -> None:
                     # Forward to Brain via IPC
                     input_q = API_QUEUES.get("input")
                     if input_q:
+                        is_owner = getattr(websocket.state, "is_owner", False)
                         input_q.put({
                             "type": "chat",
                             "content": text,
                             "source": "voice",
                             "chat_id": "talk-mode",
-                            "sender_id": "VoiceUser",
+                            "sender_id": "owner" if is_owner else "VoiceUser",
                         })
 
             elif msg_type == "talk.audio":
@@ -363,7 +372,7 @@ async def gateway_endpoint(websocket: WebSocket) -> None:
                 except Exception as exc:
                     logger.error("Gateway handler error [%s]: %s", msg_type, exc, exc_info=True)
                     await websocket.send_json(
-                        {"type": "error", "message": f"Handler error: {exc}"}
+                        {"type": "error", "message": "Internal error processing request"}
                     )
             else:
                 await websocket.send_json(

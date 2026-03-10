@@ -7,7 +7,7 @@ from pathlib import Path
 import os
 from typing import Any, List, Optional
 
-from runtime.config_manager import config
+from runtime.config_manager import config, get_config
 from perception.audio import get_audio
 from hardware import create_body_driver, BodyDriver
 from memory import MemoryManager
@@ -43,6 +43,7 @@ class GazerBrain:
     """Gazer Brain: coordinates perception, cognition, and action."""
 
     def __init__(self, ui_queue=None):
+        get_config()  # Fail fast if config is unavailable
         ensure_openviking_ready(config)
         self.app_context = AppContext()
         set_app_context(self.app_context)

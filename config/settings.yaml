@@ -616,8 +616,6 @@ plugins:
     trusted_keys: {}
 skill_registry:
   registry_url: ''
-skills:
-  registry_url: ''
 canvas:
   enabled: true
   max_panels: 20

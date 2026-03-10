@@ -386,7 +386,7 @@ DEFAULT_CONFIG = {
         },
     },
     "telegram": {
-        "enabled": True,
+        "enabled": False,
         "token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
         "allowed_ids": os.getenv("ALLOWED_USER_IDS", "").split(",") if os.getenv("ALLOWED_USER_IDS") else [],
         "dm_policy": "pairing"
@@ -620,10 +620,12 @@ DEFAULT_CONFIG = {
                 "git_branch",
             ],
             "desktop": [
-                "node_list",
-                "node_describe",
-                "node_invoke",
-                "gui_task_execute",
+                "screen_observe",
+                "screenshot",
+                "send_file",
+                "mouse_click",
+                "keyboard_type",
+                "keyboard_hotkey",
             ],
             "devices": ["node_list", "node_describe", "node_invoke", "gui_task_execute"],
             "web": ["web_search", "web_fetch"],
@@ -723,9 +725,6 @@ DEFAULT_CONFIG = {
     },
     "skill_registry": {
         "registry_url": "",  # URL to remote skill index JSON
-    },
-    "skills": {
-        "registry_url": "",  # URL to remote skill index JSON (legacy, prefer skill_registry)
     },
     "canvas": {
         "enabled": True,
