@@ -11,7 +11,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("SessionStore")
 
@@ -152,4 +152,79 @@ class SessionStore:
         if path.is_file():
             path.unlink()
             return True
+        # Also remove stale meta
+        meta_path = self._meta_path(session_key)
+        if meta_path.is_file():
+            meta_path.unlink(missing_ok=True)
         return False
+
+    # ------------------------------------------------------------------
+    # Session metadata (model/provider override, etc.)
+    # ------------------------------------------------------------------
+
+    def _meta_path(self, session_key: str) -> Path:
+        stem = base64.urlsafe_b64encode(session_key.encode("utf-8")).decode("ascii")
+        return self._base / f"{stem}.meta.json"
+
+    def get_session_meta(self, session_key: str) -> Dict[str, Any]:
+        """Load persisted metadata for *session_key* (empty dict if none)."""
+        path = self._meta_path(session_key)
+        if not path.is_file():
+            return {}
+        try:
+            return dict(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return {}
+
+    def set_session_meta(self, session_key: str, meta: Dict[str, Any]) -> None:
+        """Persist *meta* for *session_key* (overwrites existing)."""
+        path = self._meta_path(session_key)
+        try:
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(path)
+        except OSError as exc:
+            logger.error("Failed to write session meta %s: %s", session_key, exc)
+
+    def apply_model_override(
+        self,
+        session_key: str,
+        provider: str,
+        model: str,
+    ) -> Dict[str, Any]:
+        """Persist a per-session model/provider override and return the updated meta.
+
+        When the selection changes, stale runtime fields (``last_model``,
+        ``context_tokens``) are cleared so the next turn reflects the new choice
+        immediately — mirroring OpenClaw's ``applyModelOverrideToSessionEntry``.
+        """
+        meta = self.get_session_meta(session_key)
+        changed = (
+            meta.get("model_override") != model
+            or meta.get("provider_override") != provider
+        )
+        meta["model_override"] = model
+        meta["provider_override"] = provider
+        meta["updated_at"] = time.time()
+        if changed:
+            # Clear stale runtime fields that are derived from the active model
+            meta.pop("last_model", None)
+            meta.pop("context_tokens", None)
+        self.set_session_meta(session_key, meta)
+        return meta
+
+    def clear_model_override(self, session_key: str) -> Dict[str, Any]:
+        """Remove any stored model/provider override for *session_key*."""
+        meta = self.get_session_meta(session_key)
+        changed = bool(meta.pop("model_override", None) or meta.pop("provider_override", None))
+        if changed:
+            meta.pop("last_model", None)
+            meta.pop("context_tokens", None)
+            meta["updated_at"] = time.time()
+            self.set_session_meta(session_key, meta)
+        return meta
+
+    def get_model_override(self, session_key: str) -> Tuple[Optional[str], Optional[str]]:
+        """Return ``(provider, model)`` override for *session_key*, or ``(None, None)``."""
+        meta = self.get_session_meta(session_key)
+        return meta.get("provider_override"), meta.get("model_override")

@@ -661,6 +661,19 @@ class AgentLoop(
             except Exception as exc:
                 logger.warning("Slow provider resolver failed; using default provider: %s", exc)
 
+        # P16: restore per-session model override (set via /model override).
+        # Applied after slow_provider_resolver so explicit user choices take precedence.
+        try:
+            _meta_provider, _meta_model = self.session_store.get_model_override(session_key)
+            if _meta_model:
+                self._active_model_override = _meta_model
+                logger.debug(
+                    "Restored session model override: provider=%s model=%s session=%s",
+                    _meta_provider, _meta_model, session_key,
+                )
+        except Exception as exc:
+            logger.warning("Failed to restore session model override: %s", exc)
+
         # Session reset trigger
         if msg.metadata.get("_reset_session"):
             self.reset_session(session_key)

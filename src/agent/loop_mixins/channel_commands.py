@@ -59,6 +59,8 @@ class ChannelCommandsMixin:
             "- /model show\n"
             "- /model set slow <provider> <model>\n"
             "- /model set fast <provider> <model>\n"
+            "- /model override <provider> <model>  # 为本会话设置临时模型覆盖\n"
+            "- /model override clear              # 清除本会话的模型覆盖\n"
             "说明: 也支持使用 `+` 前缀。"
         )
 
@@ -271,6 +273,8 @@ class ChannelCommandsMixin:
             "- /model\n"
             "- /model set slow <provider> <model>\n"
             "- /model set fast <provider> <model>\n"
+            "- /model override <provider> <model>\n"
+            "- /model override clear\n"
             "- /router\n"
             "- /router on|off\n"
             "- /router strategy <priority|latency|success_rate>\n"
@@ -310,7 +314,9 @@ class ChannelCommandsMixin:
             f"- fallback0(fast_brain): ref={fallback_ref or 'n/a'} provider={fast_provider or 'n/a'} model={fast_model or 'n/a'}\n"
             "当前运行时:\n"
             f"- slow_model={runtime_slow_model or 'n/a'}\n"
-            f"- fast_model={runtime_fast_model}"
+            f"- fast_model={runtime_fast_model}\n"
+            "会话覆盖 (session override):\n"
+            f"- active_model_override={str(self._active_model_override or '(none)')}"
         )
 
     def _build_router_status_text(self) -> str:
@@ -347,7 +353,10 @@ class ChannelCommandsMixin:
             return action in {"on", "off", "enable", "disable", "degrade", "strategy", "set"}
 
         def _model_mutating(args: List[str]) -> bool:
-            return bool(args) and str(args[0]).strip().lower() == "set"
+            if not args:
+                return False
+            action = str(args[0]).strip().lower()
+            return action in {"set", "override"}
 
         self.channel_command_registry.register("help", self._handle_command_help, aliases=["h"])
         self.channel_command_registry.register(
@@ -467,6 +476,8 @@ class ChannelCommandsMixin:
             return self._build_model_status_text()
 
         action = str(args[0]).strip().lower()
+        if action == "override":
+            return self._handle_command_model_override(args, msg, action_args=args[1:])
         if action != "set":
             return self._command_usage_model()
         if len(args) < 4:
@@ -526,6 +537,59 @@ class ChannelCommandsMixin:
         return (
             f"已更新 {brain_key}: provider={provider}, model={model}\n"
             "配置已保存；若切换了 provider，需重启后完全生效。"
+        )
+
+    def _handle_command_model_override(
+        self,
+        args: List[str],
+        msg: InboundMessage,
+        *,
+        action_args: List[str],
+    ) -> str:
+        """Handle `/model override [clear | <provider> <model>]`.
+
+        Session-level model overrides are stored in the ``SessionStore`` meta
+        (``<session>.meta.json``) and restored at each turn start — mirroring
+        OpenClaw's ``applyModelOverrideToSessionEntry``.  They are scoped to
+        the current session only and do not affect other conversations.
+        """
+        del args  # not used here; action_args carries the sub-args
+        role_label = self._describe_command_role(self._resolve_command_role(msg))
+        if not self._is_command_authorized(msg, mutating=True):
+            return (
+                f"权限不足: 当前角色={role_label}。该命令仅 owner 或本地 web 渠道可执行。\n"
+                "请在 `security.owner_channel_ids` 配置 owner 的渠道 ID。"
+            )
+
+        if not action_args or str(action_args[0]).strip().lower() in {"clear", "reset", "off"}:
+            try:
+                self.session_store.clear_model_override(msg.session_key)
+                self._active_model_override = None
+            except Exception as exc:
+                logger.error("Failed to clear session model override: %s", exc, exc_info=True)
+                return f"清除失败: {exc}"
+            return "已清除本会话的模型覆盖，恢复使用默认模型。"
+
+        # /model override <provider> <model>
+        if len(action_args) < 2:
+            return (
+                "用法:\n"
+                "- /model override <provider> <model>\n"
+                "- /model override clear"
+            )
+        provider = str(action_args[0]).strip()
+        model = " ".join(str(a) for a in action_args[1:]).strip()
+        if not provider or not model:
+            return self._command_usage_model()
+        try:
+            self.session_store.apply_model_override(msg.session_key, provider, model)
+            self._active_model_override = model
+        except Exception as exc:
+            logger.error("Failed to persist session model override: %s", exc, exc_info=True)
+            return f"持久化失败: {exc}"
+        return (
+            f"已为本会话设置模型覆盖: provider={provider}, model={model}\n"
+            "下次回话仍然有效；使用 `/model override clear` 恢复默认。"
         )
 
     def _execute_channel_command(self, *, command: str, args: List[str], msg: InboundMessage) -> str:

@@ -20,6 +20,7 @@ channel/chat via ``failure_channel`` / ``failure_chat_id``.
 import asyncio
 import json
 import logging
+import random
 import time
 import uuid
 import re
@@ -27,6 +28,8 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Awaitable, Dict, List, Optional, Tuple
+
+from scheduler.run_log import CronRunLogEntry, append_run_log
 
 logger = logging.getLogger("CronScheduler")
 
@@ -44,6 +47,9 @@ _AGENT_TURN_TIMEOUT_S: int = 3600       # 60 minutes for agent-turn jobs
 # Startup catchup
 _MAX_MISSED_JOBS_PER_RESTART: int = 5
 _MISSED_JOB_STAGGER_S: float = 5.0
+
+# Top-of-hour cron stagger (prevent thundering herd for jobs like "0 * * * *")
+_DEFAULT_TOP_OF_HOUR_STAGGER_MS: int = 5 * 60 * 1000  # 5 minutes
 
 # Transient error patterns (rate-limit, overload, network, timeout, 5xx)
 _TRANSIENT_PATTERNS: List[re.Pattern] = [
@@ -127,6 +133,20 @@ def _field_matches(field_str: str, value: int, lo: int, hi: int) -> bool:
 # ---------------------------------------------------------------------------
 # Timezone helper
 # ---------------------------------------------------------------------------
+
+def _is_top_of_hour_cron_expr(expr: str) -> bool:
+    """Return True when *expr* is a recurring top-of-hour cron expression.
+
+    Recognises patterns like ``"0 * * * *"`` (fire every hour on the hour).
+    These jobs benefit from a stagger window to prevent thundering herds after
+    restarts or when many agents share the same schedule.
+    """
+    fields = expr.strip().split()
+    if len(fields) == 5:
+        minute_field, hour_field = fields[0], fields[1]
+        return minute_field == "0" and "*" in hour_field
+    return False
+
 
 def _local_now(tz_name: str) -> datetime:
     """Return the current datetime in *tz_name* (best-effort).
@@ -213,6 +233,17 @@ class CronJob:
     delete_after_run: bool = False       # Delete job from store after successful run ("at" kind)
     max_transient_retries: int = 3       # Max retries for transient errors ("at"/one-shot)
     retry_on: List[str] = field(default_factory=list)  # Transient categories to retry; [] = all
+
+    # ---- Stagger -----------------------------------------------------------
+    stagger_ms: Optional[int] = None     # Random stagger window in ms (None = auto-detect)
+
+    # ---- Delivery ----------------------------------------------------------
+    delivery_mode: str = "announce"      # "none" | "announce" | "webhook"
+    webhook_url: str = ""                # Used when delivery_mode == "webhook"
+    failure_alert_cooldown_seconds: int = 3600  # Minimum interval between failure alerts
+
+    # ---- Run log -----------------------------------------------------------
+    run_log_enabled: bool = True         # Write execution history to runs/<id>.jsonl
 
 
 # ---------------------------------------------------------------------------
@@ -352,15 +383,32 @@ class CronScheduler:
         """Execute a single job with timeout, error handling, and post-run lifecycle."""
         sem = self._semaphore or asyncio.Semaphore(1)
         async with sem:
+            # Per-job stagger: apply a random delay within stagger_ms window.
+            stagger_ms = job.stagger_ms
+            if stagger_ms is None and job.schedule_kind == "cron":
+                stagger_ms = (
+                    _DEFAULT_TOP_OF_HOUR_STAGGER_MS
+                    if _is_top_of_hour_cron_expr(job.cron_expr)
+                    else 0
+                )
+            if stagger_ms and stagger_ms > 0:
+                delay_s = random.uniform(0.0, stagger_ms / 1000.0)
+                logger.debug(
+                    "Cron job %s: stagger delay %.1fs (stagger_ms=%d)",
+                    job.id, delay_s, stagger_ms,
+                )
+                await asyncio.sleep(delay_s)
+
             job.last_run = now_ts
             run_start = time.monotonic()
             logger.info("Running cron job: %s (%s) [kind=%s]", job.id, job.name, job.schedule_kind)
             timeout = self._resolve_timeout(job)
+            run_result: Optional[str] = None
             try:
                 if timeout:
-                    await asyncio.wait_for(self._run_callback(job), timeout=timeout)
+                    run_result = await asyncio.wait_for(self._run_callback(job), timeout=timeout)
                 else:
-                    await self._run_callback(job)
+                    run_result = await self._run_callback(job)
                 # Success
                 job.consecutive_errors = 0
                 job.last_error = ""
@@ -406,6 +454,21 @@ class CronScheduler:
                 await self._maybe_send_failure_alert(job, now_ts)
             finally:
                 job.last_duration_ms = (time.monotonic() - run_start) * 1000
+                # Write run log entry
+                if job.run_log_enabled:
+                    _status = "ok" if not job.last_error else "error"
+                    _entry = CronRunLogEntry.make(
+                        job_id=job.id,
+                        status=_status,  # type: ignore[arg-type]
+                        error=job.last_error or None,
+                        summary=str(run_result or "")[:500] or None,
+                        duration_ms=job.last_duration_ms,
+                        model=job.last_run_model or None,
+                    )
+                    try:
+                        await append_run_log(self._store, _entry)
+                    except Exception as _log_exc:
+                        logger.warning("run_log write failed for job %s: %s", job.id, _log_exc)
 
             # Post-run lifecycle
             success = not job.last_error
@@ -525,7 +588,7 @@ class CronScheduler:
         if not job.failure_channel or not job.failure_chat_id:
             return
         # Cooldown: at most one alert per hour
-        cooldown = 3600.0
+        cooldown = float(max(0, int(job.failure_alert_cooldown_seconds)))
         if now_ts - job.last_failure_alert_at < cooldown:
             return
         job.last_failure_alert_at = now_ts

@@ -2,7 +2,10 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bus.input_provenance import InputProvenance
 
 
 @dataclass
@@ -16,7 +19,8 @@ class InboundMessage:
     timestamp: datetime = field(default_factory=datetime.now)
     media: list[str] = field(default_factory=list)  # Media URLs
     metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
-    
+    provenance: "Optional[InputProvenance]" = None  # Origin classification (see bus.input_provenance)
+
     @property
     def session_key(self) -> str:
         """Unique key for session identification."""
