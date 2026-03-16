@@ -1,5 +1,6 @@
 """Hybrid index layer: FTS5 full-text + Faiss vector search."""
 
+import re
 import sqlite3
 import os
 import logging
@@ -8,11 +9,64 @@ import threading
 import numpy as np
 import faiss
 from datetime import datetime
-from typing import List, Tuple, Optional
+from typing import Callable, List, Optional, Tuple
 
 from llm.embedding import EmbeddingProvider
+from memory.interface import MemoryEmbeddingProbeResult, MemoryProviderStatus, MemorySearchResult
 
 logger = logging.getLogger("GazerIndex")
+
+# ---------------------------------------------------------------------------
+# CJK BM25 query normalisation (inspired by OpenClaw's QMD memory manager)
+# ---------------------------------------------------------------------------
+
+_HAN_RE = re.compile(r"[\u3400-\u9fff]", re.UNICODE)
+_BM25_HAN_MAX_KEYWORDS = 12
+_CJK_PUNCT_RE = re.compile(r"[\s\u3000\uff0c\u3001\u3002\uff1a\uff1b\uff01\uff1f]+", re.UNICODE)
+
+
+def _has_han(text: str) -> bool:
+    """Return True when *text* contains Han (CJK) script characters."""
+    return bool(_HAN_RE.search(text))
+
+
+def _normalize_cjk_bm25_query(query: str) -> str:
+    """
+    Normalise a CJK query before passing it to FTS5.
+
+    For Han-script text, BM25 single-character tokens are too broad and tend
+    to swamp the relevance signal.  This function:
+
+    1. Splits on CJK punctuation and whitespace.
+    2. Drops single-character Han tokens (too broad for BM25).
+    3. Deduplicates and caps at ``_BM25_HAN_MAX_KEYWORDS``.
+    4. Falls back to the original query when no tokens survive.
+
+    Non-CJK queries are returned unchanged.
+    """
+    trimmed = query.strip()
+    if not trimmed or not _has_han(trimmed):
+        return trimmed
+
+    tokens = _CJK_PUNCT_RE.split(trimmed)
+    seen: set[str] = set()
+    keywords: list[str] = []
+    for token in tokens:
+        token = token.strip()
+        if not token or token in seen:
+            continue
+        is_han = _has_han(token)
+        # Single-char Han tokens overwhelm BM25 -- skip them
+        if is_han and len(token) < 2:
+            continue
+        if not is_han and len(token) < 2:
+            continue
+        seen.add(token)
+        keywords.append(token)
+        if len(keywords) >= _BM25_HAN_MAX_KEYWORDS:
+            break
+
+    return " ".join(keywords) if keywords else trimmed
 
 
 class SQLiteIndex:
@@ -202,10 +256,115 @@ class SQLiteIndex:
         """Flush pending writes and release resources."""
         self.flush()
 
+    # ------------------------------------------------------------------
+    # MemorySearchManager interface implementation
+    # ------------------------------------------------------------------
+
+    async def search(
+        self,
+        query: str,
+        *,
+        max_results: int = 10,
+        min_score: float = 0.0,
+        session_key: Optional[str] = None,
+    ) -> List[MemorySearchResult]:
+        """Hybrid search returning :class:`~memory.interface.MemorySearchResult` objects."""
+        raw = await self.hybrid_search(query, limit=max_results)
+        results: List[MemorySearchResult] = []
+        for item in raw:
+            score = float(item.get("score", 0.0))
+            if score < min_score:
+                continue
+            results.append(
+                MemorySearchResult(
+                    content=str(item.get("content", "")),
+                    sender=str(item.get("sender", "")),
+                    timestamp=str(item.get("timestamp", "")),
+                    score=score,
+                    source="memory",
+                )
+            )
+        return results
+
+    def status(self) -> MemoryProviderStatus:
+        """Return a snapshot of this index's health and configuration."""
+        provider_name = "none"
+        model_name: Optional[str] = None
+        if self.embedding_provider:
+            provider_name = getattr(self.embedding_provider, "provider", "unknown") or "unknown"
+            model_name = getattr(self.embedding_provider, "model", None)
+
+        # Count FTS rows
+        chunks = 0
+        try:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM memory_vectors")
+                row = cur.fetchone()
+                chunks = int(row[0]) if row else 0
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+        return MemoryProviderStatus(
+            backend="sqlite",
+            provider=provider_name,
+            model=model_name,
+            chunks=chunks,
+            dirty=self._dirty,
+            fts_available=True,
+            vector_available=self.faiss_index.ntotal > 0,
+            vector_dims=self.dim if self.faiss_index.ntotal > 0 else None,
+            cache_entries=self._next_id,
+            custom={"faiss_total": self.faiss_index.ntotal, "id_map_len": len(self.id_map)},
+        )
+
+    async def probe_embedding_availability(self) -> MemoryEmbeddingProbeResult:
+        """Check whether the embedding provider is functional."""
+        if not self.embedding_provider:
+            return MemoryEmbeddingProbeResult(ok=False, error="no_embedding_provider")
+        try:
+            vec = await self.embedding_provider.embed("probe")
+            if vec is None:
+                return MemoryEmbeddingProbeResult(ok=False, error="null_embedding")
+            return MemoryEmbeddingProbeResult(ok=True)
+        except Exception as exc:
+            return MemoryEmbeddingProbeResult(ok=False, error=str(exc))
+
+    async def probe_vector_availability(self) -> bool:
+        """Return True when the Faiss index has at least one vector."""
+        return self.faiss_index.ntotal > 0
+
+    async def sync(
+        self,
+        *,
+        reason: Optional[str] = None,
+        force: bool = False,
+        progress: Optional[Callable[[int, int, str], None]] = None,
+    ) -> None:
+        """Flush the Faiss index to disk if dirty (or *force* is True)."""
+        if progress:
+            progress(0, 1, "flushing faiss index")
+        with self._lock:
+            if self._dirty or force:
+                faiss.write_index(self.faiss_index, self.index_path)
+                self._dirty = False
+                logger.debug("SQLiteIndex sync complete (reason=%s).", reason or "manual")
+        if progress:
+            progress(1, 1, "done")
+
+    # ------------------------------------------------------------------
+    # FTS (BM25)
+    # ------------------------------------------------------------------
+
     def fts_search(
         self, query: str, limit: int = 5
     ) -> List[Tuple[str, str, str, float]]:
-        safe_query = '"' + query.replace('"', '""') + '"'
+        # Normalise CJK queries before wrapping in FTS5 phrase syntax
+        normalised = _normalize_cjk_bm25_query(query)
+        safe_query = '"' + normalised.replace('"', '""') + '"'
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         try:

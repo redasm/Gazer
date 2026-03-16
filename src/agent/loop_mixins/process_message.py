@@ -84,6 +84,29 @@ class ProcessMessageMixin:
             channel=msg.channel,
             chat_id=msg.chat_id,
         )
+
+        # Apply token-budget assembly via the ContextEngine
+        if hasattr(self, "get_context_engine"):
+            try:
+                from runtime.config_manager import config as _ce_cfg
+                token_budget = int(_ce_cfg.get("models.context_token_budget", 100_000) or 100_000)
+                engine = await self.get_context_engine()
+                assemble_result = await engine.assemble(
+                    session_key=session_key,
+                    messages=messages,
+                    token_budget=token_budget,
+                )
+                messages = assemble_result.messages
+                if assemble_result.estimated_tokens:
+                    logger.debug(
+                        "Context engine assembled %d tokens (budget=%d) for session %s",
+                        assemble_result.estimated_tokens,
+                        token_budget,
+                        session_key,
+                    )
+            except Exception:
+                logger.warning("Context engine assemble failed; using raw messages.", exc_info=True)
+
         memory_context_chars = 0
         recall_count = 0
         if hasattr(self.context, "get_memory_context_stats"):

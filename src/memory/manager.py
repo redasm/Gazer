@@ -5,7 +5,9 @@ import logging
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
+
+from memory.interface import MemoryEmbeddingProbeResult, MemoryProviderStatus, MemorySearchResult
 
 from soul.core import WorkingMemory, MemoryEntry
 from memory.relationships import RelationshipGraph
@@ -187,6 +189,56 @@ class MemoryManager:
 
     def get_last_context_stats(self) -> dict:
         return dict(self._last_context_stats)
+
+    # ------------------------------------------------------------------
+    # MemorySearchManager interface
+    # ------------------------------------------------------------------
+
+    async def search(
+        self,
+        query: str,
+        *,
+        max_results: int = 10,
+        min_score: float = 0.0,
+        session_key: Optional[str] = None,
+    ) -> List[MemorySearchResult]:
+        """Delegating hybrid search via the SQLiteIndex."""
+        return await self.index.search(
+            query,
+            max_results=max_results,
+            min_score=min_score,
+            session_key=session_key,
+        )
+
+    def status(self) -> MemoryProviderStatus:
+        """Return a unified status snapshot from the SQLiteIndex."""
+        try:
+            return self.index.status()
+        except Exception as exc:
+            logger.warning("MemoryManager.status() failed: %s", exc)
+            return MemoryProviderStatus(
+                backend="sqlite",
+                provider="unknown",
+                error=str(exc),
+            )
+
+    async def probe_embedding_availability(self) -> MemoryEmbeddingProbeResult:
+        """Check whether the embedding provider attached to the index is functional."""
+        return await self.index.probe_embedding_availability()
+
+    async def probe_vector_availability(self) -> bool:
+        """Check whether semantic (vector) search is available."""
+        return await self.index.probe_vector_availability()
+
+    async def sync(
+        self,
+        *,
+        reason: Optional[str] = None,
+        force: bool = False,
+        progress: Optional[Callable[[int, int, str], None]] = None,
+    ) -> None:
+        """Flush the Faiss index to disk and (optionally) synchronise the backend."""
+        await self.index.sync(reason=reason, force=force, progress=progress)
 
     # ------------------------------------------------------------------
     # Load

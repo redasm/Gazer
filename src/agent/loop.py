@@ -48,6 +48,8 @@ from agent.loop_mixins import (
     ToolResultUtilsMixin,
     ProcessMessageMixin,
 )
+from agent.context_engine import ContextEngine
+from agent.context_engine_registry import ensure_context_engines_initialized
 
 from soul.models import ModelRegistry
 from soul.persona_runtime import get_persona_runtime_manager
@@ -261,7 +263,12 @@ class AgentLoop(
         self.context = context_builder or ContextBuilder(workspace)
         self.tools = ToolRegistry()
         self._tool_policy_raw = dict(tool_policy or {})
-        
+
+        # Context engine (pluggable, defaults to legacy) -- id resolved below after _cfg
+        ensure_context_engines_initialized()
+        self._context_engine: Optional[ContextEngine] = None
+        self._context_engine_id: str = "legacy"  # overridden below when _cfg is available
+
         # Persistent session store (single source of truth for history)
         self.session_store = SessionStore()
         self.trajectory_store = TrajectoryStore()
@@ -272,6 +279,7 @@ class AgentLoop(
 
         # Rate limiter: configurable via config, defaults to 20 req / 60s per sender
         from runtime.config_manager import config as _cfg
+        self._context_engine_id = str(_cfg.get("models.context_engine", "legacy") or "legacy")
         self._rate_limiter = RateLimiter(
             max_requests=_cfg.get("security.rate_limit_requests", 20),
             window_seconds=_cfg.get("security.rate_limit_window", 60.0),
@@ -368,7 +376,25 @@ class AgentLoop(
                     )
                 except asyncio.TimeoutError:
                     continue
-                
+
+                # Hook: message:received + session:start (check before any processing)
+                if self._turn_hooks:
+                    _is_first_msg = not bool(self._get_history(msg.session_key))
+                    await self._turn_hooks.emit_message_received({
+                        "channel": msg.channel,
+                        "chat_id": msg.chat_id,
+                        "sender_id": msg.sender_id,
+                        "session_key": msg.session_key,
+                        "content_length": len(msg.content),
+                    })
+                    if _is_first_msg:
+                        await self._turn_hooks.emit_session_start({
+                            "channel": msg.channel,
+                            "chat_id": msg.chat_id,
+                            "sender_id": msg.sender_id,
+                            "session_key": msg.session_key,
+                        })
+
                 # Rate limiting check
                 rate_key = f"{msg.channel}:{msg.sender_id}"
                 if not self._rate_limiter.allow(rate_key):
@@ -389,6 +415,14 @@ class AgentLoop(
                     )
                     if response:
                         await self.bus.publish_outbound(response)
+                        # Hook: message:sent
+                        if self._turn_hooks:
+                            await self._turn_hooks.emit_message_sent({
+                                "channel": response.channel,
+                                "chat_id": response.chat_id,
+                                "session_key": msg.session_key,
+                                "content_length": len(response.content or ""),
+                            })
                 except asyncio.TimeoutError:
                     reply_language = self._detect_user_language(msg.content)
                     logger.error(
@@ -467,6 +501,49 @@ class AgentLoop(
         """Clear conversation history for a session (supports /new, /reset)."""
         self.session_store.delete_session(session_key)
         logger.info("Session reset: %s", session_key)
+        # Hook: session:reset (schedule as background task if loop is running)
+        if self._turn_hooks:
+            try:
+                _loop = asyncio.get_running_loop()
+                _loop.create_task(
+                    self._turn_hooks.emit_session_reset({"session_key": session_key})
+                )
+            except RuntimeError:
+                pass  # No running event loop; skip hook
+
+    async def get_context_engine(self) -> ContextEngine:
+        """Return the active context engine, initialising it lazily on first call."""
+        if self._context_engine is None:
+            from agent.context_engine_registry import resolve_context_engine
+            try:
+                self._context_engine = await resolve_context_engine(self._context_engine_id)
+                logger.info("Context engine initialised: %s", self._context_engine.info.id)
+            except Exception as exc:
+                logger.error(
+                    "Failed to initialise context engine %r: %s; falling back to legacy.",
+                    self._context_engine_id, exc,
+                )
+                from agent.legacy_context_engine import LegacyContextEngine
+                self._context_engine = LegacyContextEngine(
+                    session_store=self.session_store
+                )
+        return self._context_engine
+
+    async def compact_session(self, session_key: str, force: bool = False) -> dict:
+        """Explicitly compact a session's context (e.g., from an admin command)."""
+        engine = await self.get_context_engine()
+        result = await engine.compact(
+            session_key=session_key,
+            force=force,
+        )
+        return {
+            "ok": result.ok,
+            "compacted": result.compacted,
+            "reason": result.reason,
+            "tokens_before": result.tokens_before,
+            "tokens_after": result.tokens_after,
+            "summary": result.summary,
+        }
 
     async def _maybe_auto_route_turn(
         self,

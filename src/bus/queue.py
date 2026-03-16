@@ -1,10 +1,11 @@
 """Async message queue for decoupled channel-agent communication."""
 
 import asyncio
-from typing import Callable, Awaitable, List, Dict
+from typing import Callable, Awaitable, List, Dict, Optional
 import logging
 
 from bus.events import InboundMessage, OutboundMessage, TypingEvent
+from bus.send_policy import SendPolicy
 
 logger = logging.getLogger("MessageBus")
 
@@ -14,14 +15,19 @@ class MessageBus:
     
     Channels push messages to the inbound queue, and the agent processes
     them and pushes responses to the outbound queue.
+
+    An optional ``send_policy`` can be provided to filter outbound messages
+    before they reach channel subscribers.  Messages resolved as ``"deny"``
+    are silently dropped (with a DEBUG-level log entry).
     """
     
-    def __init__(self):
+    def __init__(self, send_policy: Optional[SendPolicy] = None):
         self.inbound: asyncio.Queue[InboundMessage] = asyncio.Queue()
         self.outbound: asyncio.Queue[OutboundMessage] = asyncio.Queue()
         self._outbound_subscribers: Dict[str, List[Callable[[OutboundMessage], Awaitable[None]]]] = {}
         self._typing_subscribers: Dict[str, List[Callable[[TypingEvent], Awaitable[None]]]] = {}
         self._running = False
+        self._send_policy: Optional[SendPolicy] = send_policy
     
     async def publish_inbound(self, msg: InboundMessage) -> None:
         """Publish a message from a channel to the agent."""
@@ -82,6 +88,19 @@ class MessageBus:
                 except asyncio.TimeoutError:
                     continue
                     
+                # Send-policy gate
+                if self._send_policy is not None:
+                    _verdict = self._send_policy.resolve(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                    )
+                    if _verdict == "deny":
+                        logger.debug(
+                            "SendPolicy denied outbound: channel=%s chat_id=%s",
+                            msg.channel, msg.chat_id,
+                        )
+                        continue
+
                 subscribers = self._outbound_subscribers.get(msg.channel, [])
                 if not subscribers:
                     logger.warning(
