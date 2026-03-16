@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -256,14 +257,18 @@ class PairingManager:
             logger.error("Failed to save pending pairing data: %s", e)
 
 
-# Lazy singleton
+# Lazy singleton — protected by a lock to prevent double-initialisation
+# under concurrent async requests during startup.
 _pairing_manager: Optional["PairingManager"] = None
+_pairing_manager_lock = threading.Lock()
 
 
 def get_pairing_manager() -> "PairingManager":
     """Return the singleton PairingManager, creating it on first access."""
     global _pairing_manager
     if _pairing_manager is None:
-        _pairing_manager = PairingManager()
+        with _pairing_manager_lock:
+            if _pairing_manager is None:
+                _pairing_manager = PairingManager()
     return _pairing_manager
 

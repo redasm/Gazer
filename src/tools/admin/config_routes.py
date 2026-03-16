@@ -43,9 +43,11 @@ from runtime.config_manager import (
     is_sensitive_config_path,
 )
 
-# Security-critical config keys that cannot be changed via the web API
+# Security-critical config keys that cannot be changed via the generic /config API.
+# Note: security.dm_policy and security.owner_channel_ids are intentionally excluded
+# because the /web/config-wizard/apply endpoint is the designated path to set them
+# during initial onboarding. All such changes are recorded via _append_policy_audit.
 _PROTECTED_NAMESPACES = {
-    "security.dm_policy",
     "security.auto_approve_privileged",
     "api.cors_origins",
     "api.cors_credentials",
@@ -848,7 +850,13 @@ async def apply_web_config_wizard(payload: Dict[str, Any]):
             dm_policy = str(security.get("dm_policy", "")).strip().lower()
             if dm_policy not in {"open", "allowlist", "pairing"}:
                 raise HTTPException(status_code=400, detail="security.dm_policy must be one of ['open','allowlist','pairing']")
+            prev_dm_policy = str(config.get("security.dm_policy", "pairing") or "pairing").strip().lower()
             updates["security.dm_policy"] = dm_policy
+            if dm_policy != prev_dm_policy:
+                _append_policy_audit(
+                    action="security.dm_policy.changed",
+                    details={"from": prev_dm_policy, "to": dm_policy, "source": "/web/config-wizard/apply"},
+                )
         if "owner_channel_ids" in security:
             owner_map = security.get("owner_channel_ids", {})
             if not isinstance(owner_map, dict):
@@ -858,7 +866,13 @@ async def apply_web_config_wizard(payload: Dict[str, Any]):
                 for channel, sender in owner_map.items()
                 if str(channel).strip() and str(sender).strip()
             }
+            prev_owner_ids = config.get("security.owner_channel_ids", {}) or {}
             updates["security.owner_channel_ids"] = normalized_owner
+            if normalized_owner != prev_owner_ids:
+                _append_policy_audit(
+                    action="security.owner_channel_ids.changed",
+                    details={"channels": sorted(normalized_owner.keys()), "source": "/web/config-wizard/apply"},
+                )
 
         if "auto_approve_privileged" in security:
             warnings.append("security.auto_approve_privileged is protected and was not changed by wizard endpoint.")

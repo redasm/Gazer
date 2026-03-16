@@ -19,7 +19,9 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
+from pathlib import Path
 from typing import Dict, Optional
 
 from runtime.config_manager import config
@@ -27,7 +29,9 @@ from security.file_crypto import SecureFileStorage
 
 logger = logging.getLogger("OwnerManager")
 
-_OWNER_FILE = "config/owner.json"
+# Absolute path so the file is always resolved relative to the project root,
+# regardless of the working directory the process is launched from.
+_OWNER_FILE = str(Path(__file__).resolve().parent.parent.parent / "config" / "owner.json")
 
 
 # ---------------------------------------------------------------------------
@@ -250,13 +254,17 @@ class OwnerManager:
             logger.error("Failed to save owner data: %s", e)
 
 
-# Lazy singleton
+# Lazy singleton — protected by a lock to prevent double-initialisation
+# under concurrent async requests during startup.
 _owner_manager: Optional["OwnerManager"] = None
+_owner_manager_lock = threading.Lock()
 
 
 def get_owner_manager() -> "OwnerManager":
     """Return the singleton OwnerManager, creating it on first access."""
     global _owner_manager
     if _owner_manager is None:
-        _owner_manager = OwnerManager()
+        with _owner_manager_lock:
+            if _owner_manager is None:
+                _owner_manager = OwnerManager()
     return _owner_manager

@@ -22,6 +22,9 @@ class ExecTool(CodingToolBase):
     (similar to OpenClaw's elevated-mode gating).
     """
 
+    # Warn once per process about running without a sandbox.
+    _sandbox_warned: bool = False
+
     def __init__(
         self,
         workspace: Path,
@@ -66,6 +69,22 @@ class ExecTool(CodingToolBase):
         }
 
     async def execute(self, command: str, workdir: str = ".", timeout: int = 30, **_: Any) -> str:
+        if not ExecTool._sandbox_warned:
+            ExecTool._sandbox_warned = True
+            try:
+                from runtime.config_manager import config as _cfg
+                if (
+                    str(_cfg.get("coding.exec_backend", "local")).strip().lower() == "local"
+                    and not bool(_cfg.get("sandbox.enabled", False))
+                ):
+                    logger.warning(
+                        "ExecTool: running without sandbox (sandbox.enabled=false). "
+                        "Commands execute with full host access. "
+                        "Set coding.exec_backend=sandbox for production deployments."
+                    )
+            except Exception:
+                pass
+
         warning = check_dangerous_command(command)
         if warning:
             logger.warning("ExecTool blocked: %r", command)

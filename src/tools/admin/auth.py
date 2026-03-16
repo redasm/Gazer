@@ -192,7 +192,7 @@ def _session_cookie_kwargs(request: Request) -> Dict[str, Any]:
 # FastAPI dependency: verify admin token
 # ---------------------------------------------------------------------------
 
-async def verify_admin_token(request: Request):
+def verify_admin_token(request: Request):
     """Dependency: verify the caller for all API operations.
 
     Requires a valid admin_token.

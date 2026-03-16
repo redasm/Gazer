@@ -305,8 +305,7 @@ runtime:
   environment: dev
 feishu:
   enabled: true
-  app_id: null
-  app_secret: SZydlSxmRZau7thm6n4USgBXIiTYANlJ
+  app_secret: ''
   allowed_ids: []
   simulated_typing:
     enabled: true

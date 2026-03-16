@@ -366,6 +366,9 @@ class ConfigManager:
                 persist_data = copy.deepcopy(self.data) if isinstance(self.data, dict) else {}
                 for key_path in self.NON_PERSISTED_KEYS:
                     self._delete_dot_path(persist_data, key_path)
+                # Strip secrets so they are never persisted in plaintext.
+                # They will be restored from env vars on the next load.
+                self._strip_sensitive_for_persist(persist_data)
                 persist_data = self._order_for_persist(persist_data)
                 with file_lock(self._lock_path, timeout=5.0):
                     fd, tmp_path = tempfile.mkstemp(dir=config_dir, suffix=".yaml.tmp")
@@ -724,6 +727,23 @@ class ConfigManager:
                 del parent[key]
             else:
                 break
+
+    def _strip_sensitive_for_persist(
+        self, data: Dict[str, Any], path: str = ""
+    ) -> None:
+        """Replace sensitive field values with '' in-place before writing to YAML.
+
+        Keeps secrets out of the YAML file so they remain env-var-sourced.
+        On the next load, _restore_sensitive_from_defaults() will restore them
+        from DEFAULT_CONFIG (which reads the corresponding env vars).
+        """
+        for key in list(data.keys()):
+            current_path = f"{path}.{key}" if path else key
+            value = data[key]
+            if self._is_sensitive_path(current_path):
+                data[key] = ""
+            elif isinstance(value, dict):
+                self._strip_sensitive_for_persist(value, current_path)
 
     def _mask_sensitive(
         self, data: Dict[str, Any], path: str = ""
