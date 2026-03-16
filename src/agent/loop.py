@@ -279,6 +279,7 @@ class AgentLoop(
 
         # Rate limiter: configurable via config, defaults to 20 req / 60s per sender
         from runtime.config_manager import config as _cfg
+        self.agent_id: str = str(_cfg.get("agent.id", "") or "")
         self._context_engine_id = str(_cfg.get("models.context_engine", "legacy") or "legacy")
         self._rate_limiter = RateLimiter(
             max_requests=_cfg.get("security.rate_limit_requests", 20),
@@ -393,6 +394,7 @@ class AgentLoop(
                             "chat_id": msg.chat_id,
                             "sender_id": msg.sender_id,
                             "session_key": msg.session_key,
+                            "agent_id": self.agent_id,
                         })
 
                 # Rate limiting check
@@ -451,6 +453,18 @@ class AgentLoop(
                         chat_id=msg.chat_id,
                         content=self._msg(reply_language, "runtime_error"),
                     ))
+                finally:
+                    # Hook: session:end (fires after every processed turn)
+                    if self._turn_hooks:
+                        _msg_count = len(self._get_history(msg.session_key))
+                        await self._turn_hooks.emit_session_end({
+                            "channel": msg.channel,
+                            "chat_id": msg.chat_id,
+                            "sender_id": msg.sender_id,
+                            "session_key": msg.session_key,
+                            "agent_id": self.agent_id,
+                            "message_count": _msg_count,
+                        })
             except Exception as e:
                 logger.error("Critical error in agent loop: %s", e, exc_info=True)
                 await asyncio.sleep(1)
@@ -506,7 +520,10 @@ class AgentLoop(
             try:
                 _loop = asyncio.get_running_loop()
                 _loop.create_task(
-                    self._turn_hooks.emit_session_reset({"session_key": session_key})
+                    self._turn_hooks.emit_session_reset({
+                        "session_key": session_key,
+                        "agent_id": self.agent_id,
+                    })
                 )
             except RuntimeError:
                 pass  # No running event loop; skip hook

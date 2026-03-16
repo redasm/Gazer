@@ -22,12 +22,55 @@ import json
 import logging
 import time
 import uuid
+import re
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Awaitable, Dict, List, Optional
+from typing import Any, Callable, Awaitable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("CronScheduler")
+
+# ---------------------------------------------------------------------------
+# Backoff + transient-error helpers
+# ---------------------------------------------------------------------------
+
+# Explicit backoff schedule in seconds (mirrors OpenClaw's DEFAULT_BACKOFF_SCHEDULE_MS)
+_BACKOFF_SCHEDULE_S: List[int] = [30, 60, 300, 900, 3600]  # 30s, 1min, 5min, 15min, 60min
+
+# Default per-job execution timeouts (seconds)
+_DEFAULT_JOB_TIMEOUT_S: int = 600       # 10 minutes for generic jobs
+_AGENT_TURN_TIMEOUT_S: int = 3600       # 60 minutes for agent-turn jobs
+
+# Startup catchup
+_MAX_MISSED_JOBS_PER_RESTART: int = 5
+_MISSED_JOB_STAGGER_S: float = 5.0
+
+# Transient error patterns (rate-limit, overload, network, timeout, 5xx)
+_TRANSIENT_PATTERNS: List[re.Pattern] = [
+    re.compile(r"rate.?limit|too many requests|429|resource has been exhausted|cloudflare|tokens per day", re.I),
+    re.compile(r"\b529\b|overloaded|high demand|temporar(?:il|y) overloaded|capacity exceeded", re.I),
+    re.compile(r"network|econnreset|econnrefused|fetch failed|socket", re.I),
+    re.compile(r"timeout|etimedout", re.I),
+    re.compile(r"\b5\d{2}\b"),
+]
+
+
+def _error_backoff_s(consecutive_errors: int) -> int:
+    """Return the backoff delay in seconds for the given consecutive error count."""
+    idx = min(consecutive_errors - 1, len(_BACKOFF_SCHEDULE_S) - 1)
+    return _BACKOFF_SCHEDULE_S[max(0, idx)]
+
+
+def _is_transient_error(error: str, retry_on: Optional[List[str]] = None) -> bool:
+    """Return True if the error message matches a known transient pattern."""
+    if not error:
+        return False
+    patterns = _TRANSIENT_PATTERNS
+    if retry_on:
+        # Map retry_on keys to patterns by index
+        key_map = {"rate_limit": 0, "overloaded": 1, "network": 2, "timeout": 3, "server_error": 4}
+        patterns = [_TRANSIENT_PATTERNS[key_map[k]] for k in retry_on if k in key_map]
+    return any(p.search(error) for p in patterns)
 
 # ---------------------------------------------------------------------------
 # Minimal cron expression parser (supports: * and numeric fields for
@@ -165,6 +208,12 @@ class CronJob:
     last_run_tokens: int = 0             # Tokens used in last run
     last_run_model: str = ""             # Model used in last run
 
+    # ---- Execution policy --------------------------------------------------
+    timeout_seconds: int = 0             # 0 = use default (600 generic / 3600 agentTurn)
+    delete_after_run: bool = False       # Delete job from store after successful run ("at" kind)
+    max_transient_retries: int = 3       # Max retries for transient errors ("at"/one-shot)
+    retry_on: List[str] = field(default_factory=list)  # Transient categories to retry; [] = all
+
 
 # ---------------------------------------------------------------------------
 # Scheduler
@@ -185,6 +234,7 @@ class CronScheduler:
         run_callback: Callable[[CronJob], Awaitable[Optional[str]]],
         store_path: Optional[Path] = None,
         alert_callback: Optional[Callable[[CronJob], Awaitable[None]]] = None,
+        max_concurrent_runs: int = 1,
     ) -> None:
         self._jobs: Dict[str, CronJob] = {}
         self._store = store_path or Path.home() / ".gazer" / "cron" / "jobs.json"
@@ -192,6 +242,8 @@ class CronScheduler:
         self._alert_callback = alert_callback
         self._running = False
         self._tick_interval = 30  # Check every 30 seconds
+        self._max_concurrent_runs = max(1, max_concurrent_runs)
+        self._semaphore: Optional[asyncio.Semaphore] = None
 
     # ------------------------------------------------------------------
     # Persistence
@@ -258,7 +310,9 @@ class CronScheduler:
     async def start(self) -> None:
         """Start the scheduler tick loop."""
         self._running = True
-        logger.info("CronScheduler started")
+        self._semaphore = asyncio.Semaphore(self._max_concurrent_runs)
+        logger.info("CronScheduler started (max_concurrent_runs=%d)", self._max_concurrent_runs)
+        await self.run_missed_jobs()
         while self._running:
             await self._tick()
             await asyncio.sleep(self._tick_interval)
@@ -272,45 +326,158 @@ class CronScheduler:
         now = datetime.now(timezone.utc)
         now_ts = now.timestamp()
 
+        due_jobs = []
         for job in list(self._jobs.values()):
             if not job.enabled:
                 continue
-
-            # Back-off: skip if too many consecutive errors
-            # Back-off window doubles per error: 1, 2, 4, 8 … ticks (capped at 8)
+            # Back-off using explicit schedule (not tick-doubling)
             if job.consecutive_errors > 0:
-                backoff_ticks = min(2 ** (job.consecutive_errors - 1), 8)
-                backoff_seconds = backoff_ticks * self._tick_interval
-                if now_ts - job.last_run < backoff_seconds:
+                backoff_s = _error_backoff_s(job.consecutive_errors)
+                if now_ts - job.last_run < backoff_s:
                     continue
-
             if not self._is_due(job, now, now_ts):
                 continue
+            due_jobs.append(job)
 
-            # Due -- run it
+        if not due_jobs:
+            self.save()
+            return
+
+        # Execute due jobs concurrently (respecting semaphore)
+        tasks = [self._run_job(job, now_ts) for job in due_jobs]
+        await asyncio.gather(*tasks)
+        self.save()
+
+    async def _run_job(self, job: CronJob, now_ts: float) -> None:  # noqa: C901
+        """Execute a single job with timeout, error handling, and post-run lifecycle."""
+        sem = self._semaphore or asyncio.Semaphore(1)
+        async with sem:
             job.last_run = now_ts
             run_start = time.monotonic()
             logger.info("Running cron job: %s (%s) [kind=%s]", job.id, job.name, job.schedule_kind)
+            timeout = self._resolve_timeout(job)
             try:
-                await self._run_callback(job)
-                # Success: reset error counter
+                if timeout:
+                    await asyncio.wait_for(self._run_callback(job), timeout=timeout)
+                else:
+                    await self._run_callback(job)
+                # Success
                 job.consecutive_errors = 0
                 job.last_error = ""
+            except asyncio.TimeoutError:
+                job.consecutive_errors += 1
+                job.last_error = f"Execution timed out after {timeout:.0f}s"[:500]
+                logger.error(
+                    "Cron job %s timed out after %.0fs (consecutive_errors=%d)",
+                    job.id, timeout, job.consecutive_errors,
+                )
+                await self._maybe_send_failure_alert(job, now_ts)
             except Exception as exc:
                 job.consecutive_errors += 1
-                job.last_error = str(exc)[:500]
+                err_text = str(exc)[:500]
+                job.last_error = err_text
                 logger.error(
                     "Cron job %s failed (consecutive_errors=%d): %s",
                     job.id, job.consecutive_errors, exc, exc_info=True,
                 )
-                # Failure alert routing
+                # Transient-error retry for one-shot / "at" kind jobs
+                if job.schedule_kind == "at" or job.one_shot:
+                    max_retries = max(0, int(job.max_transient_retries))
+                    retry_on = list(job.retry_on) if job.retry_on else None
+                    if (
+                        max_retries > 0
+                        and job.consecutive_errors <= max_retries
+                        and _is_transient_error(err_text, retry_on)
+                    ):
+                        backoff_s = _error_backoff_s(job.consecutive_errors)
+                        logger.info(
+                            "Cron job %s: transient error, scheduling retry in %ds (attempt %d/%d)",
+                            job.id, backoff_s, job.consecutive_errors, max_retries,
+                        )
+                        # Advance last_run so backoff skips the right interval
+                        job.last_run = now_ts - max(0, _error_backoff_s(0)) + backoff_s
+                    elif job.schedule_kind == "at" and job.consecutive_errors > max_retries:
+                        # Permanent error or retries exhausted: disable
+                        job.enabled = False
+                        logger.warning(
+                            "Cron job %s disabled after %d consecutive errors (max_retries=%d)",
+                            job.id, job.consecutive_errors, max_retries,
+                        )
                 await self._maybe_send_failure_alert(job, now_ts)
             finally:
                 job.last_duration_ms = (time.monotonic() - run_start) * 1000
 
-            if job.one_shot:
+            # Post-run lifecycle
+            success = not job.last_error
+            should_delete = (
+                success
+                and job.delete_after_run
+                and job.schedule_kind == "at"
+            )
+            if should_delete:
+                self._jobs.pop(job.id, None)
+                logger.info("Cron job %s deleted after successful run (delete_after_run=True)", job.id)
+            elif job.one_shot:
                 self._jobs.pop(job.id, None)
                 logger.info("One-shot cron job %s removed after execution", job.id)
+
+    @staticmethod
+    def _resolve_timeout(job: CronJob) -> Optional[float]:
+        """Return the execution timeout in seconds (None = no timeout)."""
+        configured = int(job.timeout_seconds)
+        if configured > 0:
+            return float(configured)
+        # Heuristic: longer default for agent-turn-style jobs (message set)
+        if job.message.strip():
+            return float(_AGENT_TURN_TIMEOUT_S)
+        return float(_DEFAULT_JOB_TIMEOUT_S)
+
+    async def run_missed_jobs(self) -> None:
+        """Run up to MAX_MISSED_JOBS_PER_RESTART jobs that were due while offline.
+
+        Jobs past their due time are sorted by how overdue they are. The first
+        *MAX_MISSED_JOBS_PER_RESTART* are executed immediately; the rest receive
+        a staggered ``last_run`` bump to spread re-execution over time and
+        prevent a restart storm.
+        """
+        now_ts = time.time()
+        now_dt = datetime.now(timezone.utc)
+        overdue: List[Tuple[float, CronJob]] = []
+        for job in self._jobs.values():
+            if not job.enabled:
+                continue
+            if not self._is_due(job, now_dt, now_ts):
+                continue
+            overdue_by = now_ts - job.last_run
+            overdue.append((overdue_by, job))
+
+        if not overdue:
+            return
+
+        # Most-overdue first
+        overdue.sort(key=lambda t: t[0], reverse=True)
+        immediate = overdue[:_MAX_MISSED_JOBS_PER_RESTART]
+        deferred = overdue[_MAX_MISSED_JOBS_PER_RESTART:]
+
+        if deferred:
+            logger.info(
+                "CronScheduler: %d missed job(s) will be staggered (immediate=%d, deferred=%d)",
+                len(overdue), len(immediate), len(deferred),
+            )
+
+        # Stagger deferred jobs by bumping last_run into the near future
+        for i, (_, job) in enumerate(deferred, start=1):
+            job.last_run = now_ts + i * _MISSED_JOB_STAGGER_S
+
+        # Run immediate jobs concurrently
+        if immediate:
+            logger.info(
+                "CronScheduler: running %d missed job(s) after startup",
+                len(immediate),
+            )
+            self._semaphore = self._semaphore or asyncio.Semaphore(self._max_concurrent_runs)
+            tasks = [self._run_job(job, now_ts) for (_, job) in immediate]
+            await asyncio.gather(*tasks)
 
         self.save()
 

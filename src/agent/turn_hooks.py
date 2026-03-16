@@ -26,6 +26,7 @@ class TurnHookManager:
     * ``message:sent``      -- outbound response published to the bus.
     * ``session:start``     -- first message in a fresh session.
     * ``session:reset``     -- session was explicitly reset.
+    * ``session:end``       -- turn completed; carries ``message_count`` and ``agent_id``.
     """
 
     def __init__(self) -> None:
@@ -37,6 +38,7 @@ class TurnHookManager:
         self._message_sent: List[HookCallback] = []
         self._session_start: List[HookCallback] = []
         self._session_reset: List[HookCallback] = []
+        self._session_end: List[HookCallback] = []
 
     # ------------------------------------------------------------------
     # Registration
@@ -67,6 +69,10 @@ class TurnHookManager:
         """Register a callback for ``session:reset`` events."""
         self._session_reset.append(callback)
 
+    def on_session_end(self, callback: HookCallback) -> None:
+        """Register a callback for ``session:end`` events."""
+        self._session_end.append(callback)
+
     # ------------------------------------------------------------------
     # Emission
     # ------------------------------------------------------------------
@@ -95,6 +101,10 @@ class TurnHookManager:
     async def emit_session_reset(self, payload: Dict[str, Any]) -> None:
         """Emit ``session:reset`` — called when the session is explicitly reset."""
         await self._emit(self._session_reset, payload, event_name="session:reset")
+
+    async def emit_session_end(self, payload: Dict[str, Any]) -> None:
+        """Emit ``session:end`` — called after each turn completes."""
+        await self._emit(self._session_end, payload, event_name="session:end")
 
     @staticmethod
     async def _invoke(callback: HookCallback, payload: Dict[str, Any]) -> None:

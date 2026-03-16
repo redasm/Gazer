@@ -9,7 +9,9 @@ import threading
 import numpy as np
 import faiss
 from datetime import datetime
-from typing import Callable, List, Optional, Tuple
+import math
+from datetime import timezone as _tz
+from typing import Callable, Dict, List, Optional, Tuple
 
 from llm.embedding import EmbeddingProvider
 from memory.interface import MemoryEmbeddingProbeResult, MemoryProviderStatus, MemorySearchResult
@@ -260,16 +262,57 @@ class SQLiteIndex:
     # MemorySearchManager interface implementation
     # ------------------------------------------------------------------
 
-    async def search(
+    async def search(  # noqa: C901
         self,
         query: str,
         *,
         max_results: int = 10,
         min_score: float = 0.0,
         session_key: Optional[str] = None,
+        vector_weight: float = 0.7,
+        text_weight: float = 0.3,
+        candidate_multiplier: int = 4,
+        enable_mmr: bool = False,
+        mmr_lambda: float = 0.7,
+        enable_temporal_decay: bool = False,
+        temporal_decay_half_life_days: float = 30.0,
     ) -> List[MemorySearchResult]:
-        """Hybrid search returning :class:`~memory.interface.MemorySearchResult` objects."""
-        raw = await self.hybrid_search(query, limit=max_results)
+        """Hybrid search with optional MMR diversity filter and temporal decay."""
+        candidate_multiplier = max(1, int(candidate_multiplier))
+        pool_size = max_results * candidate_multiplier
+
+        # Normalise weights
+        w_sum = (vector_weight or 0.0) + (text_weight or 0.0)
+        if w_sum <= 0:
+            vector_weight, text_weight = 0.7, 0.3
+        else:
+            vector_weight /= w_sum
+            text_weight /= w_sum
+
+        raw = await self.hybrid_search(
+            query,
+            limit=pool_size,
+            vector_weight=vector_weight,
+            text_weight=text_weight,
+        )
+
+        # Apply temporal decay
+        if enable_temporal_decay and temporal_decay_half_life_days > 0:
+            now_ts = datetime.now(_tz.utc).timestamp()
+            decay_k = math.log(2.0) / (temporal_decay_half_life_days * 86400.0)
+            for item in raw:
+                ts_str = item.get("timestamp", "")
+                age_s = _parse_age_seconds(ts_str, now_ts)
+                if age_s is not None:
+                    item["score"] = item["score"] * math.exp(-decay_k * age_s)
+            raw.sort(key=lambda x: x["score"], reverse=True)
+
+        # Apply MMR diversity filter
+        if enable_mmr and len(raw) > 1:
+            raw = _apply_mmr(raw, k=max_results, lam=float(mmr_lambda))
+        else:
+            raw = raw[:max_results]
+
         results: List[MemorySearchResult] = []
         for item in raw:
             score = float(item.get("score", 0.0))
@@ -412,8 +455,8 @@ class SQLiteIndex:
         vector_weight: float = 0.7,
         text_weight: float = 0.3,
     ) -> List[dict]:
-        vector_res = await self.semantic_search(query, limit=limit * 3)
-        keyword_res = self.fts_search(query, limit=limit * 3)
+        vector_res = await self.semantic_search(query, limit=limit)
+        keyword_res = self.fts_search(query, limit=limit)
 
         combined: dict = {}
 
@@ -482,3 +525,76 @@ class SQLiteIndex:
             self._dirty = False
         if os.path.exists(self.index_path):
             os.remove(self.index_path)
+
+
+# ---------------------------------------------------------------------------
+# MMR + temporal decay helpers
+# ---------------------------------------------------------------------------
+
+def _apply_mmr(
+    candidates: List[Dict],
+    k: int,
+    lam: float = 0.7,
+) -> List[Dict]:
+    """Maximal Marginal Relevance selection.
+
+    Selects *k* items that balance relevance (score) with diversity
+    (low similarity to already-selected items).  Similarity is approximated
+    using token-level Jaccard overlap on the content strings.
+
+    ``lam = 1.0`` → pure relevance ranking (no diversity penalty).
+    ``lam = 0.0`` → maximum diversity.
+    """
+    if not candidates or k <= 0:
+        return candidates[:k]
+    lam = max(0.0, min(1.0, lam))
+
+    def _tokens(text: str) -> set:
+        return set(text.lower().split())
+
+    def _jaccard(a: set, b: set) -> float:
+        if not a or not b:
+            return 0.0
+        return len(a & b) / len(a | b)
+
+    remaining = list(candidates)
+    selected: List[Dict] = []
+
+    while remaining and len(selected) < k:
+        if not selected:
+            # First: pick highest relevance
+            best = max(remaining, key=lambda x: x.get("score", 0.0))
+        else:
+            sel_tokens = [_tokens(s["content"]) for s in selected]
+            best = None
+            best_mmr = float("-inf")
+            for item in remaining:
+                rel = float(item.get("score", 0.0))
+                max_sim = max(
+                    (_jaccard(_tokens(item["content"]), st) for st in sel_tokens),
+                    default=0.0,
+                )
+                mmr_score = lam * rel - (1.0 - lam) * max_sim
+                if mmr_score > best_mmr:
+                    best_mmr = mmr_score
+                    best = item
+        selected.append(best)  # type: ignore[arg-type]
+        remaining = [x for x in remaining if x is not best]
+
+    return selected
+
+
+def _parse_age_seconds(ts_str: str, now_ts: float) -> Optional[float]:
+    """Parse a timestamp string and return age in seconds, or None on failure."""
+    if not ts_str:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(ts_str.split(".")[0].strip(), fmt)
+            # Assume UTC if no tzinfo
+            dt = dt.replace(tzinfo=_tz.utc)
+            age = now_ts - dt.timestamp()
+            return max(0.0, age)
+        except ValueError:
+            continue
+    return None

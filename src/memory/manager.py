@@ -201,13 +201,27 @@ class MemoryManager:
         max_results: int = 10,
         min_score: float = 0.0,
         session_key: Optional[str] = None,
+        vector_weight: float = 0.7,
+        text_weight: float = 0.3,
+        candidate_multiplier: int = 4,
+        enable_mmr: bool = False,
+        mmr_lambda: float = 0.7,
+        enable_temporal_decay: bool = False,
+        temporal_decay_half_life_days: float = 30.0,
     ) -> List[MemorySearchResult]:
-        """Delegating hybrid search via the SQLiteIndex."""
+        """Delegating hybrid search with optional MMR and temporal-decay via the SQLiteIndex."""
         return await self.index.search(
             query,
             max_results=max_results,
             min_score=min_score,
             session_key=session_key,
+            vector_weight=vector_weight,
+            text_weight=text_weight,
+            candidate_multiplier=candidate_multiplier,
+            enable_mmr=enable_mmr,
+            mmr_lambda=mmr_lambda,
+            enable_temporal_decay=enable_temporal_decay,
+            temporal_decay_half_life_days=temporal_decay_half_life_days,
         )
 
     def status(self) -> MemoryProviderStatus:

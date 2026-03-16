@@ -107,8 +107,36 @@ class MemorySearchManager(Protocol):
         max_results: int = 10,
         min_score: float = 0.0,
         session_key: Optional[str] = None,
+        # Hybrid retrieval weights (auto-normalised to sum=1)
+        vector_weight: float = 0.7,
+        text_weight: float = 0.3,
+        # Over-sampling factor for re-ranking (candidate pool = max_results * multiplier)
+        candidate_multiplier: int = 4,
+        # MMR (Maximal Marginal Relevance) diversity filter
+        enable_mmr: bool = False,
+        mmr_lambda: float = 0.7,         # 1.0 = pure relevance, 0.0 = pure diversity
+        # Temporal decay (penalise older results)
+        enable_temporal_decay: bool = False,
+        temporal_decay_half_life_days: float = 30.0,
     ) -> List[MemorySearchResult]:
-        """Perform hybrid (FTS + vector) memory search and return ranked results."""
+        """Perform hybrid (FTS + vector) memory search and return ranked results.
+
+        Parameters
+        ----------
+        vector_weight / text_weight:
+            Relative weights for the vector and BM25 components.  They are
+            automatically normalised so they sum to 1.
+        candidate_multiplier:
+            The candidate pool fetched from each sub-index is
+            ``max_results × candidate_multiplier`` before re-ranking.
+        enable_mmr:
+            When True, applies Maximal Marginal Relevance to reduce redundancy.
+            ``mmr_lambda`` controls the relevance/diversity trade-off (1 = pure
+            relevance, 0 = pure diversity).
+        enable_temporal_decay:
+            When True, scores are multiplied by an exponential decay factor
+            based on each result's age relative to ``temporal_decay_half_life_days``.
+        """
         ...
 
     def status(self) -> MemoryProviderStatus:
