@@ -31,6 +31,7 @@ from multi_agent.models import (
     _short_uuid,
 )
 from multi_agent.task_graph import TaskGraph
+from runtime.protocols import ToolExecutionPort
 
 logger = logging.getLogger("multi_agent.Worker")
 
@@ -58,7 +59,7 @@ class WorkerAgent:
         task_graph: TaskGraph,
         bus: AgentMessageBus,
         blackboard: Blackboard,
-        tool_registry: Any = None,
+        tool_registry: ToolExecutionPort | None = None,
         config: WorkerConfig | None = None,
         execution_context: MultiAgentExecutionContext | None = None,
     ) -> None:

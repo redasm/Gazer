@@ -791,6 +791,19 @@ class TestFlowEngine:
         engine.reload()
         assert engine.get_flow("new_flow") is not None
 
+    @pytest.mark.asyncio
+    async def test_run_tool_preserves_raw_string_and_logs_debug(self, tmp_dir, caplog):
+        registry = AsyncMock()
+        registry.execute = AsyncMock(return_value="plain text result")
+        engine = FlowEngine(tool_registry=registry, flow_dirs=[tmp_dir])
+
+        with caplog.at_level("DEBUG"):
+            result = await engine._run_tool("echo_tool", {"message": "hello"})
+
+        assert result.error is None
+        assert result.output == "plain text result"
+        assert "returned non-JSON output" in caplog.text
+
 
 # =========================================================================
 # LLMTaskStep tests

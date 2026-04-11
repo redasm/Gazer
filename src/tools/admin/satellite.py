@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import collections
@@ -40,7 +40,7 @@ _MAX_UPLOAD_BYTES: int = int(config.get("api.max_upload_bytes", 10 * 1024 * 1024
 _latest_satellite_image = None
 
 app = APIRouter()
-logger = logging.getLogger('satellite')
+logger = logging.getLogger("satellite")
 
 
 

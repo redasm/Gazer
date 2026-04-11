@@ -92,7 +92,7 @@ const Canvas = ({ t }) => {
     const wsRef = useRef(null);
     const reconnectRef = useRef(null);
 
-    const connectWs = useCallback(() => {
+    const connectWs = useCallback(function connectCanvasWs() {
         if (wsRef.current && wsRef.current.readyState <= 1) return;
         const url = `${wsBase}/ws/canvas`;
         const socket = new WebSocket(url);
@@ -115,7 +115,7 @@ const Canvas = ({ t }) => {
             console.error("Closed code:", event.code, "reason:", event.reason);
             clearInterval(pingTimer);
             setConnected(false);
-            reconnectRef.current = setTimeout(connectWs, 3000);
+            reconnectRef.current = setTimeout(connectCanvasWs, 3000);
         };
         socket.onerror = (error) => {
             console.error('Canvas WebSocket Error:', error);

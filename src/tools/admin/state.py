@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from runtime.app_context import get_app_context
 from runtime.config_manager import config
+from runtime.paths import resolve_runtime_path
 
 
 def get_max_ws_message_bytes() -> int:
@@ -160,8 +161,14 @@ _WORKFLOW_GRAPH_DIR = _PROJECT_ROOT / "workflows" / "graphs"
 _POLICY_AUDIT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "policy_audit.jsonl"
 _STRATEGY_SNAPSHOT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "strategy_snapshot.jsonl"
 _WEB_ONBOARDING_GUIDE_PATH = _PROJECT_ROOT / "assets" / "WEB_ONBOARDING_GUIDE.md"
-_MEMORY_TURN_HEALTH_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "memory_turn_health.jsonl"
-_TOOL_PERSIST_LOG_PATH = _PROJECT_ROOT / "data" / "reports" / "tool_result_persistence.jsonl"
+_MEMORY_TURN_HEALTH_LOG_PATH = resolve_runtime_path(
+    "data/reports/memory_turn_health.jsonl",
+    config_manager=config,
+)
+_TOOL_PERSIST_LOG_PATH = resolve_runtime_path(
+    "data/reports/tool_result_persistence.jsonl",
+    config_manager=config,
+)
 _EXPORT_DEFAULT_DIR = "data/reports"
 _EXPORT_DEFAULT_ALLOWED_DIRS = ["data/reports", ".tmp_pytest", "exports"]
 _PROTECTED_EXPORT_TARGETS = {

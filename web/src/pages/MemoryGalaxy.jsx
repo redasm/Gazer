@@ -25,7 +25,7 @@ const TYPE_LABELS = {
 const MemoryGalaxy = ({ t }) => {
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [selectedNode, setSelectedNode] = useState(null);
-    const [hoverNode, setHoverNode] = useState(null);
+    const [, setHoverNode] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [highlightNodes, setHighlightNodes] = useState(new Set());
     const [highlightLinks, setHighlightLinks] = useState(new Set());

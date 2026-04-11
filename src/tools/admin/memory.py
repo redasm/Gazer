@@ -829,7 +829,7 @@ async def get_memory_graph():
             if isinstance(payload, dict):
                 return payload
         except Exception:
-            pass
+            logger.debug("Failed to read JSON memory graph source: %s", path, exc_info=True)
         return None
 
     def group_for_long_term(category: str) -> str:

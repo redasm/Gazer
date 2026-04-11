@@ -99,6 +99,13 @@ class TestPlanParsing:
         plan = PlannerAgent._parse_plan_json(raw)
         assert plan is None
 
+    def test_parse_invalid_fenced_json_logs_debug(self, caplog):
+        raw = "```json\n{\"summary\": \"broken\"\n```"
+        with caplog.at_level("DEBUG"):
+            plan = PlannerAgent._parse_plan_json(raw)
+        assert plan is None
+        assert "Failed to parse fenced plan JSON block" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Task graph building

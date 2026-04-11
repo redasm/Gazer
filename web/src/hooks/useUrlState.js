@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const useUrlState = (key, defaultValue, { parse, serialize } = {}) => {
     const read = () => {
@@ -12,8 +12,7 @@ const useUrlState = (key, defaultValue, { parse, serialize } = {}) => {
         }
     };
 
-    const initial = useMemo(read, []);
-    const [value, setValue] = useState(initial);
+    const [value, setValue] = useState(() => read());
 
     useEffect(() => {
         try {
@@ -30,4 +29,3 @@ const useUrlState = (key, defaultValue, { parse, serialize } = {}) => {
 };
 
 export default useUrlState;
-

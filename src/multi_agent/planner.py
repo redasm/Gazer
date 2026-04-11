@@ -91,6 +91,7 @@ class PlannerAgent:
         blackboard: Blackboard,
         memory_manager: Any = None,
         session_key: str = "",
+        emotion_vector: dict[str, float] | None = None,
     ) -> None:
         self._brain = dual_brain
         self._graph = task_graph
@@ -102,6 +103,18 @@ class PlannerAgent:
         self._plan_summary = ""
         self._start_time = 0.0
         self._session_key = str(session_key or "").strip()
+        self.emotion_vector = {
+            "excitement": 0.5,
+            "frustration": 0.0,
+            "confidence": 0.5,
+        }
+        if isinstance(emotion_vector, dict):
+            for key, value in emotion_vector.items():
+                if key in self.emotion_vector:
+                    try:
+                        self.emotion_vector[key] = float(value)
+                    except (TypeError, ValueError):
+                        logger.debug("Ignoring invalid emotion_vector value for key=%s", key)
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -208,15 +221,15 @@ class PlannerAgent:
                 if block.startswith("{"):
                     try:
                         return json.loads(block)
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as exc:
+                        logger.debug("Failed to parse fenced plan JSON block", exc_info=exc)
 
         start = text.find("{")
         if start >= 0:
             try:
                 return json.loads(text[start:])
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                logger.debug("Failed to parse trailing plan JSON candidate", exc_info=exc)
 
         logger.error("Failed to parse plan JSON from LLM output: %s", text[:300])
         return None

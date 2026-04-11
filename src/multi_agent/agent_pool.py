@@ -18,6 +18,7 @@ from multi_agent.dual_brain import DualBrain
 from multi_agent.models import MultiAgentExecutionContext
 from multi_agent.task_graph import TaskGraph
 from multi_agent.worker_agent import WorkerAgent, WorkerConfig
+from runtime.protocols import ToolExecutionPort
 
 logger = logging.getLogger("multi_agent.AgentPool")
 
@@ -42,7 +43,7 @@ class AgentPool:
         blackboard: Blackboard,
         task_graph: TaskGraph,
         config: PoolConfig | None = None,
-        tool_registry: Any = None,
+        tool_registry: ToolExecutionPort | None = None,
         worker_config: WorkerConfig | None = None,
         execution_context: MultiAgentExecutionContext | None = None,
     ) -> None:

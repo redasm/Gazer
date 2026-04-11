@@ -35,11 +35,10 @@ const StatusIcon = ({ status }) => {
 /* ------------------------------------------------------------------ */
 /*  Security Page                                                       */
 /* ------------------------------------------------------------------ */
-const Security = ({ t, config, setConfig, saveConfig, fetchConfig }) => {
+const Security = ({ t, config, setConfig, fetchConfig }) => {
   const [pending, setPending] = useState([]);
   const [approved, setApproved] = useState({});
   const [doctor, setDoctor] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null); // {channel, senderId}
   const [ownerChannelText, setOwnerChannelText] = useState('{}');

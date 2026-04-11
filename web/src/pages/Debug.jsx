@@ -7,7 +7,6 @@ import ToggleSwitch from '../components/ToggleSwitch';
 const Debug = ({ t }) => {
     const [systemInfo, setSystemInfo] = useState(null);
     const [processes, setProcesses] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [testResults, setTestResults] = useState([]);
     const [runningTestId, setRunningTestId] = useState(null);
@@ -75,7 +74,6 @@ const Debug = ({ t }) => {
             console.error("Failed to fetch system info", err);
             setError("Failed to fetch system info. Backend may be offline.");
         }
-        setLoading(false);
     };
 
     const fetchLlmHistory = async () => {
@@ -220,7 +218,7 @@ const Debug = ({ t }) => {
                 throw new Error('payload.cases must be an array');
             }
             parsedCases = parsed;
-        } catch (err) {
+        } catch {
             setCodingBenchmarkSchedulerStatus(t.debugCodingBenchmarkCasesInvalid || 'Invalid payload.cases JSON');
             return;
         }
@@ -228,9 +226,6 @@ const Debug = ({ t }) => {
         const nextScheduler = JSON.parse(JSON.stringify(codingBenchmarkScheduler || {}));
         if (!nextScheduler.payload || typeof nextScheduler.payload !== 'object') nextScheduler.payload = {};
         nextScheduler.payload.cases = parsedCases;
-        const caseCount = Array.isArray(codingBenchmarkScheduler?.payload?.cases)
-            ? codingBenchmarkScheduler.payload.cases.length
-            : 0;
         if (Boolean(nextScheduler?.enabled) && parsedCases.length <= 0) {
             setCodingBenchmarkSchedulerStatus(
                 t.debugCodingBenchmarkSchedulerCasesEmpty || 'Enabled but payload.cases is empty.'

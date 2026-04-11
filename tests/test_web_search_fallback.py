@@ -1,6 +1,11 @@
 import pytest
 
+from tools.web_impl import WebSearchTool as ImplWebSearchTool
 from tools.web_tools import WebSearchTool, WebReportTool, config, _cache
+
+
+def test_web_tools_facade_reexports_impl_search_tool():
+    assert WebSearchTool is ImplWebSearchTool
 
 
 @pytest.mark.asyncio

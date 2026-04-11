@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, User, Bot, Loader, Plus, Copy, Check, MessageSquare, Trash2, Pencil, PanelLeftClose, PanelLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import axios from 'axios';
 import API_BASE from '../config';
 
 const wsBase = API_BASE.replace(/^http/, 'ws');
@@ -299,7 +298,7 @@ const Chat = ({ t }) => {
         }, 45000);
     }, [clearResponseTimeout]);
 
-    const connectWs = useCallback((sessionId) => {
+    const connectWs = useCallback(function connectChatWs(sessionId) {
         // Close any existing connection first
         if (ws.current) {
             const old = ws.current;
@@ -344,7 +343,7 @@ const Chat = ({ t }) => {
             // Only auto-reconnect if this is still the active socket
             if (ws.current === socket) {
                 reconnectTimer.current = setTimeout(() => {
-                    if (mountedRef.current) connectWs(sessionRef.current || 'web-main');
+                    if (mountedRef.current) connectChatWs(sessionRef.current || 'web-main');
                 }, 3000);
             }
         };

@@ -3,6 +3,12 @@
 Extracted from web_tools.py.
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from .helpers import WebToolBase, _cache_get, _cache_set
+
 class WebFetchTool(WebToolBase):
     """Fetch a URL and extract readable text content."""
 
@@ -107,5 +113,4 @@ class WebFetchTool(WebToolBase):
         text = re.sub(r"<[^>]+>", " ", html)
         text = re.sub(r"\s+", " ", text).strip()
         return text
-
 

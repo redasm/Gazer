@@ -580,7 +580,7 @@ function WorkersModal({
   );
 }
 
-export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig, t }) {
+export default function AgentKanban({ config, setConfig, saveConfig, t }) {
   const labels = useMemo(() => buildLabels(t), [t]);
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [commentText, setCommentText] = useState('');
@@ -672,8 +672,8 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
   const allowMulti = Boolean(config.multi_agent?.allow_multi);
   const maxWorkers = config.multi_agent?.max_workers ?? 5;
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="agent-kanban-shell">
+      <div className="agent-kanban-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0 }}>
             <Bot size={20} style={{ color: '#22d3ee' }} />
@@ -701,7 +701,7 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div className="agent-kanban-stage" style={{ display: 'flex', gap: 10, marginTop: 16, marginBottom: 14, flexWrap: 'wrap' }}>
         {[
           { label: labels.total, value: formatCount(state.stats.total), color: '#67e8f9' },
           { label: labels.done, value: formatCount(state.stats.done), color: '#34d399' },
@@ -722,7 +722,7 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
       </div>
 
       {missionTasks.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
+        <div className="agent-kanban-mission-strip" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto' }}>
           {missionTasks.map((task) => (
             <div key={task.task_id} style={{
               flex: '0 0 auto', padding: '6px 12px', borderRadius: 8,
@@ -738,8 +738,8 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
         </div>
       )}
 
-      <div className="agent-kanban-layout">
-        <div className="agent-kanban-board">
+      <div className="agent-kanban-layout agent-kanban-workbench">
+        <div className="agent-kanban-board agent-kanban-execution-lanes">
           {localizedColumns.map((column) => (
             <TaskColumn
               key={column.key}
@@ -751,16 +751,19 @@ export default function AgentKanban({ config, setConfig, saveConfig, fetchConfig
             />
           ))}
         </div>
-        <div style={{ position: 'sticky', top: 12 }}>
-          <TaskDetail
-            task={selectedTask}
-            commentText={commentText}
-            commentError={commentError}
-            submittingComment={submittingComment}
-            onCommentChange={setCommentText}
-            onCommentSubmit={handleSubmitComment}
-            labels={labels}
-          />
+        <div className="agent-kanban-rail" style={{ position: 'sticky', top: 12 }}>
+          <div className="agent-kanban-detail-stack">
+            <TaskDetail
+              task={selectedTask}
+              commentText={commentText}
+              commentError={commentError}
+              submittingComment={submittingComment}
+              onCommentChange={setCommentText}
+              onCommentSubmit={handleSubmitComment}
+              labels={labels}
+            />
+            <div className="agent-kanban-log-panel" style={{ display: 'none' }} aria-hidden="true" />
+          </div>
         </div>
       </div>
 

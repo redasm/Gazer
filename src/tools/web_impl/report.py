@@ -3,6 +3,16 @@
 Extracted from web_tools.py.
 """
 
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Dict, List, Optional
+
+from .fetch import WebFetchTool
+from .helpers import WebToolBase, logger
+from .search import WebSearchTool
+
 class WebReportTool(WebToolBase):
     """Generate a compact research report with explicit source citations."""
 
@@ -243,5 +253,4 @@ class WebReportTool(WebToolBase):
         except Exception as exc:
             logger.warning("web_report memory save failed: %s", exc)
         return report
-
 

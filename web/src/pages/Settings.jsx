@@ -1628,7 +1628,7 @@ const Settings = ({ config, setConfig, saveConfig, fetchConfig, modelProviders, 
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.06)',
             }}>
-                {TABS.map(({ key, icon: Icon, color }) => {
+                {TABS.map(({ key, color }) => {
                     const isActive = activeTab === key;
                     return (
                         <button

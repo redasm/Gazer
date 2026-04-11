@@ -56,7 +56,6 @@ const DonutChart = ({ slices, size = 180 }) => {
     const total = slices.reduce((s, d) => s + d.value, 0);
     if (!total) return <svg width={size} height={size} />;
     const cx = size / 2, cy = size / 2, r = size * 0.38, stroke = size * 0.12;
-    let cumAngle = -90;
     const circumference = 2 * Math.PI * r;
 
     return (
@@ -64,8 +63,8 @@ const DonutChart = ({ slices, size = 180 }) => {
             {slices.map((d, i) => {
                 const pct = d.value / total;
                 const dashLen = pct * circumference;
-                const dashOff = -((cumAngle + 90) / 360) * circumference;
-                cumAngle += pct * 360;
+                const cumulativePct = slices.slice(0, i).reduce((sum, item) => sum + (item.value / total), 0);
+                const dashOff = -(cumulativePct * circumference);
                 return (
                     <circle key={i} cx={cx} cy={cy} r={r} fill="none"
                         stroke={DONUT_COLORS[i % DONUT_COLORS.length]}
@@ -186,11 +185,17 @@ const Dashboard = ({ status, t }) => {
     }, []);
 
     useEffect(() => {
-        fetchSystem();
-        fetchUsage();
-        fetchMetrics();
-        const iv = setInterval(() => { fetchSystem(); fetchUsage(); fetchMetrics(); }, 10000);
-        return () => clearInterval(iv);
+        const loadDashboard = () => {
+            void fetchSystem();
+            void fetchUsage();
+            void fetchMetrics();
+        };
+        const kickoff = setTimeout(loadDashboard, 0);
+        const iv = setInterval(loadDashboard, 10000);
+        return () => {
+            clearTimeout(kickoff);
+            clearInterval(iv);
+        };
     }, [fetchSystem, fetchUsage, fetchMetrics]);
 
     // Extract token stats from usage tracker
@@ -277,8 +282,6 @@ const Dashboard = ({ status, t }) => {
     }, [usage, tokenStats]);
 
     // Total requests from model table
-    const totalModelRequests = useMemo(() => donutSlices.reduce((s, d) => s + d.value, 0), [donutSlices]);
-
     // RPM / TPM from metrics
     const rpm = useMemo(() => {
         const calls = metrics?.provider?.total_calls || tokenStats?.totalRequests || 0;

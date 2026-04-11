@@ -20,6 +20,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from runtime.protocols import ToolExecutionPort
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +36,7 @@ class AppContext:
 
     # --- Core services (always populated after brain.start) ---
     llm_router: Any = None
-    tool_registry: Any = None
+    tool_registry: ToolExecutionPort | None = None
     usage_tracker: Any = None
     trajectory_store: Any = None
     prompt_cache_tracker: Any = None

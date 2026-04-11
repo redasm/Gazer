@@ -53,25 +53,6 @@ const Logs = ({ t }) => {
 
     const intervalRef = useRef(null);
 
-    useEffect(() => {
-        fetchLogs();
-        intervalRef.current = setInterval(fetchLogs, 3000);
-        return () => clearInterval(intervalRef.current);
-    }, []);
-
-    useEffect(() => {
-        if (autoScroll && bottomRef.current) {
-            bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs, autoScroll]);
-
-    const handleScroll = () => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-        setAutoScroll(atBottom);
-    };
-
     const fetchLogs = async () => {
         try {
             const res = await axios.get(`${API_BASE}/logs?limit=200`);
@@ -87,6 +68,30 @@ const Logs = ({ t }) => {
             }
         }
         setLoading(false);
+    };
+
+    useEffect(() => {
+        const kickoff = setTimeout(() => {
+            void fetchLogs();
+        }, 0);
+        intervalRef.current = setInterval(fetchLogs, 3000);
+        return () => {
+            clearTimeout(kickoff);
+            clearInterval(intervalRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (autoScroll && bottomRef.current) {
+            bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, autoScroll]);
+
+    const handleScroll = () => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+        setAutoScroll(atBottom);
     };
 
     const clearLogs = async () => {

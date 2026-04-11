@@ -24,6 +24,7 @@ from soul.persona import GazerPersonality
 from memory.manager import MemoryManager
 from soul.core import MemoryEntry
 from runtime.config_manager import config
+from runtime.paths import resolve_runtime_path
 from runtime.provider_registry import get_provider_registry
 from security.owner import get_owner_manager
 from soul.models import ModelRegistry
@@ -219,12 +220,13 @@ class GazerAgent(MultiAgentMixin):
 
     @staticmethod
     def _append_jsonl(path: Path, payload: Dict[str, Any]) -> None:
+        resolved_path = resolve_runtime_path(path, config_manager=config)
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "a", encoding="utf-8") as fh:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(resolved_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
         except Exception:
-            logger.debug("Failed to append report file: %s", path, exc_info=True)
+            logger.debug("Failed to append report file: %s", resolved_path, exc_info=True)
 
     @staticmethod
     def _tool_result_policy() -> Dict[str, Any]:

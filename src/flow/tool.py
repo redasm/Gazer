@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any, Dict
 
+from flow.engine import FlowEngine
 from tools.base import Tool
 
 logger = logging.getLogger("FlowRunTool")
@@ -24,7 +25,7 @@ class FlowRunTool(Tool):
     - ``recover`` — resume from latest interruption checkpoint
     """
 
-    def __init__(self, engine: Any) -> None:
+    def __init__(self, engine: FlowEngine) -> None:
         self._engine = engine
 
     @property

@@ -144,4 +144,4 @@ pytest -q
 
 ## 许可证
 
-本项目使用 MIT License，详见 [`LICENSE`](LICENSE)。
+本项目使用 Apache-2.0 License，详见 [`LICENSE`](LICENSE)。

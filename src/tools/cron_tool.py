@@ -1,5 +1,6 @@
 """CronTool -- allows the agent to manage cron jobs programmatically."""
 
+import asyncio
 import json
 import logging
 from dataclasses import asdict
@@ -97,9 +98,12 @@ class CronTool(Tool):
         handler = dispatch.get(action)
         if not handler:
             return self._error("CRON_ACTION_UNKNOWN", f"unknown action '{action}'.")
-        return await handler(**kwargs)
+        result = handler(**kwargs)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
 
-    async def _list(self, **_: Any) -> str:
+    def _list(self, **_: Any) -> str:
         jobs = self._scheduler.list_jobs()
         if not jobs:
             return "No cron jobs configured."
@@ -109,7 +113,7 @@ class CronTool(Tool):
             lines.append(f"- {j.id}: {j.name} [{j.cron_expr}] ({status}) agent={j.agent_id}")
         return "\n".join(lines)
 
-    async def _add(self, **kwargs: Any) -> str:
+    def _add(self, **kwargs: Any) -> str:
         from scheduler.cron import CronJob
         name = kwargs.get("name", "Unnamed")
         cron_expr = kwargs.get("cron_expr", "")
@@ -127,7 +131,7 @@ class CronTool(Tool):
         self._scheduler.add(job)
         return f"Created cron job: {job.id} ({job.name}) [{job.cron_expr}]"
 
-    async def _remove(self, **kwargs: Any) -> str:
+    def _remove(self, **kwargs: Any) -> str:
         job_id = kwargs.get("job_id", "")
         if not job_id:
             return self._error("CRON_REMOVE_ID_REQUIRED", "'job_id' is required for remove.")
@@ -135,7 +139,7 @@ class CronTool(Tool):
             return f"Removed cron job: {job_id}"
         return f"Job not found: {job_id}"
 
-    async def _edit(self, **kwargs: Any) -> str:
+    def _edit(self, **kwargs: Any) -> str:
         job_id = kwargs.get("job_id", "")
         if not job_id:
             return self._error("CRON_EDIT_ID_REQUIRED", "'job_id' is required for edit.")

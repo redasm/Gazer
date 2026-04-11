@@ -3,6 +3,25 @@
 Extracted from web_tools.py.
 """
 
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+import xml.etree.ElementTree as ET
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote, quote_plus
+
+from .helpers import (
+    WebToolBase,
+    _cache_get,
+    _cache_set,
+    config,
+    logger,
+    resolve_web_report_path,
+)
+
 class WebSearchTool(WebToolBase):
     """Search the web using Brave Search API or DuckDuckGo fallback."""
 
@@ -159,6 +178,7 @@ class WebSearchTool(WebToolBase):
         ).strip()
         if not report_file:
             return
+        report_file = resolve_web_report_path(report_file)
         try:
             report_dir = os.path.dirname(report_file)
             if report_dir:
@@ -712,5 +732,4 @@ class WebSearchTool(WebToolBase):
         if not lines:
             return None
         return "\n\n".join(lines)
-
 

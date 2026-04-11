@@ -261,6 +261,7 @@ async def talk_endpoint(websocket: WebSocket) -> None:
     if not await _verify_ws_auth(websocket):
         return
 
+    controller = None
     await websocket.accept()
     try:
         from runtime.talk_mode import TalkModeController, TalkState
@@ -318,9 +319,15 @@ async def talk_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
-        pass
+        logger.debug("Talk WebSocket disconnected")
     except Exception as exc:
         logger.error("Talk WebSocket error: %s", exc, exc_info=True)
+    finally:
+        if controller is not None:
+            try:
+                await controller.deactivate()
+            except Exception:
+                logger.debug("Failed to deactivate talk controller during websocket cleanup", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +388,7 @@ async def gateway_endpoint(websocket: WebSocket) -> None:
                 )
 
     except WebSocketDisconnect:
-        pass
+        logger.debug("Gateway WebSocket disconnected")
     except Exception as exc:
         logger.error("Gateway WebSocket error: %s", exc, exc_info=True)
     finally:

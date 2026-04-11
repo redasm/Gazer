@@ -1,9 +1,12 @@
 from pathlib import Path
+import json
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 AGENT_KANBAN_PATH = PROJECT_ROOT / "web" / "src" / "pages" / "AgentKanban.jsx"
 I18N_PATH = PROJECT_ROOT / "web" / "src" / "i18n.js"
+EN_LOCALE_PATH = PROJECT_ROOT / "web" / "src" / "locales" / "en.json"
+ZH_LOCALE_PATH = PROJECT_ROOT / "web" / "src" / "locales" / "zh.json"
 CSS_PATH = PROJECT_ROOT / "web" / "src" / "index.css"
 
 
@@ -28,29 +31,41 @@ def test_agent_kanban_uses_translation_keys() -> None:
 
 
 def test_i18n_contains_agent_kanban_strings_for_en_and_zh() -> None:
+    en = json.loads(EN_LOCALE_PATH.read_text(encoding="utf-8"))
+    zh = json.loads(ZH_LOCALE_PATH.read_text(encoding="utf-8"))
+
+    assert en["agentKanbanTitle"] == "Multi-Agent Board"
+    assert en["agentKanbanSubtitle"] == "Multi-Agent Mission Control"
+    assert en["agentKanbanExecutionControl"] == "Execution Control"
+    assert en["agentKanbanCommentSubmit"] == "Post Comment"
+    assert en["agentKanbanLiveLog"] == "Live Log"
+    assert en["agentKanbanOwnerLabel"] == "Owner"
+    assert en["agentKanbanMissionFocus"] == "Mission Focus"
+    assert en["agentKanbanControlDeck"] == "Operator Deck"
+
+    assert zh["agentKanbanTitle"] == "多 Agent 看板"
+    assert zh["agentKanbanSubtitle"] == "多 Agent 任务控制台"
+    assert zh["agentKanbanExecutionControl"] == "执行控制"
+    assert zh["agentKanbanCommentSubmit"] == "发送评论"
+    assert zh["agentKanbanLiveLog"] == "实时日志"
+    assert zh["agentKanbanOwnerLabel"] == "负责人"
+    assert zh["agentKanbanMissionFocus"] == "任务焦点"
+    assert zh["agentKanbanControlDeck"] == "操作台"
+
+
+def test_i18n_loader_imports_locale_json_files() -> None:
     source = I18N_PATH.read_text(encoding="utf-8")
 
-    expected_fragments = [
-        'agentKanbanTitle: "Multi-Agent Board"',
-        'agentKanbanSubtitle: "Multi-Agent Mission Control"',
-        'agentKanbanExecutionControl: "Execution Control"',
-        'agentKanbanCommentSubmit: "Post Comment"',
-        'agentKanbanLiveLog: "Live Log"',
-        'agentKanbanOwnerLabel: "Owner"',
-        'agentKanbanMissionFocus: "Mission Focus"',
-        'agentKanbanControlDeck: "Operator Deck"',
-        'agentKanbanTitle: "多 Agent 看板"',
-        'agentKanbanSubtitle: "多 Agent 任务控制台"',
-        'agentKanbanExecutionControl: "执行控制"',
-        'agentKanbanCommentSubmit: "发送评论"',
-        'agentKanbanLiveLog: "实时日志"',
-        'agentKanbanOwnerLabel: "负责人"',
-        'agentKanbanMissionFocus: "任务焦点"',
-        'agentKanbanControlDeck: "操作台"',
-    ]
+    assert "import en from './locales/en.json';" in source
+    assert "import zh from './locales/zh.json';" in source
+    assert "supportedLocales" in source
 
-    for fragment in expected_fragments:
-        assert fragment in source
+
+def test_locale_files_share_identical_top_level_keys() -> None:
+    en = json.loads(EN_LOCALE_PATH.read_text(encoding="utf-8"))
+    zh = json.loads(ZH_LOCALE_PATH.read_text(encoding="utf-8"))
+
+    assert set(en.keys()) == set(zh.keys())
 
 
 def test_agent_kanban_uses_mission_control_layout_classes() -> None:

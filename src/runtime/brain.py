@@ -8,6 +8,7 @@ import os
 from typing import Any, List, Optional
 
 from runtime.config_manager import config, get_config
+from runtime.paths import resolve_runtime_root
 from perception.audio import get_audio
 from hardware import create_body_driver, BodyDriver
 from memory import MemoryManager
@@ -62,7 +63,7 @@ class GazerBrain:
         self.is_running = False
         self._rust_sidecar_client = None
 
-        workspace_path = Path(os.getcwd())
+        workspace_path = resolve_runtime_root(config)
         self._sync_soul_single_source(workspace_path)
         self.agent = GazerAgent(workspace_path, self.memory_manager)
 
@@ -222,7 +223,7 @@ class GazerBrain:
 
         if config.get("scheduler.heartbeat_enabled", True):
             from scheduler.heartbeat import HeartbeatRunner
-            workspace_path = Path(os.getcwd())
+            workspace_path = resolve_runtime_root(config)
             self.heartbeat_runner = HeartbeatRunner(
                 workspace=workspace_path,
                 run_callback=self._run_heartbeat,
@@ -329,9 +330,23 @@ class GazerBrain:
         self.body.disconnect()
         if self.capture_manager:
             try:
-                asyncio.ensure_future(self.capture_manager.stop())
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.capture_manager.stop())
             except RuntimeError:
-                pass
+                logger.warning(
+                    "Event loop unavailable during capture_manager.stop(); using synchronous cleanup fallback."
+                )
+                sync_stop = getattr(self.capture_manager, "stop_sync", None)
+                release = getattr(self.capture_manager, "release", None)
+                close = getattr(self.capture_manager, "close", None)
+                for cleaner in (sync_stop, release, close):
+                    if not callable(cleaner):
+                        continue
+                    try:
+                        cleaner()
+                        break
+                    except Exception:
+                        logger.warning("Synchronous capture cleanup failed", exc_info=True)
         if self.cron_scheduler:
             self.cron_scheduler.stop()
         if self.heartbeat_runner:

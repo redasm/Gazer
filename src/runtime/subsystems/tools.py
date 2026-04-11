@@ -5,11 +5,14 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from runtime.paths import resolve_runtime_root
+from runtime.protocols import ConfigProvider
+
 logger = logging.getLogger("GazerBrain")
 
 
 async def setup_tools(
-    config,
+    config: ConfigProvider,
     agent,
     capture_manager,
     device_registry,
@@ -35,7 +38,6 @@ async def setup_tools(
             "rust_sidecar_client": ...,
         }
     """
-    import os
     from tools.coding import (
         ExecTool, ReadFileTool, WriteFileTool, EditFileTool,
         ListDirTool, FindFilesTool, GrepTool, ReadSkillTool,
@@ -52,7 +54,7 @@ async def setup_tools(
     from tools.sandbox import get_sandbox_operations
     from tools.remote_ops import get_ssh_operations
 
-    workspace = Path(os.getcwd())
+    workspace = resolve_runtime_root(config)
     coding_workspace = workspace
 
     # === Hook Registry ===

@@ -191,6 +191,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # Fixed: do not echo client data back (prevents reflection)
             await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
+        logger.debug("Status WebSocket disconnected")
+    finally:
         manager.disconnect(websocket)
 
 
@@ -317,4 +319,6 @@ async def chat_endpoint(websocket: WebSocket):
             else:
                 await websocket.send_json({"type": "error", "message": "Brain disconnected"})
     except WebSocketDisconnect:
+        logger.debug("Chat WebSocket disconnected [session_id=%s]", session_id)
+    finally:
         chat_manager.disconnect(websocket, session_id)

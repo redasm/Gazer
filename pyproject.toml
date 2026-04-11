@@ -7,7 +7,7 @@ name = "gazer"
 version = "0.1.0"
 description = "Desktop embodied AI companion with dual-brain cognitive architecture"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 
 dependencies = [
     "fastapi>=0.115.0",

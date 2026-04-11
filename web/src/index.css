@@ -393,6 +393,34 @@ main > * {
 }
 
 /* ---- Agent Kanban ---- */
+.agent-kanban-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-kanban-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-kanban-stage {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.agent-kanban-mission-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.agent-kanban-workbench {
+  align-items: start;
+}
+
 .agent-kanban-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -406,6 +434,21 @@ main > * {
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.agent-kanban-rail {
+  position: sticky;
+  top: 12px;
+}
+
+.agent-kanban-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-kanban-log-panel {
+  display: none;
 }
 
 .agent-kanban-column {

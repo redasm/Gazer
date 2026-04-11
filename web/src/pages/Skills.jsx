@@ -83,8 +83,6 @@ const Skills = ({ t }) => {
         setTimeout(() => setToast(null), 4000);
     };
 
-    useEffect(() => { fetchSkills(); }, []);
-
     const fetchSkills = async () => {
         try {
             const res = await axios.get(`${API_BASE}/skills`);
@@ -93,6 +91,13 @@ const Skills = ({ t }) => {
             console.error("Failed to fetch skills", err);
         }
     };
+
+    useEffect(() => {
+        const kickoff = setTimeout(() => {
+            void fetchSkills();
+        }, 0);
+        return () => clearTimeout(kickoff);
+    }, []);
 
     const builtinSkills = useMemo(() => skills.filter(s => s.builtin), [skills]);
     const extensionSkills = useMemo(() => skills.filter(s => !s.builtin), [skills]);

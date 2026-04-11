@@ -225,7 +225,6 @@ function App() {
                 config={config}
                 setConfig={setConfig}
                 saveConfig={saveConfig}
-                fetchConfig={fetchConfig}
                 t={t}
               />
             </Suspense>
@@ -240,7 +239,6 @@ function App() {
                 t={t}
                 config={config}
                 setConfig={setConfig}
-                saveConfig={saveConfig}
                 fetchConfig={fetchConfig}
               />
             </Suspense>

@@ -149,9 +149,7 @@ const WorkflowStudio = ({ t, showNotice }) => {
     const [clipboard, setClipboard] = useState(null);
     const [pasteCount, setPasteCount] = useState(0);
     const [historyMeta, setHistoryMeta] = useState({ canUndo: false, canRedo: false });
-    const [batchNodeType, setBatchNodeType] = useState('prompt');
-    const [batchPrefix, setBatchPrefix] = useState('');
-    const [batchSuffix, setBatchSuffix] = useState('');
+    const [batchNodeType] = useState('prompt');
     const [importPreview, setImportPreview] = useState(null);
     const [importPendingGraph, setImportPendingGraph] = useState(null);
     const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -739,25 +737,6 @@ const WorkflowStudio = ({ t, showNotice }) => {
         }));
         showNotice?.(t.noticeBatchTypeApplied || 'Batch node type updated', 'success');
     };
-    const applyLabelAffixesToSelectedNodes = () => {
-        if (!selectedNodeIds.length) {
-            showNotice?.(t.noticeSelectNodesFirst || 'Select nodes first', 'error');
-            return;
-        }
-        if (!batchPrefix && !batchSuffix) {
-            showNotice?.(t.noticeBatchLabelEmpty || 'Set prefix or suffix first', 'error');
-            return;
-        }
-        withGraphUpdate((prev) => ({
-            ...prev,
-            nodes: (prev.nodes || []).map((node) => {
-                if (!selectedNodeIds.includes(node.id)) return node;
-                const baseLabel = String(node.label || node.id);
-                return { ...node, label: `${batchPrefix}${baseLabel}${batchSuffix}` };
-            }),
-        }));
-        showNotice?.(t.noticeBatchLabelApplied || 'Batch labels updated', 'success');
-    };
     const clearSelectedNodeConfig = () => {
         if (!selectedNodeIds.length) {
             showNotice?.(t.noticeSelectNodesFirst || 'Select nodes first', 'error');
@@ -932,7 +911,7 @@ const WorkflowStudio = ({ t, showNotice }) => {
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [connectFrom, selectedEdgeId, selectedNodeIds, graph.nodes, graph.edges, viewport.scale, clipboard, pasteCount, batchNodeType, batchPrefix, batchSuffix]);
+    }, [connectFrom, selectedEdgeId, selectedNodeIds, graph.nodes, graph.edges, viewport.scale, clipboard, pasteCount, batchNodeType]);
 
     const updateSelectedNodeConfig = (patch) => {
         if (!selectedNode) return;
@@ -2201,7 +2180,9 @@ const WorkflowStudio = ({ t, showNotice }) => {
                                                 onChange={(e) => {
                                                     try {
                                                         updateSelectedNodeConfig({ args: JSON.parse(e.target.value || '{}') });
-                                                    } catch {}
+                                                    } catch {
+                                                        // Ignore transient JSON parse errors while the user is typing.
+                                                    }
                                                 }}
                                                 placeholder={t.toolArgs || 'Tool args JSON'}
                                             />

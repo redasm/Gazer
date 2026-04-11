@@ -63,7 +63,6 @@ COPY --from=web-build /web/dist ./web/dist
 COPY assets/ ./assets/
 COPY config/ ./config/
 COPY skills/ ./skills/
-COPY workflows/ ./workflows/
 COPY .env.example ./.env.example
 
 # Create data directories with correct ownership

@@ -4,131 +4,30 @@
 """
 
 import asyncio
-import fnmatch
 import logging
-import time
-import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
 
 from tools.base import CancellationToken, Tool
+from tools.registry_access import evaluate_tool_access_decision
+from tools.registry_definitions import list_tool_definitions
+from tools.registry_execute import evaluate_pre_execution_block, prepare_execution_context, run_tool_pipeline
+from tools.registry_errors import (
+    DEFAULT_TOOL_ERROR_HINTS,
+    format_tool_error,
+    new_tool_trace_id,
+)
+from tools.registry_policy import ToolPolicy, normalize_tool_policy
+from tools.registry_runtime import BudgetSettings, ToolRegistryRuntimeState
 from runtime.config_manager import config as gazer_config
-from runtime.rust_gate import push_tool_access_context
 
 if TYPE_CHECKING:
     from plugins.hooks import HookRegistry
 
 logger = logging.getLogger("ToolRegistry")
 
-@dataclass(frozen=True)
-class BudgetSettings:
-    """Parsed budget configuration for the tool execution rate limiter."""
-    enabled: bool = False
-    max_calls: int = 120
-    window_seconds: int = 60
-    max_weight: float = 120.0
-    group_caps: Dict[str, int] = field(default_factory=dict)
-    group_weights: Dict[str, float] = field(default_factory=dict)
-    tool_weights: Dict[str, float] = field(default_factory=dict)
-
-
-_DEFAULT_ERROR_HINTS: Dict[str, str] = {
-    "TOOL_NOT_FOUND": "Tool 名称不存在。先调用 tool definitions 获取可用工具列表，再重试。",
-    "TOOL_NOT_PERMITTED": "工具被安全策略拦截。检查 owner 权限 / allowlist 配置。",
-    "TOOL_PARAMS_INVALID": "参数不符合工具 schema。请根据工具 parameters 重新构建参数对象。",
-    "TOOL_CIRCUIT_OPEN": "该工具近期连续失败触发熔断。等待冷却或改用替代工具路径。",
-    "TOOL_BUDGET_EXCEEDED": "工具调用预算超限。降低调用频率或调整 security.tool_budget_* 配置。",
-    "TOOL_CANCELLED": "操作已取消。必要时重新发起请求。",
-    "TOOL_BLOCKED_BY_HOOK": "被插件 Hook 拦截。检查 plugins/hook 配置与日志。",
-    "TOOL_EXECUTION_FAILED": "执行失败。检查依赖、权限、网络、以及工具日志；避免重复相同调用。",
-}
-
-
-@dataclass
-class ToolPolicy:
-    """Per-agent tool policy."""
-
-    allow_names: Set[str] = field(default_factory=set)
-    deny_names: Set[str] = field(default_factory=set)
-    allow_providers: Set[str] = field(default_factory=set)
-    deny_providers: Set[str] = field(default_factory=set)
-    allow_model_providers: Set[str] = field(default_factory=set)
-    deny_model_providers: Set[str] = field(default_factory=set)
-    allow_model_names: Set[str] = field(default_factory=set)
-    deny_model_names: Set[str] = field(default_factory=set)
-    allow_model_selectors: Set[str] = field(default_factory=set)
-    deny_model_selectors: Set[str] = field(default_factory=set)
-
-
-def _normalize_policy_value(values: Any, *, lowercase: bool = False) -> Set[str]:
-    if not values:
-        return set()
-    if isinstance(values, str):
-        values = [values]
-    if not isinstance(values, list):
-        return set()
-    normalized: Set[str] = set()
-    for item in values:
-        value = str(item).strip()
-        if not value:
-            continue
-        normalized.add(value.lower() if lowercase else value)
-    return normalized
-
-
-def _normalize_model_selector_values(values: Any) -> Set[str]:
-    selectors = _normalize_policy_value(values, lowercase=True)
-    return {item for item in selectors if item not in {"/", "*"}}
-
-
-def normalize_tool_policy(policy: Optional[Dict[str, Any]], groups: Optional[Dict[str, List[str]]] = None) -> ToolPolicy:
-    """Normalize raw policy dict into ``ToolPolicy``."""
-    if not policy:
-        return ToolPolicy()
-    groups = groups or {}
-
-    allow_names = _normalize_policy_value(policy.get("allow_names"))
-    deny_names = _normalize_policy_value(policy.get("deny_names"))
-    allow_providers = _normalize_policy_value(policy.get("allow_providers"), lowercase=True)
-    deny_providers = _normalize_policy_value(policy.get("deny_providers"), lowercase=True)
-    allow_model_providers = _normalize_policy_value(
-        policy.get("allow_model_providers"),
-        lowercase=True,
-    )
-    deny_model_providers = _normalize_policy_value(
-        policy.get("deny_model_providers"),
-        lowercase=True,
-    )
-    allow_model_names = _normalize_policy_value(policy.get("allow_model_names"), lowercase=True)
-    deny_model_names = _normalize_policy_value(policy.get("deny_model_names"), lowercase=True)
-    allow_model_selectors = _normalize_model_selector_values(policy.get("allow_model_selectors"))
-    deny_model_selectors = _normalize_model_selector_values(policy.get("deny_model_selectors"))
-
-    for group_name in _normalize_policy_value(policy.get("allow_groups")):
-        names = groups.get(group_name, [])
-        if not names:
-            logger.warning("Unknown/empty allow_group: %s", group_name)
-        allow_names.update(_normalize_policy_value(names))
-
-    for group_name in _normalize_policy_value(policy.get("deny_groups")):
-        names = groups.get(group_name, [])
-        if not names:
-            logger.warning("Unknown/empty deny_group: %s", group_name)
-        deny_names.update(_normalize_policy_value(names))
-
-    return ToolPolicy(
-        allow_names=allow_names,
-        deny_names=deny_names,
-        allow_providers=allow_providers,
-        deny_providers=deny_providers,
-        allow_model_providers=allow_model_providers,
-        deny_model_providers=deny_model_providers,
-        allow_model_names=allow_model_names,
-        deny_model_names=deny_model_names,
-        allow_model_selectors=allow_model_selectors,
-        deny_model_selectors=deny_model_selectors,
-    )
+_DEFAULT_ERROR_HINTS: Dict[str, str] = DEFAULT_TOOL_ERROR_HINTS
 
 
 class ToolRegistry:
@@ -146,12 +45,7 @@ class ToolRegistry:
         self._allowlist: Set[str] = set()
         # Hook registry (injected after init to avoid circular imports)
         self._hooks: Optional["HookRegistry"] = None
-        # Per-tool failure tracker for lightweight circuit breaking.
-        self._failure_state: Dict[str, Dict[str, float]] = {}
-        # Rolling events for global tool-call budget.
-        self._budget_events: List[Dict[str, float | str]] = []
-        # Rolling governance rejection events (policy/circuit/budget).
-        self._rejection_events: deque[Dict[str, Any]] = deque(maxlen=300)
+        self._runtime_state = ToolRegistryRuntimeState()
 
     @staticmethod
     def _error(code: str, message: str, *, trace_id: str = "", hint: str = "") -> str:
@@ -160,17 +54,11 @@ class ToolRegistry:
         Keep the first line as `Error [CODE]: ...` so AgentLoop can parse `error_code`.
         Additional fields are appended on separate lines to stay human-readable.
         """
-        head = f"Error [{code}]: {message}"
-        if trace_id:
-            head = f"{head} (trace_id={trace_id})"
-        resolved_hint = str(hint or _DEFAULT_ERROR_HINTS.get(code, "")).strip()
-        if not resolved_hint:
-            return head
-        return f"{head}\nHint: {resolved_hint}"
+        return format_tool_error(code, message, trace_id=trace_id, hint=hint)
 
     @staticmethod
     def _new_trace_id() -> str:
-        return f"trc_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        return new_tool_trace_id()
 
     def _record_rejection_event(
         self,
@@ -182,16 +70,13 @@ class ToolRegistry:
         trace_id: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self._rejection_events.append(
-            {
-                "ts": time.time(),
-                "code": str(code),
-                "tool": str(name),
-                "provider": str(provider or "core"),
-                "reason": str(reason or ""),
-                "trace_id": str(trace_id),
-                "metadata": dict(metadata or {}),
-            }
+        self._runtime_state.record_rejection_event(
+            code=code,
+            name=name,
+            provider=provider,
+            reason=reason,
+            trace_id=trace_id,
+            metadata=metadata,
         )
 
     def set_hook_registry(self, hooks: "HookRegistry") -> None:
@@ -266,135 +151,36 @@ class ToolRegistry:
             tool_weights=tool_weights,
         )
 
-    def _trim_budget_events(self, *, window_seconds: int) -> None:
-        if not self._budget_events:
-            return
-        cutoff = time.time() - float(window_seconds)
-        self._budget_events = [
-            item for item in self._budget_events if float(item.get("ts", 0.0)) >= cutoff
-        ]
-
-    def _resolve_budget_weight(
-        self,
-        *,
-        tool_name: str,
-        provider: str,
-        group_weights: Dict[str, float],
-        tool_weights: Dict[str, float],
-    ) -> float:
-        name_key = str(tool_name).strip().lower()
-        provider_key = str(provider).strip().lower()
-        if name_key in tool_weights:
-            return max(0.01, float(tool_weights[name_key]))
-        group_weight = float(group_weights.get(provider_key, 1.0))
-        return max(0.01, group_weight)
-
     def _record_budget_usage(self, *, name: str, provider: str, weight: float) -> None:
         bs = self._budget_settings()
-        if not bs.enabled:
-            return
-        self._trim_budget_events(window_seconds=bs.window_seconds)
-        self._budget_events.append(
-            {"ts": time.time(), "tool": name, "provider": provider, "weight": float(weight)}
-        )
-
-    def _budget_state(self) -> tuple[int, float, Dict[str, int]]:
-        total_calls = len(self._budget_events)
-        total_weight = 0.0
-        by_group: Dict[str, int] = {}
-        for item in self._budget_events:
-            provider = str(item.get("provider", "core")).strip().lower() or "core"
-            by_group[provider] = by_group.get(provider, 0) + 1
-            try:
-                total_weight += float(item.get("weight", 1.0))
-            except (TypeError, ValueError):
-                total_weight += 1.0
-        return total_calls, round(total_weight, 4), by_group
+        self._runtime_state.record_budget_usage(name=name, provider=provider, weight=weight, settings=bs)
 
     def get_budget_runtime_status(self) -> Dict[str, Any]:
         """Return current tool-budget runtime status for observability."""
         bs = self._budget_settings()
-        self._trim_budget_events(window_seconds=bs.window_seconds)
-        used_calls, used_weight, by_group = self._budget_state()
-        group_usage = {
-            key: {
-                "used_calls": int(by_group.get(key, 0)),
-                "cap_calls": int(bs.group_caps[key]) if key in bs.group_caps else None,
-                "remaining_calls": (
-                    max(0, int(bs.group_caps[key]) - int(by_group.get(key, 0)))
-                    if key in bs.group_caps
-                    else None
-                ),
-            }
-            for key in sorted(set(by_group.keys()) | set(bs.group_caps.keys()))
-        }
-        return {
-            "enabled": bool(bs.enabled),
-            "window_seconds": int(bs.window_seconds),
-            "max_calls": int(bs.max_calls),
-            "used_calls": int(used_calls),
-            "remaining_calls": max(0, int(bs.max_calls) - int(used_calls)),
-            "max_weight": float(bs.max_weight),
-            "used_weight": float(used_weight),
-            "remaining_weight": round(max(0.0, float(bs.max_weight) - float(used_weight)), 4),
-            "group_caps": {k: int(v) for k, v in sorted(bs.group_caps.items())},
-            "group_usage": group_usage,
-        }
+        return self._runtime_state.budget_runtime_status(bs)
 
     def get_recent_rejection_events(self, *, limit: int = 50) -> List[Dict[str, Any]]:
         """Return most recent governance rejection events (newest first)."""
         safe_limit = max(1, min(int(limit), 500))
-        items = list(self._rejection_events)
-        return list(reversed(items[-safe_limit:]))
+        return self._runtime_state.recent_rejection_events(limit=safe_limit)
 
     def _is_budget_exceeded(self, *, name: str, provider: str) -> tuple[bool, str]:
         bs = self._budget_settings()
-        if not bs.enabled:
-            return False, ""
-        self._trim_budget_events(window_seconds=bs.window_seconds)
-        calls, used_weight, by_group = self._budget_state()
-        if calls >= bs.max_calls:
-            return True, "max_calls"
-        provider_key = str(provider).strip().lower() or "core"
-        if provider_key in bs.group_caps and by_group.get(provider_key, 0) >= int(bs.group_caps[provider_key]):
-            return True, f"group_calls:{provider_key}"
-        next_weight = self._resolve_budget_weight(
-            tool_name=name,
-            provider=provider_key,
-            group_weights=bs.group_weights,
-            tool_weights=bs.tool_weights,
-        )
-        if used_weight + next_weight > bs.max_weight:
-            return True, "max_weight"
-        return False, ""
+        return self._runtime_state.is_budget_exceeded(name=name, provider=provider, settings=bs)
 
     def _is_circuit_open(self, name: str) -> bool:
-        state = self._failure_state.get(name)
-        if not state:
-            return False
-        open_until = float(state.get("open_until", 0.0))
-        if open_until <= 0:
-            return False
-        now = time.time()
-        if now >= open_until:
-            state["open_until"] = 0.0
-            state["failures"] = 0.0
-            return False
-        return True
+        return self._runtime_state.is_circuit_open(name)
 
     def _record_tool_outcome(self, name: str, result: str) -> None:
         enabled, threshold, cooldown = self._circuit_settings()
-        if not enabled:
-            return
-        state = self._failure_state.setdefault(name, {"failures": 0.0, "open_until": 0.0})
-        if str(result).startswith("Error"):
-            failures = int(state.get("failures", 0.0)) + 1
-            state["failures"] = float(failures)
-            if failures >= threshold:
-                state["open_until"] = time.time() + cooldown
-        else:
-            state["failures"] = 0.0
-            state["open_until"] = 0.0
+        self._runtime_state.record_tool_outcome(
+            name,
+            result,
+            enabled=enabled,
+            threshold=threshold,
+            cooldown=cooldown,
+        )
 
     # ------------------------------------------------------------------
     # Registration
@@ -466,36 +252,6 @@ class ToolRegistry:
         return False
 
 
-    @staticmethod
-    def _normalize_model_context(model_provider: str, model_name: str) -> tuple[str, str]:
-        provider = str(model_provider or "").strip().lower()
-        model = str(model_name or "").strip().lower()
-        if not provider and model:
-            if "/" in model:
-                provider, model = model.split("/", 1)
-            elif ":" in model:
-                provider_candidate, maybe_model = model.split(":", 1)
-                if provider_candidate and maybe_model:
-                    provider = provider_candidate
-                    model = maybe_model
-        return provider, model
-
-    @staticmethod
-    def _matches_model_selector(selector: str, *, model_provider: str, model_name: str) -> bool:
-        raw = str(selector or "").strip().lower()
-        if not raw:
-            return False
-        if "/" in raw:
-            provider_pattern, model_pattern = raw.split("/", 1)
-        else:
-            provider_pattern, model_pattern = "*", raw
-        provider_pattern = provider_pattern or "*"
-        model_pattern = model_pattern or "*"
-        return (
-            fnmatch.fnmatch(model_provider, provider_pattern)
-            and fnmatch.fnmatch(model_name, model_pattern)
-        )
-
     def _is_allowed(
         self,
         name: str,
@@ -528,286 +284,22 @@ class ToolRegistry:
     ) -> Dict[str, Any]:
         """Return structured access evaluation for a tool."""
         tool = self._tools.get(name)
-        if tool is None:
-            return {
-                "tool": name,
-                "exists": False,
-                "allowed": False,
-                "reason": "not_found",
-            }
-
-        provider = self._tool_provider(tool)
-        resolved_model_provider, resolved_model_name = self._normalize_model_context(
+        owner_context_available = self._has_sender_context(channel=channel, sender_id=sender_id)
+        return evaluate_tool_access_decision(
+            name=name,
+            tool=tool,
+            denylist=self._denylist,
+            allowlist=self._allowlist,
+            policy=policy,
+            sender_id=sender_id,
+            channel=channel,
             model_provider=model_provider,
             model_name=model_name,
+            provider=self._tool_provider(tool) if tool is not None else "",
+            owner_context_available=owner_context_available,
+            owner_sender=self._is_owner_sender(channel=channel, sender_id=sender_id) if owner_context_available else False,
+            owner_only=self._is_owner_only_tool(tool) if tool is not None else False,
         )
-        has_model_context = bool(resolved_model_provider and resolved_model_name)
-        rule_chain: List[Dict[str, Any]] = []
-
-        def _append_rule(rule: str, allowed: bool, reason: str, details: Optional[Dict[str, Any]] = None) -> None:
-            rule_chain.append(
-                {
-                    "rule": str(rule),
-                    "allowed": bool(allowed),
-                    "reason": str(reason),
-                    "details": dict(details or {}),
-                }
-            )
-
-        decision = {
-            "tool": name,
-            "exists": True,
-            "provider": provider,
-            "owner_only": tool.owner_only,
-            "model_context": {
-                "provider": resolved_model_provider,
-                "model": resolved_model_name,
-                "available": has_model_context,
-            },
-            "allowed": True,
-            "reason": "allowed",
-            "checks": {
-                "global_allowlist": True,
-                "global_denylist": True,
-                "policy_allow_names": True,
-                "policy_deny_names": True,
-                "policy_allow_providers": True,
-                "policy_deny_providers": True,
-                "policy_allow_model_providers": True,
-                "policy_deny_model_providers": True,
-                "policy_allow_model_names": True,
-                "policy_deny_model_names": True,
-                "policy_allow_model_selectors": True,
-                "policy_deny_model_selectors": True,
-                "owner_only": True,
-                "system": True,
-            },
-            "rule_chain": rule_chain,
-        }
-
-        if name in self._denylist:
-            decision["allowed"] = False
-            decision["reason"] = "blocked_by_global_denylist"
-            decision["checks"]["global_denylist"] = False
-            _append_rule("global_denylist", False, "tool listed in global denylist")
-            return decision
-        _append_rule("global_denylist", True, "tool not in global denylist")
-        if self._allowlist and name not in self._allowlist:
-            decision["allowed"] = False
-            decision["reason"] = "blocked_by_global_allowlist"
-            decision["checks"]["global_allowlist"] = False
-            _append_rule("global_allowlist", False, "tool missing in global allowlist")
-            return decision
-        _append_rule(
-            "global_allowlist",
-            True,
-            "global allowlist empty or tool explicitly allowed",
-        )
-
-        owner_context_available = self._has_sender_context(channel=channel, sender_id=sender_id)
-        owner_sender = (
-            self._is_owner_sender(channel=channel, sender_id=sender_id)
-            if owner_context_available
-            else False
-        )
-        if self._is_owner_only_tool(tool):
-            if owner_context_available and not owner_sender:
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_owner_only"
-                decision["checks"]["owner_only"] = False
-                _append_rule(
-                    "owner_only",
-                    False,
-                    "tool is owner-only and sender is not owner",
-                    {
-                        "owner_sender": owner_sender,
-                        "sender_id": str(sender_id or "").strip(),
-                        "channel": str(channel or "").strip(),
-                    },
-                )
-                return decision
-            if not owner_context_available:
-                # Fail-closed: deny owner-only tools when sender context is
-                # unavailable to prevent accidental privilege escalation.
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_owner_only_no_context"
-                decision["checks"]["owner_only"] = False
-                _append_rule(
-                    "owner_only",
-                    False,
-                    "tool is owner-only; sender context unavailable, access denied (fail-closed)",
-                )
-                return decision
-            _append_rule(
-                "owner_only",
-                True,
-                "tool is owner-only and sender is owner",
-                {
-                    "owner_sender": owner_sender,
-                    "context_available": owner_context_available,
-                },
-            )
-        else:
-            _append_rule("owner_only", True, "tool is not owner-only")
-
-        if policy is not None:
-            if name in policy.deny_names:
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_policy_deny_names"
-                decision["checks"]["policy_deny_names"] = False
-                _append_rule("policy_deny_names", False, "tool explicitly denied by policy")
-                return decision
-            _append_rule("policy_deny_names", True, "tool not denied by policy name rules")
-            if provider in policy.deny_providers:
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_policy_deny_providers"
-                decision["checks"]["policy_deny_providers"] = False
-                _append_rule("policy_deny_providers", False, "tool provider denied by policy")
-                return decision
-            _append_rule("policy_deny_providers", True, "tool provider not denied by policy")
-            if policy.allow_names and name not in policy.allow_names:
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_policy_allow_names"
-                decision["checks"]["policy_allow_names"] = False
-                _append_rule("policy_allow_names", False, "tool not in policy allow_names")
-                return decision
-            _append_rule(
-                "policy_allow_names",
-                True,
-                "allow_names empty or tool matched allow_names",
-            )
-            if policy.allow_providers and provider not in policy.allow_providers:
-                decision["allowed"] = False
-                decision["reason"] = "blocked_by_policy_allow_providers"
-                decision["checks"]["policy_allow_providers"] = False
-                _append_rule("policy_allow_providers", False, "tool provider not in allow_providers")
-                return decision
-            _append_rule(
-                "policy_allow_providers",
-                True,
-                "allow_providers empty or provider matched",
-            )
-
-            if has_model_context:
-                if resolved_model_provider in policy.deny_model_providers:
-                    decision["allowed"] = False
-                    decision["reason"] = "blocked_by_policy_deny_model_providers"
-                    decision["checks"]["policy_deny_model_providers"] = False
-                    _append_rule("policy_deny_model_providers", False, "model provider denied by policy")
-                    return decision
-                _append_rule(
-                    "policy_deny_model_providers",
-                    True,
-                    "model provider not denied by policy",
-                )
-                if policy.allow_model_providers and resolved_model_provider not in policy.allow_model_providers:
-                    decision["allowed"] = False
-                    decision["reason"] = "blocked_by_policy_allow_model_providers"
-                    decision["checks"]["policy_allow_model_providers"] = False
-                    _append_rule(
-                        "policy_allow_model_providers",
-                        False,
-                        "model provider not in allow_model_providers",
-                    )
-                    return decision
-                _append_rule(
-                    "policy_allow_model_providers",
-                    True,
-                    "allow_model_providers empty or model provider matched",
-                )
-
-                if resolved_model_name in policy.deny_model_names:
-                    decision["allowed"] = False
-                    decision["reason"] = "blocked_by_policy_deny_model_names"
-                    decision["checks"]["policy_deny_model_names"] = False
-                    _append_rule("policy_deny_model_names", False, "model denied by policy")
-                    return decision
-                _append_rule("policy_deny_model_names", True, "model not denied by policy")
-                if policy.allow_model_names and resolved_model_name not in policy.allow_model_names:
-                    decision["allowed"] = False
-                    decision["reason"] = "blocked_by_policy_allow_model_names"
-                    decision["checks"]["policy_allow_model_names"] = False
-                    _append_rule("policy_allow_model_names", False, "model not in allow_model_names")
-                    return decision
-                _append_rule(
-                    "policy_allow_model_names",
-                    True,
-                    "allow_model_names empty or model matched",
-                )
-
-                for selector in sorted(policy.deny_model_selectors):
-                    if self._matches_model_selector(
-                        selector,
-                        model_provider=resolved_model_provider,
-                        model_name=resolved_model_name,
-                    ):
-                        decision["allowed"] = False
-                        decision["reason"] = "blocked_by_policy_deny_model_selectors"
-                        decision["checks"]["policy_deny_model_selectors"] = False
-                        _append_rule(
-                            "policy_deny_model_selectors",
-                            False,
-                            "model matched deny selector",
-                            {"selector": selector},
-                        )
-                        return decision
-                _append_rule(
-                    "policy_deny_model_selectors",
-                    True,
-                    "model did not match deny selectors",
-                )
-                if policy.allow_model_selectors:
-                    allow_hit = None
-                    for selector in sorted(policy.allow_model_selectors):
-                        if self._matches_model_selector(
-                            selector,
-                            model_provider=resolved_model_provider,
-                            model_name=resolved_model_name,
-                        ):
-                            allow_hit = selector
-                            break
-                    if not allow_hit:
-                        decision["allowed"] = False
-                        decision["reason"] = "blocked_by_policy_allow_model_selectors"
-                        decision["checks"]["policy_allow_model_selectors"] = False
-                        _append_rule(
-                            "policy_allow_model_selectors",
-                            False,
-                            "model did not match allow selectors",
-                        )
-                        return decision
-                    _append_rule(
-                        "policy_allow_model_selectors",
-                        True,
-                        "model matched allow selector",
-                        {"selector": allow_hit},
-                    )
-                else:
-                    _append_rule(
-                        "policy_allow_model_selectors",
-                        True,
-                        "allow_model_selectors empty",
-                    )
-            else:
-                _append_rule(
-                    "policy_model_context",
-                    True,
-                    "model context unavailable; model-level rules skipped",
-                    {
-                        "allow_rules": bool(
-                            policy.allow_model_providers
-                            or policy.allow_model_names
-                            or policy.allow_model_selectors
-                        ),
-                        "deny_rules": bool(
-                            policy.deny_model_providers
-                            or policy.deny_model_names
-                            or policy.deny_model_selectors
-                        ),
-                    },
-                )
-
-        return decision
 
     def simulate_access(
         self,
@@ -850,18 +342,15 @@ class ToolRegistry:
         model_name: str = "",
     ) -> List[Dict[str, Any]]:
         """Get tool definitions in OpenAI format, filtered by policy."""
-        return [
-            tool.to_schema()
-            for tool in self._tools.values()
-            if self._is_allowed(
-                tool.name,
-                policy=policy,
-                sender_id=sender_id,
-                channel=channel,
-                model_provider=model_provider,
-                model_name=model_name,
-            )
-        ]
+        return list_tool_definitions(
+            self._tools,
+            is_allowed=self._is_allowed,
+            policy=policy,
+            sender_id=sender_id,
+            channel=channel,
+            model_provider=model_provider,
+            model_name=model_name,
+        )
 
     async def execute(
         self,
@@ -891,140 +380,86 @@ class ToolRegistry:
             return self._error("TOOL_NOT_FOUND", f"Tool '{name}' not found", trace_id=trace_id)
         provider = self._tool_provider(tool)
 
-        if not self._is_allowed(
+        access = self.evaluate_tool_access(
             name,
             policy=policy,
             sender_id=sender_id,
             channel=channel,
             model_provider=model_provider,
             model_name=model_name,
-        ):
-            logger.warning("Tool '%s' blocked by safety policy (owner_only=%s)", name, tool.owner_only)
-            access = self.evaluate_tool_access(
-                name,
-                policy=policy,
-                sender_id=sender_id,
-                channel=channel,
-                model_provider=model_provider,
-                model_name=model_name,
-            )
-            reason = str(access.get("reason", "policy"))
-            self._record_rejection_event(
-                code="TOOL_NOT_PERMITTED",
-                name=name,
-                provider=provider,
-                reason=reason,
-                trace_id=trace_id,
-                metadata={
-                    "owner_only": tool.owner_only,
-                    "channel": str(channel or "").strip(),
-                    "sender_id": str(sender_id or "").strip(),
-                    "model_provider": str(model_provider or "").strip().lower(),
-                    "model_name": str(model_name or "").strip().lower(),
-                },
-            )
-            message = (
-                f"Tool '{name}' is restricted to owner channels."
-                if reason == "blocked_by_owner_only"
-                else f"Tool '{name}' is not permitted for the current trust level."
-            )
-            return self._error(
-                "TOOL_NOT_PERMITTED",
-                message,
-                trace_id=trace_id,
-            )
-
+        )
         enabled, _threshold, _cooldown = self._circuit_settings()
-        if enabled and self._is_circuit_open(name):
-            self._record_rejection_event(
-                code="TOOL_CIRCUIT_OPEN",
-                name=name,
-                provider=provider,
-                reason="circuit_open",
-                trace_id=trace_id,
-            )
-            return self._error(
-                "TOOL_CIRCUIT_OPEN",
-                f"Tool '{name}' is temporarily blocked after repeated failures.",
-                trace_id=trace_id,
-            )
         budget_exceeded, budget_reason = self._is_budget_exceeded(name=name, provider=provider)
-        if budget_exceeded:
-            status = self.get_budget_runtime_status()
-            self._record_rejection_event(
-                code="TOOL_BUDGET_EXCEEDED",
-                name=name,
-                provider=provider,
-                reason=budget_reason or "budget_exceeded",
-                trace_id=trace_id,
-                metadata={
-                    "used_calls": int(status.get("used_calls", 0)),
-                    "max_calls": int(status.get("max_calls", 0)),
-                    "used_weight": float(status.get("used_weight", 0.0)),
-                    "max_weight": float(status.get("max_weight", 0.0)),
-                },
-            )
-            return self._error(
-                "TOOL_BUDGET_EXCEEDED",
-                f"Tool execution budget exceeded for current rolling window ({budget_reason}).",
-                trace_id=trace_id,
-            )
+        precheck_error = evaluate_pre_execution_block(
+            access_allowed=bool(access.get("allowed", False)),
+            access_reason=str(access.get("reason", "policy")),
+            tool_owner_only=bool(tool.owner_only),
+            trace_id=trace_id,
+            name=name,
+            provider=provider,
+            channel=channel,
+            sender_id=sender_id,
+            model_provider=model_provider,
+            model_name=model_name,
+            circuit_open=bool(enabled and self._is_circuit_open(name)),
+            budget_exceeded=bool(budget_exceeded),
+            budget_reason=str(budget_reason or ""),
+            budget_status=self.get_budget_runtime_status() if budget_exceeded else None,
+            record_rejection_event=self._record_rejection_event,
+            error_builder=self._error,
+        )
+        if precheck_error:
+            logger.warning("Tool '%s' blocked by pre-execution guard (owner_only=%s)", name, tool.owner_only)
+            return precheck_error
 
         try:
             bs = self._budget_settings()
-            budget_weight = self._resolve_budget_weight(
-                tool_name=name,
-                provider=provider,
-                group_weights=bs.group_weights,
-                tool_weights=bs.tool_weights,
+            prep_error, _budget_weight = prepare_execution_context(
+                tool=tool,
+                name=name,
+                params=params,
+                cancel_token=cancel_token,
+                trace_id=trace_id,
+                budget_settings=bs,
+                resolve_budget_weight=lambda **kwargs: self._runtime_state.resolve_budget_weight(
+                    tool_name=kwargs["tool_name"],
+                    provider=provider,
+                    group_weights=kwargs["group_weights"],
+                    tool_weights=kwargs["tool_weights"],
+                ),
+                record_budget_usage=lambda **kwargs: self._record_budget_usage(
+                    name=kwargs["name"],
+                    provider=provider,
+                    weight=kwargs["weight"],
+                ),
+                error_builder=self._error,
             )
-            if bs.enabled:
-                self._record_budget_usage(name=name, provider=provider, weight=budget_weight)
-            if cancel_token and cancel_token.is_cancelled:
-                return self._error(
-                    "TOOL_CANCELLED",
-                    f"Operation cancelled before executing '{name}'.",
-                    trace_id=trace_id,
-                )
-            errors = tool.validate_params(params)
-            if errors:
-                return self._error(
-                    "TOOL_PARAMS_INVALID",
-                    f"Invalid parameters for tool '{name}': " + "; ".join(errors),
-                    trace_id=trace_id,
-                )
+            if prep_error:
+                return prep_error
 
-            # --- Hook: before_tool_call ---
-            effective_params = params
-            if self._hooks:
+            owner_context_available = self._has_sender_context(channel=channel, sender_id=sender_id)
+            owner_sender = self._is_owner_sender(channel=channel, sender_id=sender_id) if owner_context_available else False
+            try:
+                result = await run_tool_pipeline(
+                    tool=tool,
+                    name=name,
+                    params=params,
+                    hooks=self._hooks,
+                    policy=policy,
+                    sender_id=sender_id,
+                    channel=channel,
+                    sender_is_owner=owner_sender,
+                )
+            except Exception as hook_exc:
                 from plugins.hooks import HookAbort
-                try:
-                    effective_params = await self._hooks.run_before_tool_call(name, params)
-                except HookAbort as abort:
+
+                if isinstance(hook_exc, HookAbort):
                     return self._error(
                         "TOOL_BLOCKED_BY_HOOK",
-                        f"Blocked by hook: {abort.reason}",
+                        f"Blocked by hook: {hook_exc.reason}",
                         trace_id=trace_id,
                     )
-
-            # Pass execution trust context to tools that need nested policy enforcement
-            # (e.g. workflow tools that trigger additional tool calls).
-            if isinstance(effective_params, dict):
-                effective_params = dict(effective_params)
-
-                effective_params.setdefault("_access_policy", policy)
-                effective_params.setdefault("_access_sender_id", str(sender_id or ""))
-                effective_params.setdefault("_access_channel", str(channel or ""))
-                owner_context_available = self._has_sender_context(channel=channel, sender_id=sender_id)
-                owner_sender = self._is_owner_sender(channel=channel, sender_id=sender_id) if owner_context_available else False
-                effective_params.setdefault("_access_sender_is_owner", owner_sender)
-
-            with push_tool_access_context(channel=str(channel or ""), sender_id=str(sender_id or "")):
-                result = await tool.execute(**effective_params)
-
-            # --- Hook: after_tool_call ---
-            if self._hooks:
-                result = await self._hooks.run_after_tool_call(name, effective_params, result)
+                raise
 
             self._record_tool_outcome(name, str(result))
 

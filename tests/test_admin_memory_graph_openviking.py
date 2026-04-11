@@ -103,3 +103,21 @@ async def test_memory_graph_prefers_openviking_sources(monkeypatch, tmp_path: Pa
     assert any("user_identity" in name for name in names)
     assert "LegacyOnly" not in names
     assert len(links) > 0
+
+
+@pytest.mark.asyncio
+async def test_memory_graph_ignores_invalid_long_term_json_with_debug_log(monkeypatch, tmp_path: Path, caplog):
+    ov_dir = tmp_path / "openviking"
+    long_term_dir = ov_dir / "long_term"
+    long_term_dir.mkdir(parents=True, exist_ok=True)
+    (long_term_dir / "profile.json").write_text("{broken", encoding="utf-8")
+
+    fake_mm = _FakeMemoryManager(base_path=tmp_path / "legacy_memory", backend_path=ov_dir)
+    monkeypatch.setattr(admin_api, "_get_memory_manager", lambda: fake_mm)
+
+    with caplog.at_level("DEBUG"):
+        payload = await admin_api.get_memory_graph()
+
+    assert "nodes" in payload
+    assert "links" in payload
+    assert "Failed to read JSON memory graph source" in caplog.text

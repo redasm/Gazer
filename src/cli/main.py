@@ -26,6 +26,8 @@ _SRC = _PROJECT_ROOT / "src"
 if _SRC.exists() and str(_SRC) not in sys.path:
     sys.path.append(str(_SRC))
 
+logger = logging.getLogger("GazerCLI")
+
 
 def _setup_logging(verbose: bool) -> None:
     logging.basicConfig(
@@ -61,7 +63,7 @@ def start(ctx: click.Context) -> None:
         try:
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         except Exception:
-            pass
+            logger.debug("Failed to set Windows selector event loop policy", exc_info=True)
 
     # Re-use the existing main() from main.py
     sys.path.insert(0, str(_PROJECT_ROOT))
@@ -213,7 +215,7 @@ def _run_doctor() -> None:
         sym = ok if pct < 90 else warn
         click.echo(f"  {sym} Disk: {pct:.0f}% used ({free // (1024**3)} GB free)")
     except Exception:
-        pass
+        logger.debug("Failed to inspect disk usage during doctor run", exc_info=True)
 
     # 11. Port availability
     import socket
@@ -228,7 +230,7 @@ def _run_doctor() -> None:
             else:
                 click.echo(f"  {ok} Port {api_port} available")
     except Exception:
-        pass
+        logger.debug("Failed to inspect admin API port availability", exc_info=True)
 
     # Summary
     click.echo()

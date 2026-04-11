@@ -32,6 +32,7 @@ from flow.models import (
 from flow.parser import discover_flows, interpolate
 from flow.safe_eval import safe_eval, safe_eval_bool, SafeEvalError
 from flow.state import StateStore
+from runtime.protocols import ToolExecutionPort
 from runtime.resilience import RetryBudget, classify_error_message
 
 logger = logging.getLogger("FlowEngine")
@@ -48,7 +49,7 @@ class FlowEngine:
 
     def __init__(
         self,
-        tool_registry: Any,
+        tool_registry: ToolExecutionPort,
         llm_provider: Any = None,
         state_store: Optional[StateStore] = None,
         flow_dirs: Optional[List[Path]] = None,
@@ -460,8 +461,12 @@ class FlowEngine:
         if isinstance(result, str):
             try:
                 output = json.loads(result)
-            except (json.JSONDecodeError, ValueError):
-                pass
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.debug(
+                    "Tool '%s' returned non-JSON output; preserving raw string result",
+                    tool_name,
+                    exc_info=exc,
+                )
         return StepResult(output=output)
 
     async def _run_llm_task(self, args: Dict[str, Any]) -> StepResult:
@@ -521,6 +526,23 @@ class FlowEngine:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _build_safe_eval_names(ctx: FlowContext) -> Dict[str, Any]:
+        steps_payload = {
+            step_id: {
+                "output": result.output,
+                "error": result.error,
+                "skipped": result.skipped,
+            }
+            for step_id, result in ctx.steps.items()
+        }
+        return {
+            "args": ctx.args,
+            "steps": steps_payload,
+            "state": ctx.state,
+            "item": ctx.item,
+        }
+
+    @staticmethod
     def _eval_condition(expr: str, ctx: FlowContext) -> bool:
         """Evaluate a condition expression using safe AST-based evaluation.
 
@@ -529,13 +551,7 @@ class FlowEngine:
 
         Uses flow.safe_eval to prevent code injection attacks.
         """
-        names = {
-            "args": ctx.args,
-            "steps": ctx.steps,
-            "state": ctx.state,
-            "item": ctx.item,
-        }
-        return safe_eval_bool(expr, names)
+        return safe_eval_bool(expr, FlowEngine._build_safe_eval_names(ctx))
 
     # ------------------------------------------------------------------
     # on_complete state updates
@@ -550,12 +566,7 @@ class FlowEngine:
 
         Uses flow.safe_eval to prevent code injection attacks.
         """
-        names = {
-            "args": ctx.args,
-            "steps": ctx.steps,
-            "state": ctx.state,
-            "item": ctx.item,
-        }
+        names = FlowEngine._build_safe_eval_names(ctx)
         for key, expr in updates.items():
             try:
                 ctx.state[key] = safe_eval(expr, names)

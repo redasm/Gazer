@@ -16,7 +16,7 @@ import os
 import signal
 import sys
 from pathlib import Path
-from typing import Any, Dict, Callable, Awaitable, Optional
+from typing import Any, Dict, Callable, Optional
 
 from agent.adapter import GazerAgent
 from tools.coding import (
@@ -68,8 +68,8 @@ class InteractiveCLI:
 
         self._flow_engine = None  # Initialized in _setup()
 
-        # Slash command registry: name -> async handler
-        self._commands: Dict[str, Callable[..., Awaitable[None]]] = {
+        # Slash command registry: name -> handler (sync or async)
+        self._commands: Dict[str, Callable[..., Any]] = {
             "help": self._cmd_help,
             "quit": self._cmd_quit,
             "exit": self._cmd_quit,
@@ -185,7 +185,12 @@ class InteractiveCLI:
     # Slash commands
     # ------------------------------------------------------------------
 
-    async def _cmd_help(self, _args: str) -> None:
+    async def _invoke_command(self, handler: Callable[..., Any], args: str) -> None:
+        result = handler(args)
+        if asyncio.iscoroutine(result):
+            await result
+
+    def _cmd_help(self, _args: str) -> None:
         print(f"""
 {_BOLD}Slash commands:{_RESET}
   {_GREEN}/help{_RESET}            Show this message
@@ -204,7 +209,7 @@ class InteractiveCLI:
   {_GREEN}/quit{_RESET}            Exit the CLI
 """)
 
-    async def _cmd_quit(self, _args: str) -> None:
+    def _cmd_quit(self, _args: str) -> None:
         self._running = False
         print(f"{_DIM}Goodbye!{_RESET}")
 
@@ -261,7 +266,7 @@ class InteractiveCLI:
         )
         print(result)
 
-    async def _cmd_tools(self, _args: str) -> None:
+    def _cmd_tools(self, _args: str) -> None:
         names = self.agent.loop.tools.tool_names
         print(f"{_BOLD}Registered tools ({len(names)}):{_RESET}")
         for n in sorted(names):
@@ -270,13 +275,13 @@ class InteractiveCLI:
             desc = (tool.description[:60] + "...") if tool and len(tool.description) > 60 else (tool.description if tool else "")
             print(f"  {_GREEN}{n:20s}{_RESET} [{owner:10s}] {desc}")
 
-    async def _cmd_new_session(self, _args: str) -> None:
+    def _cmd_new_session(self, _args: str) -> None:
         """Reset the current session (clear conversation history)."""
         session_key = "gazer:main"
         self.agent.loop.reset_session(session_key)
         print(f"{_CYAN}Session reset. Starting fresh.{_RESET}")
 
-    async def _cmd_cron(self, args: str) -> None:
+    def _cmd_cron(self, args: str) -> None:
         """List cron jobs (pass args to the cron tool for add/remove)."""
         if not self._cron_scheduler:
             print(f"{_YELLOW}Cron scheduler is disabled.{_RESET}")
@@ -481,7 +486,7 @@ class InteractiveCLI:
                     cmd_args = parts[1] if len(parts) > 1 else ""
                     handler = self._commands.get(cmd_name)
                     if handler:
-                        await handler(cmd_args)
+                        await self._invoke_command(handler, cmd_args)
                     else:
                         print(f"{_YELLOW}Unknown command: /{cmd_name}. Type /help for available commands.{_RESET}")
                     continue
