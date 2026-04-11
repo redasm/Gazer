@@ -239,6 +239,7 @@ class FeishuChannel(ChannelAdapter):
         if not chat_id:
             logger.error("Feishu send: missing chat_id")
             return
+        cleanup_key = str(msg.reply_to or "").strip() or chat_id
 
         if msg.is_partial:
             # Feishu doesn't have a native "typing" indicator API for bots
@@ -252,36 +253,59 @@ class FeishuChannel(ChannelAdapter):
 
         # --- Send text ---
         if not msg.content or not msg.content.strip():
+            if msg.media:
+                self._cleanup_typing_status_message(cleanup_key)
             return
 
-        sent_ok, _ = self._send_text_message(chat_id=chat_id, text=msg.content, context="message")
+        sent_ok, _ = self._send_text_message(
+            chat_id=chat_id,
+            text=msg.content,
+            context="message",
+            reply_to=str(msg.reply_to or "").strip(),
+        )
         if not sent_ok:
             return
-        self._cleanup_typing_status_message(chat_id)
+        self._cleanup_typing_status_message(cleanup_key)
 
-    def _send_text_message(self, *, chat_id: str, text: str, context: str) -> tuple[bool, str]:
+    def _send_text_message(self, *, chat_id: str, text: str, context: str, reply_to: str = "") -> tuple[bool, str]:
         content = json.dumps({"text": text})
 
         try:
-            request = (
-                CreateMessageRequest.builder()
-                .receive_id_type("open_id")
-                .request_body(
-                    CreateMessageRequestBody.builder()
-                    .receive_id(chat_id)
-                    .msg_type("text")
-                    .content(content)
+            reply_to = str(reply_to or "").strip()
+            if reply_to:
+                request = (
+                    ReplyMessageRequest.builder()
+                    .message_id(reply_to)
+                    .request_body(
+                        ReplyMessageRequestBody.builder()
+                        .content(content)
+                        .msg_type("text")
+                        .build()
+                    )
                     .build()
                 )
-                .build()
-            )
-            response = self.client.im.v1.message.create(request)
+                response = self.client.im.v1.message.reply(request)
+            else:
+                request = (
+                    CreateMessageRequest.builder()
+                    .receive_id_type("open_id")
+                    .request_body(
+                        CreateMessageRequestBody.builder()
+                        .receive_id(chat_id)
+                        .msg_type("text")
+                        .content(content)
+                        .build()
+                    )
+                    .build()
+                )
+                response = self.client.im.v1.message.create(request)
             if not response.success():
                 logger.error(
-                    "Feishu %s send failed: code=%s, msg=%s",
+                    "Feishu %s send failed: code=%s, msg=%s reply_to=%s",
                     context,
                     response.code,
                     response.msg,
+                    reply_to,
                 )
                 return False, ""
             message_id = ""
@@ -293,11 +317,14 @@ class FeishuChannel(ChannelAdapter):
             logger.error("Feishu %s send exception: %s", context, exc, exc_info=True)
             return False, ""
 
-    def _cleanup_typing_status_message(self, chat_id: str) -> None:
+    def _cleanup_typing_status_message(self, key: str) -> None:
         enabled = bool(config.get("feishu.simulated_typing.auto_recall_on_reply", True))
         if not enabled:
             return
-        status_message_id = self._typing_status_message_ids.pop(chat_id, "")
+        status_key = str(key or "").strip()
+        if not status_key:
+            return
+        status_message_id = self._typing_status_message_ids.pop(status_key, "")
         if not status_message_id:
             return
         try:
@@ -317,6 +344,7 @@ class FeishuChannel(ChannelAdapter):
         if not event.is_typing:
             return
         chat_id = str(event.chat_id or "").strip()
+        reply_to = str(getattr(event, "reply_to", "") or "").strip()
         if not chat_id:
             return
 
@@ -335,15 +363,21 @@ class FeishuChannel(ChannelAdapter):
             min_interval = 8.0
 
         now = time.monotonic()
-        last_sent_at = self._typing_last_sent_at.get(chat_id, 0.0)
+        status_key = reply_to or chat_id
+        last_sent_at = self._typing_last_sent_at.get(status_key, 0.0)
         if now - last_sent_at < min_interval:
             return
 
-        sent_ok, message_id = self._send_text_message(chat_id=chat_id, text=text, context="typing")
+        sent_ok, message_id = self._send_text_message(
+            chat_id=chat_id,
+            text=text,
+            context="typing",
+            reply_to=reply_to,
+        )
         if sent_ok:
-            self._typing_last_sent_at[chat_id] = now
+            self._typing_last_sent_at[status_key] = now
             if message_id:
-                self._typing_status_message_ids[chat_id] = message_id
+                self._typing_status_message_ids[status_key] = message_id
 
     # Image file extensions (case-insensitive)
     _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}

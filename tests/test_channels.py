@@ -130,6 +130,32 @@ def test_web_channel_typing_event_updates_ui_status():
     print("OK: WebChannel typing events update UI status.")
 
 
+def test_web_channel_send_includes_reply_to_in_broadcast(monkeypatch):
+    from channels.web import WebChannel
+    from bus.events import OutboundMessage
+
+    captured = []
+
+    class _FakeChatManager:
+        async def broadcast(self, chat_id, payload):
+            captured.append((chat_id, payload))
+
+    class _FakeManager:
+        async def broadcast(self, *_args, **_kwargs):
+            return None
+
+    async def run():
+        import tools.admin.websockets as ws_mod
+
+        monkeypatch.setattr(ws_mod, "chat_manager", _FakeChatManager(), raising=False)
+        monkeypatch.setattr(ws_mod, "manager", _FakeManager(), raising=False)
+        web = WebChannel()
+        await web.send(OutboundMessage(channel="web", chat_id="web-main", content="reply", reply_to="m_1"))
+
+    asyncio.run(run())
+    assert captured[0][1]["reply_to"] == "m_1"
+
+
 def test_brain_has_no_poll_ipc():
     """brain.py no longer contains _poll_ipc -- Web Chat goes through channels."""
     brain_path = project_root / "src" / "runtime" / "brain.py"

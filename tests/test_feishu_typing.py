@@ -20,11 +20,16 @@ class _FakeResponse:
 class _FakeMessageAPI:
     def __init__(self) -> None:
         self.create_calls = []
+        self.reply_calls = []
         self.delete_calls = []
 
     def create(self, request):
         self.create_calls.append(request)
         return _FakeResponse(ok=True, message_id="typing-mid-1")
+
+    def reply(self, request):
+        self.reply_calls.append(request)
+        return _FakeResponse(ok=True, message_id="typing-reply-1")
 
     def delete(self, request):
         self.delete_calls.append(request)
@@ -74,10 +79,10 @@ async def test_feishu_typing_sends_status_and_records_message_id(monkeypatch):
 
     message_api = _FakeMessageAPI()
     ch = _build_channel(message_api)
-    await ch._on_typing(TypingEvent(channel="feishu", chat_id="ou_xxx", is_typing=True))
+    await ch._on_typing(TypingEvent(channel="feishu", chat_id="ou_xxx", is_typing=True, reply_to="om_xxx"))
 
-    assert len(message_api.create_calls) == 1
-    assert ch._typing_status_message_ids.get("ou_xxx") == "typing-mid-1"
+    assert len(message_api.reply_calls) == 1
+    assert ch._typing_status_message_ids.get("om_xxx") == "typing-reply-1"
 
 
 @pytest.mark.asyncio
@@ -100,10 +105,27 @@ async def test_feishu_reply_auto_recalls_typing_status(monkeypatch):
 
     message_api = _FakeMessageAPI()
     ch = _build_channel(message_api)
-    ch._typing_status_message_ids["ou_xxx"] = "typing-mid-1"
+    ch._typing_status_message_ids["om_xxx"] = "typing-mid-1"
 
-    await ch.send(OutboundMessage(channel="feishu", chat_id="ou_xxx", content="final answer"))
+    await ch.send(OutboundMessage(channel="feishu", chat_id="ou_xxx", content="final answer", reply_to="om_xxx"))
 
-    assert len(message_api.create_calls) == 1
+    assert len(message_api.reply_calls) == 1
     assert len(message_api.delete_calls) == 1
-    assert "ou_xxx" not in ch._typing_status_message_ids
+    assert "om_xxx" not in ch._typing_status_message_ids
+
+
+def test_feishu_send_uses_reply_api_when_reply_to_present():
+    message_api = _FakeMessageAPI()
+    ch = _build_channel(message_api)
+
+    sent_ok, message_id = ch._send_text_message(
+        chat_id="ou_xxx",
+        text="final answer",
+        context="message",
+        reply_to="om_parent",
+    )
+
+    assert sent_ok is True
+    assert message_id == "typing-reply-1"
+    assert len(message_api.reply_calls) == 1
+    assert len(message_api.create_calls) == 0

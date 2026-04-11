@@ -84,14 +84,26 @@ class SignalChannel(ChannelAdapter):
     async def send(self, msg: OutboundMessage) -> None:
         if msg.is_partial:
             return  # Signal has no typing indicator API via REST
+        reply_to = str(msg.reply_to or "").strip()
+        metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
 
         # Send media
         for media_path in msg.media or []:
-            await self._send_media(msg.chat_id, media_path)
+            await self._send_media(
+                msg.chat_id,
+                media_path,
+                quote_timestamp=reply_to,
+                metadata=metadata,
+            )
 
         # Send text
         if msg.content and msg.content.strip():
-            await self._send_text(msg.chat_id, msg.content)
+            await self._send_text(
+                msg.chat_id,
+                msg.content,
+                quote_timestamp=reply_to,
+                metadata=metadata,
+            )
 
     async def _on_typing(self, event: TypingEvent) -> None:
         pass
@@ -134,6 +146,7 @@ class SignalChannel(ChannelAdapter):
             group_id = (data_msg.get("groupInfo") or {}).get("groupId", "")
             chat_id = group_id or sender
             text = data_msg.get("message", "")
+            timestamp = int(data_msg.get("timestamp", 0) or 0)
 
             # Handle attachments
             media_paths: List[str] = []
@@ -157,8 +170,12 @@ class SignalChannel(ChannelAdapter):
                     sender_id=sender,
                     media=media_paths,
                     metadata={
+                        "reply_to": str(timestamp) if timestamp else "",
+                        "signal_message_timestamp": timestamp,
+                        "signal_quote_author": sender,
+                        "signal_quote_message": text or "[Media message]",
                         "signal_group_id": group_id,
-                        "signal_timestamp": data_msg.get("timestamp", 0),
+                        "signal_timestamp": timestamp,
                     },
                 )
 
@@ -166,7 +183,13 @@ class SignalChannel(ChannelAdapter):
     # Outbound helpers
     # ------------------------------------------------------------------
 
-    async def _send_text(self, to: str, text: str) -> bool:
+    async def _send_text(
+        self,
+        to: str,
+        text: str,
+        quote_timestamp: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         if not self._http:
             return False
         payload: Dict[str, Any] = {
@@ -174,6 +197,12 @@ class SignalChannel(ChannelAdapter):
             "number": self.phone_number,
             "recipients": [to],
         }
+        quote_timestamp = str(quote_timestamp or "").strip()
+        meta = metadata if isinstance(metadata, dict) else {}
+        if quote_timestamp:
+            payload["quote_timestamp"] = quote_timestamp
+            payload["quote_author"] = str(meta.get("signal_quote_author", "") or "").strip()
+            payload["quote_message"] = str(meta.get("signal_quote_message", "") or "").strip()
         try:
             resp = await self._http.post(
                 f"{self.api_url}/v2/send", json=payload
@@ -185,7 +214,13 @@ class SignalChannel(ChannelAdapter):
             logger.error("Signal send error: %s", exc)
         return False
 
-    async def _send_media(self, to: str, media_path: str) -> bool:
+    async def _send_media(
+        self,
+        to: str,
+        media_path: str,
+        quote_timestamp: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """Send a media attachment via signal-cli REST API."""
         if not self._http:
             return False
@@ -206,6 +241,12 @@ class SignalChannel(ChannelAdapter):
                     f"data:{_ext_to_mime(p.suffix)};filename={p.name};base64,{data_b64}"
                 ],
             }
+            quote_timestamp = str(quote_timestamp or "").strip()
+            meta = metadata if isinstance(metadata, dict) else {}
+            if quote_timestamp:
+                payload["quote_timestamp"] = quote_timestamp
+                payload["quote_author"] = str(meta.get("signal_quote_author", "") or "").strip()
+                payload["quote_message"] = str(meta.get("signal_quote_message", "") or "").strip()
             resp = await self._http.post(
                 f"{self.api_url}/v2/send", json=payload
             )

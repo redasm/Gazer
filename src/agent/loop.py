@@ -404,7 +404,8 @@ class AgentLoop(
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content="You're sending messages too quickly. Please wait a moment."
+                        content="You're sending messages too quickly. Please wait a moment.",
+                        reply_to=self._resolve_outbound_reply_to(msg),
                     ))
                     continue
 
@@ -435,13 +436,19 @@ class AgentLoop(
                         msg.sender_id,
                     )
                     await self.bus.publish_typing(
-                        TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False),
+                        TypingEvent(
+                            channel=msg.channel,
+                            chat_id=msg.chat_id,
+                            is_typing=False,
+                            reply_to=self._resolve_outbound_reply_to(msg),
+                        ),
                     )
                     await self.bus.publish_outbound(
                         OutboundMessage(
                             channel=msg.channel,
                             chat_id=msg.chat_id,
                             content=self._msg(reply_language, "timeout", seconds=int(turn_timeout)),
+                            reply_to=self._resolve_outbound_reply_to(msg),
                         )
                     )
                 except Exception as e:
@@ -452,6 +459,7 @@ class AgentLoop(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
                         content=self._msg(reply_language, "runtime_error"),
+                        reply_to=self._resolve_outbound_reply_to(msg),
                     ))
                 finally:
                     # Hook: session:end (fires after every processed turn)
@@ -681,7 +689,10 @@ class AgentLoop(
 
         # Typing indicator: start
         await self.bus.publish_typing(TypingEvent(
-            channel=msg.channel, chat_id=msg.chat_id, is_typing=True,
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+            is_typing=True,
+            reply_to=self._resolve_outbound_reply_to(msg),
         ))
 
         # --- Early returns ---
@@ -696,7 +707,10 @@ class AgentLoop(
         fast_response = await self._try_fast_brain(msg)
         if fast_response is not None:
             await self.bus.publish_typing(TypingEvent(
-                channel=msg.channel, chat_id=msg.chat_id, is_typing=False,
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                is_typing=False,
+                reply_to=self._resolve_outbound_reply_to(msg),
             ))
             self._update_history(session_key, "user", msg.content)
             self._update_history(session_key, "assistant", fast_response)
@@ -708,7 +722,10 @@ class AgentLoop(
                 "recall_count": 0, "persist_ok": persist_ok,
             })
             return OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id, content=fast_response,
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content=fast_response,
+                reply_to=self._resolve_outbound_reply_to(msg),
             )
 
         auto_route_response = await self._maybe_auto_route_turn(
@@ -750,6 +767,5 @@ class AgentLoop(
                 turn_tool_calls_executed=turn_metrics.get("tool_calls_executed", 0),
             )
         return finalize_result
-
 
 

@@ -43,6 +43,7 @@ class TestTypingEvent:
     def test_defaults(self):
         ev = TypingEvent(channel="tg", chat_id="c1")
         assert ev.is_typing is True
+        assert ev.reply_to is None
 
     def test_stop_typing(self):
         ev = TypingEvent(channel="tg", chat_id="c1", is_typing=False)

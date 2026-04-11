@@ -84,6 +84,12 @@ class TelegramChannel(ChannelAdapter):
         except (ValueError, TypeError):
             logger.error("Invalid chat_id: %s", msg.chat_id)
             return
+        reply_to_message_id = None
+        try:
+            if str(msg.reply_to or "").strip():
+                reply_to_message_id = int(str(msg.reply_to).strip())
+        except (TypeError, ValueError):
+            logger.debug("Telegram reply_to skipped due to invalid message id: %s", msg.reply_to)
 
         if msg.is_partial:
             try:
@@ -99,7 +105,11 @@ class TelegramChannel(ChannelAdapter):
                 p = Path(media_path)
                 if p.is_file():
                     with p.open("rb") as f:
-                        await self.app.bot.send_photo(chat_id=chat_id, photo=f)
+                        await self.app.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=f,
+                            reply_to_message_id=reply_to_message_id,
+                        )
                     logger.info("Telegram sent photo: %s", media_path)
             except Exception as exc:
                 logger.error("Failed to send Telegram photo: %s", exc)
@@ -117,7 +127,10 @@ class TelegramChannel(ChannelAdapter):
         reply_markup = InlineKeyboardMarkup(keyboard)
         try:
             await self.app.bot.send_message(
-                chat_id=chat_id, text=msg.content, reply_markup=reply_markup
+                chat_id=chat_id,
+                text=msg.content,
+                reply_markup=reply_markup,
+                reply_to_message_id=reply_to_message_id,
             )
         except Exception as exc:
             logger.error("Failed to send Telegram message to %s: %s", chat_id, exc)
@@ -185,6 +198,10 @@ class TelegramChannel(ChannelAdapter):
             content="Hello",  # Natural greeting for the agent to respond to
             chat_id=chat_id,
             sender_id=user_id,
+            metadata={
+                "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+            },
         )
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -200,6 +217,10 @@ class TelegramChannel(ChannelAdapter):
             content=text,
             chat_id=str(update.effective_chat.id),
             sender_id=user_id,
+            metadata={
+                "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+            },
         )
 
     async def _on_command_passthrough(
@@ -226,6 +247,10 @@ class TelegramChannel(ChannelAdapter):
             content=text,
             chat_id=str(update.effective_chat.id),
             sender_id=user_id,
+            metadata={
+                "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+            },
         )
 
     async def _on_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -249,10 +274,22 @@ class TelegramChannel(ChannelAdapter):
                 chat_id=chat_id,
                 sender_id=user_id,
                 media=[str(path)],
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
             )
         except Exception as exc:
             logger.error("Failed to download Telegram photo: %s", exc, exc_info=True)
-            await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
+            await self.publish(
+                content=caption,
+                chat_id=chat_id,
+                sender_id=user_id,
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
+            )
 
     async def _on_document_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle image documents (uncompressed images sent as files)."""
@@ -279,10 +316,22 @@ class TelegramChannel(ChannelAdapter):
                 chat_id=chat_id,
                 sender_id=user_id,
                 media=[str(path)],
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
             )
         except Exception as exc:
             logger.error("Failed to download Telegram document image: %s", exc, exc_info=True)
-            await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
+            await self.publish(
+                content=caption,
+                chat_id=chat_id,
+                sender_id=user_id,
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
+            )
 
     async def _on_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle Telegram voice messages and forward as media."""
@@ -310,6 +359,8 @@ class TelegramChannel(ChannelAdapter):
                 sender_id=user_id,
                 media=[str(path)],
                 metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
                     "telegram_message_type": "voice",
                     "telegram_mime_type": voice.mime_type or "",
                     "telegram_duration_seconds": int(getattr(voice, "duration", 0) or 0),
@@ -317,7 +368,15 @@ class TelegramChannel(ChannelAdapter):
             )
         except Exception as exc:
             logger.error("Failed to download Telegram voice: %s", exc, exc_info=True)
-            await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
+            await self.publish(
+                content=caption,
+                chat_id=chat_id,
+                sender_id=user_id,
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
+            )
 
     async def _on_video(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle Telegram video messages and forward as media."""
@@ -346,6 +405,8 @@ class TelegramChannel(ChannelAdapter):
                 sender_id=user_id,
                 media=[str(path)],
                 metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
                     "telegram_message_type": "video",
                     "telegram_mime_type": video.mime_type or "",
                     "telegram_duration_seconds": int(getattr(video, "duration", 0) or 0),
@@ -353,7 +414,15 @@ class TelegramChannel(ChannelAdapter):
             )
         except Exception as exc:
             logger.error("Failed to download Telegram video: %s", exc, exc_info=True)
-            await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
+            await self.publish(
+                content=caption,
+                chat_id=chat_id,
+                sender_id=user_id,
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
+            )
 
     async def _on_document_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle non-image document files and forward as media."""
@@ -388,6 +457,8 @@ class TelegramChannel(ChannelAdapter):
                 sender_id=user_id,
                 media=[str(path)],
                 metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
                     "telegram_message_type": "file",
                     "telegram_mime_type": doc.mime_type or "",
                     "telegram_file_name": doc.file_name or "",
@@ -395,7 +466,15 @@ class TelegramChannel(ChannelAdapter):
             )
         except Exception as exc:
             logger.error("Failed to download Telegram file: %s", exc, exc_info=True)
-            await self.publish(content=caption, chat_id=chat_id, sender_id=user_id)
+            await self.publish(
+                content=caption,
+                chat_id=chat_id,
+                sender_id=user_id,
+                metadata={
+                    "reply_to": str(getattr(update.message, "message_id", "") or "").strip(),
+                    "telegram_message_id": str(getattr(update.message, "message_id", "") or "").strip(),
+                },
+            )
 
     async def _on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.effective_user:

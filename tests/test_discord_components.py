@@ -77,9 +77,14 @@ async def test_discord_send_builds_view_from_components():
     class _FakeChannel:
         def __init__(self):
             self.calls = []
+            self.partial_messages = []
 
         async def send(self, *args, **kwargs):
             self.calls.append((args, kwargs))
+
+        def get_partial_message(self, message_id):
+            self.partial_messages.append(message_id)
+            return f"ref:{message_id}"
 
     class _FakeClient:
         def __init__(self, ch):
@@ -118,3 +123,35 @@ async def test_discord_send_builds_view_from_components():
     view = kwargs["view"]
     assert len(view.items) == 2
 
+
+@pytest.mark.asyncio
+async def test_discord_send_uses_reference_when_reply_to_present():
+    class _FakeChannel:
+        def __init__(self):
+            self.calls = []
+            self.partial_messages = []
+
+        async def send(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+
+        def get_partial_message(self, message_id):
+            self.partial_messages.append(message_id)
+            return f"ref:{message_id}"
+
+    class _FakeClient:
+        def __init__(self, ch):
+            self._ch = ch
+
+        def get_channel(self, _channel_id):
+            return self._ch
+
+    fake_channel = _FakeChannel()
+    channel = DiscordChannel(token="", allowed_guild_ids=[])
+    channel._client = _FakeClient(fake_channel)
+
+    await channel.send(
+        OutboundMessage(channel="discord", chat_id="42", content="reply", reply_to="99")
+    )
+
+    assert fake_channel.partial_messages == [99]
+    assert fake_channel.calls[0][1]["reference"] == "ref:99"

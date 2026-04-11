@@ -46,3 +46,4 @@ class TypingEvent:
     channel: str
     chat_id: str
     is_typing: bool = True
+    reply_to: Optional[str] = None

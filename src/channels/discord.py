@@ -243,7 +243,11 @@ class DiscordChannel(ChannelAdapter):
                 chat_id=str(getattr(message.channel, "id", "") or ""),
                 sender_id=str(getattr(message.author, "id", "") or ""),
                 guild_id=guild_id,
-                metadata={"author_name": str(getattr(message.author, "name", "") or "")},
+                metadata={
+                    "author_name": str(getattr(message.author, "name", "") or ""),
+                    "reply_to": str(getattr(message, "id", "") or ""),
+                    "discord_message_id": str(getattr(message, "id", "") or ""),
+                },
             )
 
         @client.event
@@ -265,6 +269,8 @@ class DiscordChannel(ChannelAdapter):
                 metadata={
                     "interaction": True,
                     "interaction_type": str(getattr(interaction, "type", "") or ""),
+                    "reply_to": str(getattr(getattr(interaction, "message", None), "id", "") or ""),
+                    "discord_message_id": str(getattr(getattr(interaction, "message", None), "id", "") or ""),
                     "custom_id": str(
                         getattr(interaction, "data", {}).get("custom_id", "")
                         if isinstance(getattr(interaction, "data", None), dict)
@@ -324,13 +330,29 @@ class DiscordChannel(ChannelAdapter):
             components = self._normalize_components(msg.metadata)
             view = self._build_discord_view(components) if components else None
             content = str(msg.content or "").strip()
+            reply_to = str(msg.reply_to or "").strip()
+            reference = None
+            if reply_to and hasattr(channel, "get_partial_message"):
+                try:
+                    reference = channel.get_partial_message(int(reply_to))
+                except (TypeError, ValueError):
+                    logger.debug("Discord reply_to skipped due to invalid message id: %s", reply_to)
             if content:
                 if view is not None:
-                    await channel.send(content=content, view=view)
+                    kwargs = {"content": content, "view": view}
+                    if reference is not None:
+                        kwargs["reference"] = reference
+                    await channel.send(**kwargs)
                 else:
-                    await channel.send(content)
+                    kwargs = {"content": content}
+                    if reference is not None:
+                        kwargs["reference"] = reference
+                    await channel.send(**kwargs)
                 return
             if view is not None:
-                await channel.send(content="请选择操作：", view=view)
+                kwargs = {"content": "请选择操作：", "view": view}
+                if reference is not None:
+                    kwargs["reference"] = reference
+                await channel.send(**kwargs)
         except Exception as exc:
             logger.error("Failed to send Discord message: %s", exc)

@@ -110,14 +110,15 @@ class WhatsAppChannel(ChannelAdapter):
             # WhatsApp does not support streaming; mark as read / typing
             await self._mark_read(msg.chat_id)
             return
+        reply_to = str(msg.reply_to or "").strip()
 
         # Send media attachments first
         for media_path in msg.media or []:
-            await self._send_media(msg.chat_id, media_path)
+            await self._send_media(msg.chat_id, media_path, reply_to=reply_to)
 
         # Send text
         if msg.content and msg.content.strip():
-            await self._send_text(msg.chat_id, msg.content)
+            await self._send_text(msg.chat_id, msg.content, reply_to=reply_to)
 
     async def _on_typing(self, event: TypingEvent) -> None:
         """WhatsApp has no typing indicator API — no-op."""
@@ -182,6 +183,7 @@ class WhatsAppChannel(ChannelAdapter):
         asyncio.create_task(self._mark_read(wa_msg_id))
 
         metadata: Dict[str, Any] = {
+            "reply_to": wa_msg_id,
             "whatsapp_message_id": wa_msg_id,
             "whatsapp_message_type": msg_type,
             "whatsapp_sender_name": contacts.get(sender, ""),
@@ -307,7 +309,7 @@ class WhatsAppChannel(ChannelAdapter):
     # Outbound helpers
     # ------------------------------------------------------------------
 
-    async def _send_text(self, to: str, text: str) -> Optional[str]:
+    async def _send_text(self, to: str, text: str, reply_to: str = "") -> Optional[str]:
         """Send a text message. Returns the message ID or None."""
         if not self._http:
             return None
@@ -319,6 +321,9 @@ class WhatsAppChannel(ChannelAdapter):
             "type": "text",
             "text": {"preview_url": True, "body": text},
         }
+        reply_to = str(reply_to or "").strip()
+        if reply_to:
+            payload["context"] = {"message_id": reply_to}
 
         try:
             resp = await self._http.post(
@@ -334,7 +339,7 @@ class WhatsAppChannel(ChannelAdapter):
             logger.error("WhatsApp send error: %s", exc)
         return None
 
-    async def _send_media(self, to: str, media_path: str) -> Optional[str]:
+    async def _send_media(self, to: str, media_path: str, reply_to: str = "") -> Optional[str]:
         """Upload and send a media file."""
         if not self._http:
             return None
@@ -371,6 +376,9 @@ class WhatsAppChannel(ChannelAdapter):
                 "type": media_type,
                 media_type: {"id": media_id},
             }
+            reply_to = str(reply_to or "").strip()
+            if reply_to:
+                payload["context"] = {"message_id": reply_to}
 
             resp = await self._http.post(
                 f"{self._api_url}/messages", json=payload

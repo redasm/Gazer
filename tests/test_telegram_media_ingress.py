@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from channels.telegram import TelegramChannel
+from bus.events import OutboundMessage
 
 
 class _FakeFile:
@@ -137,3 +138,26 @@ async def test_telegram_command_passthrough_ignores_start_and_fix():
     await channel._on_command_passthrough(update_start, None)
     await channel._on_command_passthrough(update_fix, None)
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_telegram_send_uses_reply_to_message_id():
+    calls = []
+    channel = object.__new__(TelegramChannel)
+    channel.app = SimpleNamespace(
+        bot=SimpleNamespace(
+            send_message=lambda **kwargs: calls.append(kwargs),
+            send_chat_action=lambda **kwargs: None,
+        )
+    )
+
+    async def _send_message(**kwargs):
+        calls.append(kwargs)
+
+    channel.app.bot.send_message = _send_message
+
+    await channel.send(
+        OutboundMessage(channel="telegram", chat_id="2", content="reply", reply_to="123")
+    )
+
+    assert calls[0]["reply_to_message_id"] == 123

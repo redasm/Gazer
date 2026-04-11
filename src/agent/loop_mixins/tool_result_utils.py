@@ -26,6 +26,18 @@ class ToolResultUtilsMixin:
     """Mixin providing tool result utils functionality."""
 
     @staticmethod
+    def _resolve_outbound_reply_to(msg: InboundMessage) -> str | None:
+        metadata = msg.metadata if isinstance(getattr(msg, "metadata", None), dict) else {}
+        generic_reply_to = str(metadata.get("reply_to", "") or "").strip()
+        if generic_reply_to:
+            return generic_reply_to
+        if str(getattr(msg, "channel", "") or "").strip().lower() == "feishu":
+            feishu_message_id = str(metadata.get("feishu_message_id", "") or "").strip()
+            if feishu_message_id:
+                return feishu_message_id
+        return None
+
+    @staticmethod
     def _strip_media_markers(text: str) -> str:
         if not text or MEDIA_MARKER not in text:
             return (text or "").strip()
@@ -350,4 +362,3 @@ class ToolResultUtilsMixin:
             "i've taken a screenshot", "here is the screenshot",
         ]
         return any(marker in content_lower for marker in fake_markers)
-

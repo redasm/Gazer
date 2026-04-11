@@ -15,6 +15,21 @@ const STORAGE = {
 const MAX_MSGS = 200;
 const MAX_SESSIONS = 50;
 const genId = () => `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const genMessageId = () => `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const previewText = (value, limit = 60) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    if (text.length <= limit) return text;
+    return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+};
+
+const resolveReplyPreview = (messages, replyTo) => {
+    const targetId = String(replyTo || '').trim();
+    if (!targetId) return null;
+    return [...messages].reverse().find(
+        (candidate) => candidate.role === 'user' && candidate.clientMessageId === targetId,
+    ) || null;
+};
 const loadSessions = () => { try { return JSON.parse(localStorage.getItem(STORAGE.sessions)) || []; } catch { return []; } };
 const persistSessions = (list) => {
     // Prune oldest sessions beyond limit, cleaning up their stored messages
@@ -375,9 +390,9 @@ const Chat = ({ t }) => {
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && last.streaming) {
-                        return [...prev.slice(0, -1), { ...last, content: last.content + data.content }];
+                        return [...prev.slice(0, -1), { ...last, content: last.content + data.content, replyTo: data.reply_to || last.replyTo || '' }];
                     }
-                    return [...prev, { role: 'assistant', content: data.content, time: new Date(), streaming: true }];
+                    return [...prev, { role: 'assistant', content: data.content, time: new Date(), streaming: true, replyTo: data.reply_to || '' }];
                 });
             } else if (data.type === 'tool_call_event') {
                 const payload = data.payload || {};
@@ -396,14 +411,14 @@ const Chat = ({ t }) => {
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && last.streaming) {
-                        return [...prev.slice(0, -1), { ...last, content: data.content, streaming: false }];
+                        return [...prev.slice(0, -1), { ...last, content: data.content, streaming: false, replyTo: data.reply_to || last.replyTo || '' }];
                     }
-                    return [...prev, { role: 'assistant', content: data.content, time: new Date() }];
+                    return [...prev, { role: 'assistant', content: data.content, time: new Date(), replyTo: data.reply_to || '' }];
                 });
             } else if (data.type === 'chat_response') {
                 setIsTyping(false);
                 clearResponseTimeout();
-                setMessages(prev => [...prev, { role: 'assistant', content: data.content, time: new Date() }]);
+                setMessages(prev => [...prev, { role: 'assistant', content: data.content, time: new Date(), replyTo: data.reply_to || '' }]);
             } else if (data.type === 'error') {
                 setIsTyping(false);
                 clearResponseTimeout();
@@ -457,13 +472,18 @@ const Chat = ({ t }) => {
             });
         }
 
-        setMessages(prev => [...prev, { role: 'user', content: input, time: new Date() }]);
+        const clientMessageId = genMessageId();
+        setMessages(prev => [...prev, { role: 'user', content: input, time: new Date(), clientMessageId }]);
         setIsTyping(true);
         startResponseTimeout();
         setAutoScroll(true);
         ws.current.send(JSON.stringify({
             content: input,
             session_id: activeSessionId || 'web-main',
+            metadata: {
+                reply_to: clientMessageId,
+                client_message_id: clientMessageId,
+            },
         }));
         setInput('');
         if (textareaRef.current) {
@@ -710,6 +730,9 @@ const Chat = ({ t }) => {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {messages.map((msg, idx) => (
+                                (() => {
+                                    const replied = msg.role === 'assistant' ? resolveReplyPreview(messages, msg.replyTo) : null;
+                                    return (
                                 <div key={idx} style={{
                                     display: 'flex',
                                     justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
@@ -747,6 +770,12 @@ const Chat = ({ t }) => {
                                                 wordBreak: 'break-word',
                                                 maxWidth: '100%',
                                             }}>
+                                                {replied && (
+                                                    <div className="chat-reply-card">
+                                                        <div className="chat-reply-kicker">Replying to</div>
+                                                        <div className="chat-reply-preview">{previewText(replied.content, 60)}</div>
+                                                    </div>
+                                                )}
                                                 {msg.role === 'assistant' ? (
                                                     renderMessageContent(msg.content)
                                                 ) : (
@@ -767,6 +796,8 @@ const Chat = ({ t }) => {
                                         </div>
                                     </div>
                                 </div>
+                                    );
+                                })()
                             ))}
                             {isTyping && (
                                 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>

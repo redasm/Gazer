@@ -132,6 +132,7 @@ class TeamsChannel(ChannelAdapter):
                     sender_id=sender_id,
                     media=media_paths,
                     metadata={
+                        "reply_to": activity.get("id", ""),
                         "teams_activity_id": activity.get("id", ""),
                         "teams_service_url": service_url,
                         "teams_conversation_id": chat_id,
@@ -196,6 +197,9 @@ class TeamsChannel(ChannelAdapter):
             "type": "message",
             "text": msg.content,
         }
+        reply_to = str(msg.reply_to or metadata.get("teams_activity_id", "") or "").strip()
+        if reply_to:
+            payload["replyToId"] = reply_to
 
         try:
             resp = await self._http.post(
@@ -222,11 +226,15 @@ class TeamsChannel(ChannelAdapter):
         metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
         service_url = metadata.get("teams_service_url", _API_BASE).rstrip("/")
         conv_id = msg.chat_id
+        reply_to = str(msg.reply_to or metadata.get("teams_activity_id", "") or "").strip()
 
         try:
+            payload = {"type": "typing"}
+            if reply_to:
+                payload["replyToId"] = reply_to
             resp = await self._http.post(
                 f"{service_url}/v3/conversations/{conv_id}/activities",
-                json={"type": "typing"},
+                json=payload,
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",

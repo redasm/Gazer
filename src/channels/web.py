@@ -84,18 +84,19 @@ class WebChannel(ChannelAdapter):
                 await chat_manager.broadcast(msg.chat_id, {
                     "type": "tool_call_event",
                     "chat_id": msg.chat_id,
+                    "reply_to": msg.reply_to,
                     "event_type": str(metadata.get("event_type", "")),
                     "payload": dict(metadata.get("payload", {}) or {}),
                 })
                 return
             await chat_manager.broadcast(msg.chat_id, {
-                "type": "chat_stream", "content": msg.content, "chat_id": msg.chat_id,
+                "type": "chat_stream", "content": msg.content, "chat_id": msg.chat_id, "reply_to": msg.reply_to,
             })
             self._update_ui(msg.content)
             return
 
         await chat_manager.broadcast(msg.chat_id, {
-            "type": "chat_end", "content": msg.content, "chat_id": msg.chat_id,
+            "type": "chat_end", "content": msg.content, "chat_id": msg.chat_id, "reply_to": msg.reply_to,
         })
         self._update_ui("Sent")
 

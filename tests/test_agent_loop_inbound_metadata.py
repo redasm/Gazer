@@ -109,6 +109,7 @@ async def test_agent_loop_injects_inbound_metadata_note_and_records_trajectory(m
 
     assert out is not None
     assert out.content == "ok"
+    assert out.reply_to == "om_xxx"
     system_notes = [m.get("content", "") for m in provider.last_messages if m.get("role") == "system"]
     assert any("Inbound Media Context" in str(note) for note in system_notes)
     assert any(event["action"] == "inbound_metadata" for event in store.events)

@@ -594,6 +594,7 @@ class ProcessMessageMixin:
                             chat_id=msg.chat_id,
                             content=final_content,
                             is_partial=True,
+                            reply_to=self._resolve_outbound_reply_to(msg),
                         )
                     )
                 break
@@ -713,7 +714,12 @@ class ProcessMessageMixin:
 
         # Typing off
         await self.bus.publish_typing(
-            TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
+            TypingEvent(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                is_typing=False,
+                reply_to=self._resolve_outbound_reply_to(msg),
+            )
         )
 
         # History persistence
@@ -741,6 +747,7 @@ class ProcessMessageMixin:
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=final_content,
+            reply_to=self._resolve_outbound_reply_to(msg),
             media=pending_media,
         )
 
@@ -760,7 +767,12 @@ class ProcessMessageMixin:
             msg=msg,
         )
         await self.bus.publish_typing(
-            TypingEvent(channel=msg.channel, chat_id=msg.chat_id, is_typing=False)
+            TypingEvent(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                is_typing=False,
+                reply_to=self._resolve_outbound_reply_to(msg),
+            )
         )
         self._update_history(session_key, "user", msg.content)
         self._update_history(session_key, "assistant", command_reply)
@@ -780,6 +792,6 @@ class ProcessMessageMixin:
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=command_reply,
+            reply_to=self._resolve_outbound_reply_to(msg),
         )
-
 
