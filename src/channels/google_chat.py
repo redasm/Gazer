@@ -73,6 +73,16 @@ class GoogleChatChannel(ChannelAdapter):
 
     async def send(self, msg: OutboundMessage) -> None:
         if msg.is_partial:
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                partial_msg = OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content=partial_text,
+                    reply_to=msg.reply_to,
+                    metadata=msg.metadata,
+                )
+                await self._send_message(partial_msg)
             return  # Google Chat has no typing indicator API
 
         if msg.content and msg.content.strip():

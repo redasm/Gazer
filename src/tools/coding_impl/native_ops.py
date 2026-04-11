@@ -22,6 +22,7 @@ DEFAULT_MAX_OUTPUT_SIZE = 1_000_000  # 1 MB
 MAX_GREP_MATCHES = 200
 MAX_FIND_RESULTS = 500
 DEFAULT_EXEC_TIMEOUT = 120.0
+MAX_EXEC_PROGRESS_EVENTS_PER_STREAM = 8
 
 EXCLUDED_DIRS: frozenset[str] = frozenset({
     ".git", "__pycache__", "node_modules", ".venv", ".tox",
@@ -270,7 +271,46 @@ async def native_exec(
     cwd: Path,
     *,
     timeout: float = DEFAULT_EXEC_TIMEOUT,
+    progress_callback: Any = None,
 ) -> CodingToolResult:
+    async def _emit(stage: str, message: str, **extra: Any) -> None:
+        if progress_callback is None:
+            return
+        payload = {"stage": stage, "message": message, **extra}
+        try:
+            maybe = progress_callback(payload)
+            if asyncio.iscoroutine(maybe):
+                await maybe
+        except Exception:
+            pass
+
+    async def _read_stream(stream: Any, stream_name: str) -> str:
+        chunks: list[str] = []
+        emitted = 0
+        line_count = 0
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            text = line.decode(errors="replace")
+            chunks.append(text)
+            preview = text.strip()
+            if not preview:
+                continue
+            line_count += 1
+            if emitted < 3 or line_count % 25 == 0:
+                emitted += 1
+                await _emit(
+                    stream_name,
+                    f"[{stream_name}] {preview[:160]}",
+                    stream=stream_name,
+                    line_count=line_count,
+                )
+            if emitted >= MAX_EXEC_PROGRESS_EVENTS_PER_STREAM:
+                continue
+        return "".join(chunks)
+
+    proc = None
     try:
         proc = await asyncio.create_subprocess_shell(
             command,
@@ -278,19 +318,23 @@ async def native_exec(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout,
-        )
-        stdout = stdout_bytes.decode(errors="replace")
-        stderr = stderr_bytes.decode(errors="replace")
+        await _emit("launch", f"Started command in {cwd}")
+        stdout_task = asyncio.create_task(_read_stream(proc.stdout, "stdout"))
+        stderr_task = asyncio.create_task(_read_stream(proc.stderr, "stderr"))
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        stdout = await stdout_task
+        stderr = await stderr_task
         exit_code = proc.returncode or 0
         timed_out = False
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
-        stdout, stderr = "", ""
+        if proc is not None:
+            proc.kill()
+            await proc.wait()
+        stdout = await stdout_task if "stdout_task" in locals() else ""
+        stderr = await stderr_task if "stderr_task" in locals() else ""
         exit_code = -1
         timed_out = True
+        await _emit("timeout", f"Command timed out after {timeout:.0f}s")
 
     parts: list[str] = []
     if stdout:
@@ -303,6 +347,8 @@ async def native_exec(
     output = "\n".join(parts) if parts else "(no output)"
     if timed_out:
         output = f"[timed out after {timeout:.0f}s]\n{output}"
+    else:
+        await _emit("complete", f"Command exited with code {exit_code}")
 
     text = f"[exit code: {exit_code}]\n{output}"
     return CodingToolResult(text=text, is_error=exit_code != 0)
@@ -337,6 +383,7 @@ async def native_ls(
     workspace: Path,
     *,
     max_depth: int = 1,
+    progress_callback: Any = None,
 ) -> CodingToolResult:
     dir_path = normalize_path(path, workspace)
     check_workspace_boundary(dir_path, workspace)
@@ -345,9 +392,17 @@ async def native_ls(
         return CodingToolResult(text=f"Not a directory: {path}", is_error=True)
 
     max_depth = max(1, max_depth)
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "scan", "message": f"Listing {path} (depth={max_depth})"})
+        if asyncio.iscoroutine(maybe):
+            await maybe
     entries = await asyncio.to_thread(_list_tree, dir_path, dir_path, 1, max_depth)
     output = "\n".join(entries) if entries else "(empty directory)"
     output, _ = truncate_output(output)
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "summary", "message": f"Listed {len(entries)} entr{'y' if len(entries) == 1 else 'ies'}"})
+        if asyncio.iscoroutine(maybe):
+            await maybe
     return CodingToolResult(text=output)
 
 
@@ -361,12 +416,17 @@ async def native_find(
     workspace: Path,
     *,
     search_dir: str = ".",
+    progress_callback: Any = None,
 ) -> CodingToolResult:
     base = normalize_path(search_dir, workspace)
     check_workspace_boundary(base, workspace)
 
     if not base.is_dir():
         return CodingToolResult(text=f"Not a directory: {search_dir}", is_error=True)
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "scan", "message": f"Searching {search_dir} for {pattern}"})
+        if asyncio.iscoroutine(maybe):
+            await maybe
 
     def _find_sync() -> list[str]:
         found: list[str] = []
@@ -386,12 +446,20 @@ async def native_find(
     matches = await asyncio.to_thread(_find_sync)
 
     if not matches:
+        if progress_callback is not None:
+            maybe = progress_callback({"stage": "summary", "message": f"No files matched {pattern}"})
+            if asyncio.iscoroutine(maybe):
+                await maybe
         return CodingToolResult(text=f"No files found matching '{pattern}'")
 
     header = f"Found {len(matches)} file(s)"
     if len(matches) >= MAX_FIND_RESULTS:
         header += f" (showing first {MAX_FIND_RESULTS})"
     output, _ = truncate_output("\n".join(matches))
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "summary", "message": header})
+        if asyncio.iscoroutine(maybe):
+            await maybe
     return CodingToolResult(text=f"{header}\n{output}")
 
 
@@ -448,6 +516,7 @@ async def native_grep(
     context_lines: int = 0,
     is_regex: bool = True,
     ignore_case: bool = False,
+    progress_callback: Any = None,
 ) -> CodingToolResult:
     target = normalize_path(path, workspace)
     check_workspace_boundary(target, workspace)
@@ -460,6 +529,10 @@ async def native_grep(
         return CodingToolResult(text=f"Invalid regex: {exc}", is_error=True)
 
     context = max(0, context_lines)
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "scan", "message": f"Searching {path} for {pattern}"})
+        if asyncio.iscoroutine(maybe):
+            await maybe
 
     def _grep_sync() -> list[str] | None:
         if target.is_file():
@@ -487,7 +560,15 @@ async def native_grep(
         return CodingToolResult(text=f"Path not found: {path}", is_error=True)
 
     if not all_matches:
+        if progress_callback is not None:
+            maybe = progress_callback({"stage": "summary", "message": f"No matches for {pattern}"})
+            if asyncio.iscoroutine(maybe):
+                await maybe
         return CodingToolResult(text=f"No matches for '{pattern}'")
 
     output, _ = truncate_output("\n".join(all_matches))
+    if progress_callback is not None:
+        maybe = progress_callback({"stage": "summary", "message": f"Found {len(all_matches)} matching line(s)"})
+        if asyncio.iscoroutine(maybe):
+            await maybe
     return CodingToolResult(text=output)

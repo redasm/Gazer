@@ -83,6 +83,14 @@ class SignalChannel(ChannelAdapter):
 
     async def send(self, msg: OutboundMessage) -> None:
         if msg.is_partial:
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                await self._send_text(
+                    msg.chat_id,
+                    partial_text,
+                    quote_timestamp=str(msg.reply_to or "").strip(),
+                    metadata=msg.metadata if isinstance(msg.metadata, dict) else None,
+                )
             return  # Signal has no typing indicator API via REST
         reply_to = str(msg.reply_to or "").strip()
         metadata = msg.metadata if isinstance(msg.metadata, dict) else {}

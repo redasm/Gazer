@@ -92,6 +92,17 @@ class TelegramChannel(ChannelAdapter):
             logger.debug("Telegram reply_to skipped due to invalid message id: %s", msg.reply_to)
 
         if msg.is_partial:
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                try:
+                    await self.app.bot.send_message(
+                        chat_id=chat_id,
+                        text=partial_text,
+                        reply_to_message_id=reply_to_message_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Telegram partial progress send failed: %s", exc)
+                return
             try:
                 await self.app.bot.send_chat_action(chat_id=chat_id, action="typing")
             except Exception as exc:

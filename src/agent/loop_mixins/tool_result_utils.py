@@ -230,15 +230,128 @@ class ToolResultUtilsMixin:
         except Exception:
             return str(arguments)
 
+    @staticmethod
+    def _deserialize_tool_arguments(arguments: Any) -> Dict[str, Any]:
+        """Best-effort parse of tool arguments into an object for UI summaries."""
+        if isinstance(arguments, dict):
+            return dict(arguments)
+        if isinstance(arguments, str):
+            try:
+                parsed = json.loads(arguments.strip() or "{}")
+            except Exception:
+                return {}
+            if isinstance(parsed, dict):
+                return parsed
+        return {}
+
+    @staticmethod
+    def _compact_inline_preview(value: Any, *, limit: int = 72) -> str:
+        text = str(value or "").replace("\n", " ").strip()
+        if len(text) <= limit:
+            return text
+        return f"{text[: max(0, limit - 1)].rstrip()}…"
+
+    @classmethod
+    def _build_tool_label(cls, tool_name: str, arguments: Any) -> str:
+        """Build a short Hermes-style label like `find_files: "*.py"`."""
+        name = str(tool_name or "").strip() or "tool"
+        params = cls._deserialize_tool_arguments(arguments)
+        preferred_keys = {
+            "exec": ("command",),
+            "find_files": ("pattern", "path"),
+            "grep": ("pattern", "path"),
+            "list_dir": ("path",),
+            "read_file": ("path",),
+            "write_file": ("path",),
+            "edit_file": ("path",),
+            "delete_file": ("path",),
+            "web_search": ("query",),
+            "web_fetch": ("url", "query"),
+            "browser_open": ("url",),
+        }
+        for key in preferred_keys.get(name, ()):
+            value = params.get(key)
+            preview = cls._compact_inline_preview(value)
+            if preview:
+                return f'{name}: "{preview}"'
+        for value in params.values():
+            if isinstance(value, (str, int, float, bool)):
+                preview = cls._compact_inline_preview(value)
+                if preview:
+                    return f'{name}: "{preview}"'
+        return name
+
+    @classmethod
+    def _summarize_tool_result(cls, result: str) -> str:
+        """Return a compact, UI-friendly first-line summary of tool output."""
+        text = cls._strip_media_markers(str(result or ""))
+        if not text:
+            return ""
+        for line in text.splitlines():
+            preview = cls._compact_inline_preview(line, limit=120)
+            if preview:
+                return preview
+        return ""
+
+    @classmethod
+    def _format_tool_stream_text(cls, *, event_type: str, payload: Dict[str, Any]) -> str:
+        """Plain-text fallback so non-web channels can still show tool progress."""
+        label = cls._compact_inline_preview(payload.get("label") or payload.get("tool") or "tool", limit=120)
+        if str(event_type or "").strip().lower() == "call":
+            return label
+        status = str(payload.get("status", "") or "").strip().lower()
+        if str(event_type or "").strip().lower() == "progress":
+            detail = cls._compact_inline_preview(
+                payload.get("progress_message") or payload.get("result_summary") or "running",
+                limit=80,
+            )
+            return f"{label} -> {detail}" if detail else f"{label} -> running"
+        if status == "error":
+            detail = cls._compact_inline_preview(payload.get("error_hint") or payload.get("error_code") or "failed", limit=80)
+            return f"{label} -> error: {detail}" if detail else f"{label} -> error"
+        detail = cls._compact_inline_preview(payload.get("result_summary") or "done", limit=80)
+        return f"{label} -> {detail}" if detail else f"{label} -> done"
+
+    @classmethod
+    def _build_tool_progress_payload(
+        cls,
+        tool_call: Any,
+        *,
+        stage: str,
+        message: str,
+        sequence: int,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        raw_args = cls._serialize_tool_arguments(getattr(tool_call, "arguments", {}))
+        tool_name = str(getattr(tool_call, "name", "") or "")
+        payload: Dict[str, Any] = {
+            "tool": tool_name,
+            "tool_call_id": str(getattr(tool_call, "id", "") or ""),
+            "status": "running",
+            "args_preview": raw_args[:240],
+            "label": cls._build_tool_label(tool_name, getattr(tool_call, "arguments", {})),
+            "progress_stage": str(stage or "").strip()[:64],
+            "progress_message": cls._compact_inline_preview(message, limit=240),
+            "progress_sequence": max(1, int(sequence or 1)),
+        }
+        if isinstance(extra, dict):
+            for key, value in extra.items():
+                if key in payload:
+                    continue
+                payload[str(key)] = value
+        return payload
+
     @classmethod
     def _build_tool_call_payload(cls, tool_call: Any) -> Dict[str, Any]:
         raw_args = cls._serialize_tool_arguments(getattr(tool_call, "arguments", {}))
         args_hash = hashlib.sha256(raw_args.encode("utf-8", errors="replace")).hexdigest()[:16]
+        tool_name = str(getattr(tool_call, "name", "") or "")
         return {
-            "tool": str(getattr(tool_call, "name", "") or ""),
+            "tool": tool_name,
             "tool_call_id": str(getattr(tool_call, "id", "") or ""),
             "args_preview": raw_args[:240],
             "args_hash": args_hash,
+            "label": cls._build_tool_label(tool_name, getattr(tool_call, "arguments", {})),
         }
 
     @classmethod
@@ -246,13 +359,18 @@ class ToolResultUtilsMixin:
         text = str(result or "")
         status = "error" if text.startswith("Error") else "ok"
         media_paths = cls._extract_media(text)
+        raw_args = cls._serialize_tool_arguments(getattr(tool_call, "arguments", {}))
+        tool_name = str(getattr(tool_call, "name", "") or "")
         payload: Dict[str, Any] = {
-            "tool": str(getattr(tool_call, "name", "") or ""),
+            "tool": tool_name,
             "tool_call_id": str(getattr(tool_call, "id", "") or ""),
             "status": status,
+            "args_preview": raw_args[:240],
             "result_preview": text[:240],
+            "result_summary": cls._summarize_tool_result(text),
             "has_media": bool(media_paths),
             "media_paths": media_paths[:10],
+            "label": cls._build_tool_label(tool_name, getattr(tool_call, "arguments", {})),
         }
         if status == "error":
             payload["error_code"] = cls._extract_error_code(text)
@@ -273,15 +391,16 @@ class ToolResultUtilsMixin:
         payload: Dict[str, Any],
     ) -> None:
         """Emit tool-call lifecycle events on the partial outbound stream."""
-        if str(channel or "").strip().lower() != "web":
-            return
         safe_payload = dict(payload or {})
         try:
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=channel,
                     chat_id=chat_id,
-                    content="",
+                    content=self._format_tool_stream_text(
+                        event_type=str(event_type or ""),
+                        payload=safe_payload,
+                    ),
                     is_partial=True,
                     metadata={
                         "stream_event": "tool_call",

@@ -107,6 +107,14 @@ class WhatsAppChannel(ChannelAdapter):
     async def send(self, msg: OutboundMessage) -> None:
         """Send a message via the WhatsApp Cloud API."""
         if msg.is_partial:
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                await self._send_text(
+                    msg.chat_id,
+                    partial_text,
+                    reply_to=str(msg.reply_to or "").strip(),
+                )
+                return
             # WhatsApp does not support streaming; mark as read / typing
             await self._mark_read(msg.chat_id)
             return

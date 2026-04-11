@@ -324,12 +324,6 @@ class DiscordChannel(ChannelAdapter):
             if channel is None:
                 logger.warning("Discord channel not found: %s", channel_id)
                 return
-            if msg.is_partial:
-                async with channel.typing():
-                    return
-            components = self._normalize_components(msg.metadata)
-            view = self._build_discord_view(components) if components else None
-            content = str(msg.content or "").strip()
             reply_to = str(msg.reply_to or "").strip()
             reference = None
             if reply_to and hasattr(channel, "get_partial_message"):
@@ -337,6 +331,19 @@ class DiscordChannel(ChannelAdapter):
                     reference = channel.get_partial_message(int(reply_to))
                 except (TypeError, ValueError):
                     logger.debug("Discord reply_to skipped due to invalid message id: %s", reply_to)
+            if msg.is_partial:
+                partial_text = self._get_partial_tool_progress_text(msg)
+                if partial_text:
+                    kwargs = {"content": partial_text}
+                    if reference is not None:
+                        kwargs["reference"] = reference
+                    await channel.send(**kwargs)
+                    return
+                async with channel.typing():
+                    return
+            components = self._normalize_components(msg.metadata)
+            view = self._build_discord_view(components) if components else None
+            content = str(msg.content or "").strip()
             if content:
                 if view is not None:
                     kwargs = {"content": content, "view": view}

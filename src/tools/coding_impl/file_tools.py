@@ -9,6 +9,7 @@ from tools.base import FileOperations, ShellOperations
 from .helpers import (
     MAX_READ_LINES,
     CodingToolBase,
+    _emit_progress,
     _normalize_coding_params,
     _to_workspace_relative_path,
 )
@@ -75,6 +76,7 @@ class ReadFileTool(CodingToolBase):
         file_path: str = "",
         offset: int = 1,
         limit: int = 500,
+        _progress_callback: Any = None,
         **extra: Any,
     ) -> str:
         normalized = _normalize_coding_params(
@@ -90,6 +92,11 @@ class ReadFileTool(CodingToolBase):
 
         safe_offset = max(1, int(offset or 1))
         safe_limit = min(max(1, int(limit or 500)), MAX_READ_LINES)
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Reading {resolved_path} (offset={safe_offset}, limit={safe_limit})",
+        )
 
         try:
             result = await native_read_file(
@@ -107,6 +114,11 @@ class ReadFileTool(CodingToolBase):
         if result.is_error:
             return self._error("CODING_FILE_NOT_FOUND", result.text)
 
+        await _emit_progress(
+            _progress_callback,
+            stage="summary",
+            message=f"Read {resolved_path}",
+        )
         return f"[{resolved_path}]\n{result.text}"
 
 
@@ -142,6 +154,7 @@ class WriteFileTool(CodingToolBase):
         path: str = "",
         file_path: str = "",
         content: str = "",
+        _progress_callback: Any = None,
         **extra: Any,
     ) -> str:
         normalized = _normalize_coding_params(
@@ -158,6 +171,11 @@ class WriteFileTool(CodingToolBase):
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Writing {resolved_path}",
+        )
         try:
             await native_write_file(resolved_path, self._workspace, normalized_content)
         except PermissionError as exc:
@@ -167,6 +185,11 @@ class WriteFileTool(CodingToolBase):
 
         line_count = normalized_content.count("\n") + (
             1 if normalized_content and not normalized_content.endswith("\n") else 0
+        )
+        await _emit_progress(
+            _progress_callback,
+            stage="summary",
+            message=f"Wrote {line_count} line(s) to {resolved_path}",
         )
         return f"Wrote {line_count} lines to {resolved_path}."
 
@@ -214,6 +237,7 @@ class EditFileTool(CodingToolBase):
         file_path: str = "",
         old_text: str = "",
         new_text: str = "",
+        _progress_callback: Any = None,
         **extra: Any,
     ) -> str:
         normalized = _normalize_coding_params(
@@ -242,6 +266,11 @@ class EditFileTool(CodingToolBase):
         if not target.is_file():
             return self._error("CODING_FILE_NOT_FOUND", f"'{resolved_path}' does not exist.")
 
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Editing {resolved_path}",
+        )
         try:
             result = await native_edit_file(
                 resolved_path, self._workspace, normalized_old, normalized_new,
@@ -264,4 +293,9 @@ class EditFileTool(CodingToolBase):
             return self._error("CODING_FILE_WRITE_FAILED", result.text)
 
         fuzzy_note = " (fuzzy match)" if "fuzzy" in (result.text or "") else ""
+        await _emit_progress(
+            _progress_callback,
+            stage="summary",
+            message=f"Edited {resolved_path}{fuzzy_note}",
+        )
         return f"Edited {resolved_path}: replaced 1 occurrence{fuzzy_note}."

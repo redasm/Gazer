@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from tools.base import ShellOperations
 
-from .helpers import CodingToolBase, _to_workspace_relative_path
+from .helpers import CodingToolBase, _emit_progress, _to_workspace_relative_path
 from .native_ops import native_find, native_grep, native_ls
 from .safety import _is_within_workspace
 
@@ -45,15 +45,25 @@ class ListDirTool(CodingToolBase):
             },
         }
 
-    async def execute(self, path: str = ".", recursive: bool = False, **_: Any) -> str:
+    async def execute(self, path: str = ".", recursive: bool = False, _progress_callback: Any = None, **_: Any) -> str:
         target = (self._workspace / path).resolve()
         if not _is_within_workspace(target, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
         if recursive:
             rel_path = _to_workspace_relative_path(self._workspace, target)
+            await _emit_progress(
+                _progress_callback,
+                stage="prepare",
+                message=f"Recursively listing {rel_path}",
+            )
             try:
-                result = await native_find("**/*", self._workspace, search_dir=rel_path)
+                result = await native_find(
+                    "**/*",
+                    self._workspace,
+                    search_dir=rel_path,
+                    progress_callback=_progress_callback,
+                )
             except PermissionError as exc:
                 return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
             except Exception as exc:
@@ -62,8 +72,18 @@ class ListDirTool(CodingToolBase):
             truncated = " (truncated)" if len(lines) >= 200 else ""
             return f"[{path}] {len(lines)} entries{truncated}\n{result.text}"
 
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Listing {path}",
+        )
         try:
-            result = await native_ls(path, self._workspace, max_depth=1)
+            result = await native_ls(
+                path,
+                self._workspace,
+                max_depth=1,
+                progress_callback=_progress_callback,
+            )
         except PermissionError as exc:
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
         except Exception as exc:
@@ -113,15 +133,21 @@ class FindFilesTool(CodingToolBase):
             "required": ["pattern"],
         }
 
-    async def execute(self, pattern: str, path: str = ".", **_: Any) -> str:
+    async def execute(self, pattern: str, path: str = ".", _progress_callback: Any = None, **_: Any) -> str:
         base = (self._workspace / path).resolve()
         if not _is_within_workspace(base, self._workspace):
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", "path must be inside the workspace.")
 
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Finding files in {path} matching {pattern}",
+        )
         try:
             result = await native_find(
                 pattern, self._workspace,
                 search_dir=_to_workspace_relative_path(self._workspace, base),
+                progress_callback=_progress_callback,
             )
         except PermissionError as exc:
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))
@@ -242,6 +268,7 @@ class GrepTool(CodingToolBase):
         literal: bool = False,
         context: int = 0,
         limit: int = 100,
+        _progress_callback: Any = None,
         **_: Any,
     ) -> str:
         target = (self._workspace / path).resolve()
@@ -250,6 +277,11 @@ class GrepTool(CodingToolBase):
 
         safe_context = min(max(int(context or 0), 0), 10)
 
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Grep in {path} for {pattern}",
+        )
         try:
             result = await native_grep(
                 pattern, self._workspace,
@@ -258,6 +290,7 @@ class GrepTool(CodingToolBase):
                 context_lines=safe_context,
                 is_regex=not literal,
                 ignore_case=bool(ignore_case),
+                progress_callback=_progress_callback,
             )
         except PermissionError as exc:
             return self._error("CODING_PATH_OUTSIDE_WORKSPACE", str(exc))

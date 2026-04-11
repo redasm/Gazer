@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, User, Bot, Loader, Plus, Copy, Check, MessageSquare, Trash2, Pencil, PanelLeftClose, PanelLeft, ChevronRight } from 'lucide-react';
+import { Send, User, Bot, Loader, Plus, Copy, Check, MessageSquare, Trash2, Pencil, PanelLeftClose, PanelLeft, ChevronRight, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import API_BASE from '../config';
@@ -22,6 +22,60 @@ const previewText = (value, limit = 60) => {
     if (text.length <= limit) return text;
     return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 };
+const parseJsonObject = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+const compactInline = (value, limit = 72) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    if (text.length <= limit) return text;
+    return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+};
+const resolveToolLabel = (payload) => {
+    const explicit = compactInline(payload?.label || '', 90);
+    if (explicit) return explicit;
+
+    const toolName = compactInline(payload?.tool || 'tool', 32) || 'tool';
+    const args = parseJsonObject(payload?.args_preview);
+    if (args) {
+        for (const key of ['command', 'pattern', 'path', 'query', 'url', 'name']) {
+            const value = compactInline(args[key], 72);
+            if (value) return `${toolName}: "${value}"`;
+        }
+        for (const value of Object.values(args)) {
+            if (['string', 'number', 'boolean'].includes(typeof value)) {
+                const preview = compactInline(value, 72);
+                if (preview) return `${toolName}: "${preview}"`;
+            }
+        }
+    }
+
+    const rawArgs = compactInline(payload?.args_preview || '', 72);
+    return rawArgs ? `${toolName}: "${rawArgs}"` : toolName;
+};
+const resolveToolMeta = (payload, status) => {
+    const runningDetail = compactInline(payload?.progress_message || payload?.result_summary || '', 120);
+    if (status === 'running' && runningDetail) return runningDetail;
+
+    if (status === 'error') {
+        const errorCode = compactInline(payload?.error_code || '', 32);
+        const hint = compactInline(payload?.error_hint || '', 120);
+        if (hint && errorCode) return `${errorCode} · ${hint}`;
+        if (hint) return hint;
+        if (errorCode) return errorCode;
+    }
+
+    const summary = compactInline(payload?.result_summary || payload?.result_preview || '', 120);
+    if (summary && status !== 'running') return summary;
+    if (payload?.has_media && status !== 'running') return 'Generated media attachment';
+    return status === 'running' ? 'Running' : status === 'error' ? 'Failed' : 'Completed';
+};
 
 const resolveReplyPreview = (messages, replyTo) => {
     const targetId = String(replyTo || '').trim();
@@ -42,7 +96,10 @@ const persistSessions = (list) => {
 };
 const loadMsgs = (id) => { try { return (JSON.parse(localStorage.getItem(STORAGE.msgs(id))) || []).map(m => ({ ...m, time: new Date(m.time) })); } catch { return []; } };
 const persistMsgs = (id, msgs) => {
-    const data = msgs.filter(m => !m.streaming).slice(-MAX_MSGS).map(({ role, content, time }) => ({ role, content, time }));
+    const data = msgs
+        .filter(m => !m.streaming && m.role !== 'event')
+        .slice(-MAX_MSGS)
+        .map(({ role, content, time }) => ({ role, content, time }));
     localStorage.setItem(STORAGE.msgs(id), JSON.stringify(data));
 };
 
@@ -179,6 +236,105 @@ const markdownComponents = {
     },
 };
 
+const ToolEventCard = ({ msg }) => {
+    const status = msg.status || 'running';
+    const palette = status === 'error'
+        ? {
+            bg: 'rgba(239,68,68,0.10)',
+            border: 'rgba(239,68,68,0.28)',
+            title: '#fecaca',
+            meta: '#fca5a5',
+            badgeBg: 'rgba(239,68,68,0.16)',
+            badgeText: '#fca5a5',
+            Icon: AlertCircle,
+        }
+        : status === 'ok'
+            ? {
+                bg: 'rgba(74,222,128,0.10)',
+                border: 'rgba(74,222,128,0.24)',
+                title: '#dcfce7',
+                meta: '#86efac',
+                badgeBg: 'rgba(74,222,128,0.16)',
+                badgeText: '#86efac',
+                Icon: CheckCircle2,
+            }
+            : {
+                bg: 'rgba(96,165,250,0.10)',
+                border: 'rgba(96,165,250,0.22)',
+                title: '#dbeafe',
+                meta: '#93c5fd',
+                badgeBg: 'rgba(96,165,250,0.16)',
+                badgeText: '#93c5fd',
+                Icon: Loader,
+            };
+    const Icon = palette.Icon;
+    const badgeText = status === 'error' ? 'Error' : status === 'ok' ? 'Done' : 'Running';
+
+    return (
+        <div style={{
+            padding: '10px 12px',
+            borderRadius: '14px 14px 14px 2px',
+            background: palette.bg,
+            border: `1px solid ${palette.border}`,
+            color: palette.title,
+            minWidth: 0,
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '999px',
+                        background: 'rgba(255,255,255,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                    }}>
+                        {status === 'running'
+                            ? <Icon size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                            : <Icon size={13} />}
+                    </div>
+                    <div style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                    }}>
+                        {msg.label || msg.toolName || 'tool'}
+                    </div>
+                </div>
+                <span style={{
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                    borderRadius: '999px',
+                    background: palette.badgeBg,
+                    color: palette.badgeText,
+                    flexShrink: 0,
+                }}>
+                    {badgeText}
+                </span>
+            </div>
+            {msg.meta && (
+                <div style={{
+                    marginTop: '6px',
+                    paddingLeft: '32px',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
+                    color: palette.meta,
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                }}>
+                    {msg.meta}
+                </div>
+            )}
+        </div>
+    );
+};
+
 /** Split content into text and <think> blocks for rendering. */
 const renderMessageContent = (content) => {
     if (!content) return null;
@@ -263,7 +419,7 @@ const Chat = ({ t }) => {
         if (!activeSessionId || messages.some(m => m.streaming)) return;
         persistMsgs(activeSessionId, messages);
         if (messages.length > 0) {
-            const last = messages[messages.length - 1];
+            const last = [...messages].reverse().find((item) => item.role !== 'event') || messages[messages.length - 1];
             setSessions(prev => {
                 const updated = prev.map(s =>
                     s.id === activeSessionId
@@ -396,15 +552,32 @@ const Chat = ({ t }) => {
                 });
             } else if (data.type === 'tool_call_event') {
                 const payload = data.payload || {};
-                const toolName = payload.tool || 'tool';
                 const eventType = data.event_type || '';
-                const status = payload.status || '';
-                const hint = payload.error_hint || '';
-                const summary = eventType === 'call'
-                    ? `[tool] calling ${toolName}`
-                    : `[tool] ${toolName} ${status || 'done'}`;
-                const detail = hint ? `${summary} - ${hint}` : summary;
-                setMessages(prev => [...prev, { role: 'system', content: detail, time: new Date() }]);
+                const toolCallId = String(payload.tool_call_id || `${payload.tool || 'tool'}_${Date.now()}`);
+                const nextStatus = (eventType === 'call' || eventType === 'progress') ? 'running' : (payload.status || 'ok');
+                startResponseTimeout();
+                setMessages(prev => {
+                    const existingIndex = prev.findIndex(
+                        (item) => item.role === 'event' && item.eventKind === 'tool' && item.toolCallId === toolCallId,
+                    );
+                    const eventMessage = {
+                        role: 'event',
+                        eventKind: 'tool',
+                        toolCallId,
+                        toolName: payload.tool || 'tool',
+                        label: resolveToolLabel(payload),
+                        meta: resolveToolMeta(payload, nextStatus),
+                        status: nextStatus,
+                        payload,
+                        time: existingIndex >= 0 ? prev[existingIndex].time : new Date(),
+                    };
+                    if (existingIndex >= 0) {
+                        const updated = [...prev];
+                        updated[existingIndex] = { ...updated[existingIndex], ...eventMessage };
+                        return updated;
+                    }
+                    return [...prev, eventMessage];
+                });
             } else if (data.type === 'chat_end') {
                 setIsTyping(false);
                 clearResponseTimeout();
@@ -732,6 +905,7 @@ const Chat = ({ t }) => {
                             {messages.map((msg, idx) => (
                                 (() => {
                                     const replied = msg.role === 'assistant' ? resolveReplyPreview(messages, msg.replyTo) : null;
+                                    const isEvent = msg.role === 'event' && msg.eventKind === 'tool';
                                     return (
                                 <div key={idx} style={{
                                     display: 'flex',
@@ -755,33 +929,41 @@ const Chat = ({ t }) => {
                                             justifyContent: 'center',
                                             flexShrink: 0,
                                         }}>
-                                            {msg.role === 'user' ? <User size={14} color="#93c5fd" /> : <Bot size={14} color="#60a5fa" />}
+                                            {msg.role === 'user'
+                                                ? <User size={14} color="#93c5fd" />
+                                                : isEvent
+                                                    ? <Wrench size={14} color="#93c5fd" />
+                                                    : <Bot size={14} color="#60a5fa" />}
                                         </div>
                                         <div style={{ minWidth: 0 }}>
-                                            <div style={{
-                                                padding: '10px 14px',
-                                                borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                                                background: msg.role === 'user' ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                                                border: msg.role === 'user' ? '1px solid rgba(59,130,246,0.25)' : '1px solid rgba(255,255,255,0.08)',
-                                                color: '#e0e8f0',
-                                                fontSize: '14px',
-                                                lineHeight: 1.6,
-                                                overflowWrap: 'anywhere',
-                                                wordBreak: 'break-word',
-                                                maxWidth: '100%',
-                                            }}>
-                                                {replied && (
-                                                    <div className="chat-reply-card">
-                                                        <div className="chat-reply-kicker">Replying to</div>
-                                                        <div className="chat-reply-preview">{previewText(replied.content, 60)}</div>
-                                                    </div>
-                                                )}
-                                                {msg.role === 'assistant' ? (
-                                                    renderMessageContent(msg.content)
-                                                ) : (
-                                                    <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</div>
-                                                )}
-                                            </div>
+                                            {isEvent ? (
+                                                <ToolEventCard msg={msg} />
+                                            ) : (
+                                                <div style={{
+                                                    padding: '10px 14px',
+                                                    borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
+                                                    background: msg.role === 'user' ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                                                    border: msg.role === 'user' ? '1px solid rgba(59,130,246,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                                                    color: '#e0e8f0',
+                                                    fontSize: '14px',
+                                                    lineHeight: 1.6,
+                                                    overflowWrap: 'anywhere',
+                                                    wordBreak: 'break-word',
+                                                    maxWidth: '100%',
+                                                }}>
+                                                    {replied && (
+                                                        <div className="chat-reply-card">
+                                                            <div className="chat-reply-kicker">Replying to</div>
+                                                            <div className="chat-reply-preview">{previewText(replied.content, 60)}</div>
+                                                        </div>
+                                                    )}
+                                                    {msg.role === 'assistant' ? (
+                                                        renderMessageContent(msg.content)
+                                                    ) : (
+                                                        <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</div>
+                                                    )}
+                                                </div>
+                                            )}
                                             {msg.time && (
                                                 <div style={{
                                                     fontSize: '10px',

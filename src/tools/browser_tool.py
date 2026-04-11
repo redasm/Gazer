@@ -1,5 +1,6 @@
 """Browser tool: action-based Playwright wrapper (single tool, multiple operations)."""
 
+import inspect
 import logging
 from typing import Any, Dict, Optional
 
@@ -44,6 +45,20 @@ class BrowserTool(Tool):
     def _error(code: str, message: str) -> str:
         return f"Error [{code}]: {message}"
 
+    @staticmethod
+    async def _emit_progress(progress_callback: Any, *, stage: str, message: str) -> None:
+        if progress_callback is None:
+            return
+        payload = {"stage": str(stage or "").strip(), "message": str(message or "").strip()}
+        if not payload["message"]:
+            return
+        try:
+            result = progress_callback(payload)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            logger.debug("Browser tool progress callback failed", exc_info=True)
+
     @property
     def parameters(self) -> Dict[str, Any]:
         return {
@@ -76,6 +91,8 @@ class BrowserTool(Tool):
         }
 
     async def execute(self, action: str, **kwargs: Any) -> str:
+        progress_callback = kwargs.get("_progress_callback")
+        await self._emit_progress(progress_callback, stage="prepare", message=f"Browser action: {action}")
         dispatch = {
             "start": self._start,
             "open": self._open,
@@ -96,6 +113,7 @@ class BrowserTool(Tool):
         return await self._start()
 
     async def _start(self, **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if self._page:
             return "Browser already running."
         try:
@@ -115,9 +133,11 @@ class BrowserTool(Tool):
             )
         )
         self._page = await ctx.new_page()
+        await self._emit_progress(progress_callback, stage="summary", message="Browser started")
         return "Browser started."
 
     async def _open(self, url: str = "", **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if not url:
             return self._error("BROWSER_URL_REQUIRED", "'url' is required for 'open' action.")
         err = await self._ensure_browser()
@@ -125,13 +145,16 @@ class BrowserTool(Tool):
             return err
 
         try:
+            await self._emit_progress(progress_callback, stage="navigate", message=f"Opening {url}")
             await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
             title = await self._page.title()
+            await self._emit_progress(progress_callback, stage="summary", message=f"Loaded {title or url}")
             return f"Navigated to: {url}\nTitle: {title}"
         except Exception as exc:
             return self._error("BROWSER_NAVIGATE_FAILED", f"navigating to {url} failed: {exc}")
 
     async def _snapshot(self, **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if not self._page:
             return self._error("BROWSER_NOT_STARTED", "browser not started. Use action='start' first.")
         try:
@@ -141,22 +164,26 @@ class BrowserTool(Tool):
             text = await self._page.evaluate(
                 "() => document.body.innerText.substring(0, 8000)"
             )
+            await self._emit_progress(progress_callback, stage="summary", message=f"Captured snapshot for {title or url}")
             return f"URL: {url}\nTitle: {title}\n---\n{text}"
         except Exception as exc:
             return self._error("BROWSER_SNAPSHOT_FAILED", f"taking snapshot failed: {exc}")
 
     async def _screenshot(self, **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if not self._page:
             return self._error("BROWSER_NOT_STARTED", "browser not started.")
         try:
             import tempfile, os
             path = os.path.join(tempfile.gettempdir(), "gazer_browser_screenshot.png")
             await self._page.screenshot(path=path, full_page=False)
+            await self._emit_progress(progress_callback, stage="summary", message=f"Saved screenshot to {path}")
             return f"Screenshot saved to: {path}"
         except Exception as exc:
             return self._error("BROWSER_SCREENSHOT_FAILED", f"taking screenshot failed: {exc}")
 
     async def _act(self, act_type: str = "", selector: str = "", text: str = "", **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if not self._page:
             return self._error("BROWSER_NOT_STARTED", "browser not started.")
         if not act_type or not selector:
@@ -167,12 +194,15 @@ class BrowserTool(Tool):
 
         try:
             if act_type == "click":
+                await self._emit_progress(progress_callback, stage="act", message=f"Clicking {selector}")
                 await self._page.click(selector, timeout=10000)
                 return f"Clicked: {selector}"
             elif act_type == "type":
+                await self._emit_progress(progress_callback, stage="act", message=f"Typing into {selector}")
                 await self._page.fill(selector, text, timeout=10000)
                 return f"Typed into {selector}: {text[:50]}..."
             elif act_type == "press":
+                await self._emit_progress(progress_callback, stage="act", message=f"Pressing {text} on {selector}")
                 await self._page.press(selector, text, timeout=10000)
                 return f"Pressed {text} on {selector}"
             else:
@@ -184,6 +214,7 @@ class BrowserTool(Tool):
             )
 
     async def _close(self, **_: Any) -> str:
+        progress_callback = _.get("_progress_callback")
         if self._browser:
             await self._browser.close()
             self._browser = None
@@ -191,4 +222,5 @@ class BrowserTool(Tool):
             await self._pw.stop()
             self._pw = None
         self._page = None
+        await self._emit_progress(progress_callback, stage="summary", message="Browser closed")
         return "Browser closed."

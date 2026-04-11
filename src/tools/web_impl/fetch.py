@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .helpers import WebToolBase, _cache_get, _cache_set
+from .helpers import WebToolBase, _cache_get, _cache_set, emit_web_progress
 
 class WebFetchTool(WebToolBase):
     """Fetch a URL and extract readable text content."""
@@ -51,9 +51,14 @@ class WebFetchTool(WebToolBase):
             return True  # If we can't resolve, block it for safety
         return False
 
-    async def execute(self, url: str, max_chars: int = 50000, **_: Any) -> str:
+    async def execute(self, url: str, max_chars: int = 50000, _progress_callback: Any = None, **_: Any) -> str:
         if not url.startswith(("http://", "https://")):
             return self._error("WEB_URL_INVALID", "URL must start with http:// or https://")
+        await emit_web_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Fetching {url}",
+        )
 
         # SSRF protection: block private/internal IPs
         from urllib.parse import urlparse
@@ -65,6 +70,11 @@ class WebFetchTool(WebToolBase):
         cache_key = f"fetch:{url}"
         cached = _cache_get(cache_key)
         if cached:
+            await emit_web_progress(
+                _progress_callback,
+                stage="cache",
+                message=f"Cache hit for {url}",
+            )
             return cached[:max_chars]
 
         try:
@@ -78,6 +88,11 @@ class WebFetchTool(WebToolBase):
                 follow_redirects=True,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; Gazer/1.0)"},
             ) as client:
+                await emit_web_progress(
+                    _progress_callback,
+                    stage="network",
+                    message=f"Downloading {url}",
+                )
                 resp = await client.get(url)
                 resp.raise_for_status()
                 html = resp.text
@@ -86,6 +101,11 @@ class WebFetchTool(WebToolBase):
 
         text = self._extract_text(html)
         _cache_set(cache_key, text)
+        await emit_web_progress(
+            _progress_callback,
+            stage="summary",
+            message=f"Extracted {min(len(text), max_chars)} chars from {url}",
+        )
         return text[:max_chars]
 
     @staticmethod
@@ -113,4 +133,3 @@ class WebFetchTool(WebToolBase):
         text = re.sub(r"<[^>]+>", " ", html)
         text = re.sub(r"\s+", " ", text).strip()
         return text
-

@@ -483,6 +483,7 @@ class ProcessMessageMixin:
                         retry_budget=ctx.retry_budget,
                         sender_id=msg.sender_id,
                         channel=msg.channel,
+                        chat_id=msg.chat_id,
                         session_key=session_key,
                         max_parallel_calls=ctx.max_parallel_tool_calls,
                         plan=batch_plan,
@@ -554,6 +555,7 @@ class ProcessMessageMixin:
                             retry_budget=ctx.retry_budget,
                             sender_id=msg.sender_id,
                             channel=msg.channel,
+                            chat_id=msg.chat_id,
                             session_key=session_key,
                         )
                         tool_calls_executed += 1
@@ -794,4 +796,3 @@ class ProcessMessageMixin:
             content=command_reply,
             reply_to=self._resolve_outbound_reply_to(msg),
         )
-

@@ -79,6 +79,20 @@ class ChannelAdapter(ABC):
         """
         pass
 
+    @staticmethod
+    def _get_partial_tool_progress_text(msg: OutboundMessage) -> str:
+        """Return text for tool-progress partials, otherwise empty string.
+
+        We intentionally only fan out tool lifecycle updates to non-web channels.
+        Regular token streaming would be too noisy on most transports.
+        """
+        if not bool(getattr(msg, "is_partial", False)):
+            return ""
+        metadata = msg.metadata if isinstance(getattr(msg, "metadata", None), dict) else {}
+        if str(metadata.get("stream_event", "") or "").strip().lower() != "tool_call":
+            return ""
+        return str(getattr(msg, "content", "") or "").strip()
+
     # ------------------------------------------------------------------
     # DM-policy hook (subclasses can override ``_on_pairing_challenge``)
     # ------------------------------------------------------------------

@@ -242,6 +242,15 @@ class FeishuChannel(ChannelAdapter):
         cleanup_key = str(msg.reply_to or "").strip() or chat_id
 
         if msg.is_partial:
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                self._send_text_message(
+                    chat_id=chat_id,
+                    text=partial_text,
+                    context="partial",
+                    reply_to=str(msg.reply_to or "").strip(),
+                )
+                return
             # Feishu doesn't have a native "typing" indicator API for bots
             return
 

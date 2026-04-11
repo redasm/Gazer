@@ -254,8 +254,12 @@ class SlackChannel(ChannelAdapter):
         if not content and not msg.is_partial:
             return
         if msg.is_partial:
-            # Slack has no typing API for bots; skip partial messages
-            return
+            partial_text = self._get_partial_tool_progress_text(msg)
+            if partial_text:
+                content = partial_text
+            else:
+                # Slack has no typing API for bots; skip partial messages
+                return
 
         # Determine target: use slack_channel_id from metadata if available
         metadata = msg.metadata or {}

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from tools.base import ShellOperations
 
-from .helpers import CodingToolBase, _IMAGE_SUFFIXES
+from .helpers import CodingToolBase, _IMAGE_SUFFIXES, _emit_progress
 from .native_ops import native_exec
 from .safety import _is_within_workspace, check_dangerous_command
 
@@ -68,7 +68,14 @@ class ExecTool(CodingToolBase):
             "required": ["command"],
         }
 
-    async def execute(self, command: str, workdir: str = ".", timeout: int = 30, **_: Any) -> str:
+    async def execute(
+        self,
+        command: str,
+        workdir: str = ".",
+        timeout: int = 30,
+        _progress_callback: Any = None,
+        **_: Any,
+    ) -> str:
         if not ExecTool._sandbox_warned:
             ExecTool._sandbox_warned = True
             try:
@@ -96,12 +103,22 @@ class ExecTool(CodingToolBase):
 
         timeout = min(max(timeout, 1), self._timeout_limit)
         logger.info("ExecTool: running %r in %s (timeout=%ss)", command, cwd, timeout)
+        await _emit_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f"Preparing exec in {cwd}",
+        )
 
         import time as _time
         exec_start = _time.time()
 
         try:
-            result = await native_exec(command, cwd, timeout=float(timeout))
+            result = await native_exec(
+                command,
+                cwd,
+                timeout=float(timeout),
+                progress_callback=_progress_callback,
+            )
             output = result.text
         except Exception as exc:
             message = str(exc)
@@ -115,6 +132,11 @@ class ExecTool(CodingToolBase):
             for mp in media_paths:
                 output += f"\n{MEDIA_MARKER}{mp}"
             logger.info("ExecTool auto-detected image(s): %s", media_paths)
+            await _emit_progress(
+                _progress_callback,
+                stage="media",
+                message=f"Detected {len(media_paths)} generated media file(s)",
+            )
 
         return output
 

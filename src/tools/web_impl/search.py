@@ -18,6 +18,7 @@ from .helpers import (
     _cache_get,
     _cache_set,
     config,
+    emit_web_progress,
     logger,
     resolve_web_report_path,
 )
@@ -220,10 +221,22 @@ class WebSearchTool(WebToolBase):
             return await self._wikipedia_search(query, count)
         return None
 
-    async def execute(self, query: str, count: int = 5, scene: str = "auto", **_: Any) -> str:
+    async def execute(
+        self,
+        query: str,
+        count: int = 5,
+        scene: str = "auto",
+        _progress_callback: Any = None,
+        **_: Any,
+    ) -> str:
         started_at = time.time()
         count = min(max(count, 1), 10)
         normalized_query = self._normalize_query(query)
+        await emit_web_progress(
+            _progress_callback,
+            stage="prepare",
+            message=f'Searching web for "{normalized_query}"',
+        )
 
         brave_key = str(config.get("web.search.brave_api_key", "") or "").strip()
         if not brave_key:
@@ -268,6 +281,11 @@ class WebSearchTool(WebToolBase):
         cache_key = f"search:{normalized_query}:{count}:{scene_name}"
         cached = _cache_get(cache_key)
         if cached:
+            await emit_web_progress(
+                _progress_callback,
+                stage="cache",
+                message=f'Cache hit for "{normalized_query}"',
+            )
             cached_count = len(self._parse_search_results(cached, max_entries=count))
             self._record_search_observation(
                 {
@@ -303,6 +321,11 @@ class WebSearchTool(WebToolBase):
                     fallback_reason = "primary_disabled"
                 continue
             providers_attempted.append(provider)
+            await emit_web_progress(
+                _progress_callback,
+                stage="provider",
+                message=f'Trying {provider} for "{normalized_query}"',
+            )
             candidate = await self._search_with_provider(
                 provider=provider,
                 query=normalized_query,
@@ -323,6 +346,11 @@ class WebSearchTool(WebToolBase):
                 continue
             relevance_score = self._relevance_score(normalized_query, candidate)
             if relevance_gate["enabled"] and relevance_score < relevance_gate["min_score"]:
+                await emit_web_progress(
+                    _progress_callback,
+                    stage="relevance",
+                    message=f"{provider} results were low relevance, trying fallback",
+                )
                 logger.info(
                     "web_search provider '%s' returned low-relevance results (score=%.3f, threshold=%.3f); trying next provider",
                     provider,
@@ -378,6 +406,11 @@ class WebSearchTool(WebToolBase):
 
         result_count = len(self._parse_search_results(result, max_entries=count))
         fallback_used = bool(fallback_reason and fallback_reason != "none")
+        await emit_web_progress(
+            _progress_callback,
+            stage="summary",
+            message=f"Search finished via {provider_used or 'none'} with {result_count} result(s)",
+        )
         self._record_search_observation(
             {
                 "query": normalized_query,
@@ -732,4 +765,3 @@ class WebSearchTool(WebToolBase):
         if not lines:
             return None
         return "\n\n".join(lines)
-

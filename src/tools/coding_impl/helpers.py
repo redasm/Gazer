@@ -4,6 +4,7 @@ Shared utilities for coding tool classes.
 """
 
 import asyncio
+import inspect
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -118,3 +119,28 @@ class CodingToolBase(Tool):
     @staticmethod
     def _error(code: str, message: str) -> str:
         return f"Error [{code}]: {message}"
+
+
+async def _emit_progress(
+    progress_callback: Any,
+    *,
+    stage: str,
+    message: str,
+    **extra: Any,
+) -> None:
+    """Best-effort async progress emitter for coding tools."""
+    if progress_callback is None:
+        return
+    payload = {
+        "stage": str(stage or "").strip(),
+        "message": str(message or "").strip(),
+        **extra,
+    }
+    if not payload["message"]:
+        return
+    try:
+        result = progress_callback(payload)
+        if inspect.isawaitable(result):
+            await result
+    except Exception:
+        logger.debug("Coding tool progress callback failed", exc_info=True)

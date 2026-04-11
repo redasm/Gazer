@@ -17,7 +17,7 @@ import json
 import logging
 logger = logging.getLogger('AgentLoop')
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     pass  # Add type imports as needed
@@ -51,6 +51,7 @@ class ToolExecutionMixin:
         retry_budget: RetryBudget,
         sender_id: str,
         channel: str,
+        chat_id: str = "",
         session_key: str = "",
     ) -> str:
         """Execute one tool call with normalization, timeout, and fault isolation."""
@@ -83,6 +84,38 @@ class ToolExecutionMixin:
                 "Hint: Provide a JSON object matching the tool schema.\n"
                 f"{recovery}"
             )
+
+        progress_counter = 0
+        progress_limit = 16
+
+        async def _progress_callback(event: Dict[str, Any]) -> None:
+            nonlocal progress_counter
+            if progress_counter >= progress_limit:
+                return
+            if not isinstance(event, dict):
+                return
+            message = str(event.get("message", "") or "").strip()
+            if not message:
+                return
+            progress_counter += 1
+            payload = self._build_tool_progress_payload(
+                tool_call,
+                stage=str(event.get("stage", "") or "").strip(),
+                message=message,
+                sequence=progress_counter,
+                extra={
+                    "stream": str(event.get("stream", "") or "").strip(),
+                    "line_count": int(event.get("line_count", 0) or 0),
+                },
+            )
+            await self._emit_tool_call_stream_event(
+                channel=channel,
+                chat_id=chat_id,
+                event_type="progress",
+                payload=payload,
+            )
+
+        params["_progress_callback"] = _progress_callback
 
         blocked = self._tool_call_hooks.before_tool_call(
             session_key=session_key,
@@ -235,6 +268,7 @@ class ToolExecutionMixin:
         retry_budget: RetryBudget,
         sender_id: str,
         channel: str,
+        chat_id: str,
         max_parallel_calls: int,
         session_key: str = "",
         plan: Optional[ToolBatchPlan] = None,
@@ -248,6 +282,7 @@ class ToolExecutionMixin:
                 retry_budget=retry_budget,
                 sender_id=sender_id,
                 channel=channel,
+                chat_id=chat_id,
                 session_key=session_key,
                 max_parallel_calls=max_parallel_calls,
             )
@@ -277,6 +312,7 @@ class ToolExecutionMixin:
         retry_budget: RetryBudget,
         sender_id: str,
         channel: str,
+        chat_id: str,
         max_parallel_calls: int,
         session_key: str = "",
     ) -> List[str]:
@@ -302,6 +338,7 @@ class ToolExecutionMixin:
                         retry_budget=retry_budget,
                         sender_id=sender_id,
                         channel=channel,
+                        chat_id=chat_id,
                         session_key=session_key,
                     )
 
@@ -325,4 +362,3 @@ class ToolExecutionMixin:
                 continue
             safe_results.append(result)
         return safe_results
-

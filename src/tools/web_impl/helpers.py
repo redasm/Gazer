@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import inspect
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from runtime.config_manager import config
 from runtime.paths import resolve_runtime_path
@@ -43,3 +44,28 @@ def _cache_set(key: str, value: str) -> None:
 
 def resolve_web_report_path(path: str) -> str:
     return str(resolve_runtime_path(path, config_manager=config))
+
+
+async def emit_web_progress(
+    progress_callback: Any,
+    *,
+    stage: str,
+    message: str,
+    **extra: Any,
+) -> None:
+    """Best-effort async progress emitter for web tools."""
+    if progress_callback is None:
+        return
+    payload = {
+        "stage": str(stage or "").strip(),
+        "message": str(message or "").strip(),
+        **extra,
+    }
+    if not payload["message"]:
+        return
+    try:
+        result = progress_callback(payload)
+        if inspect.isawaitable(result):
+            await result
+    except Exception:
+        logger.debug("Web tool progress callback failed", exc_info=True)
