@@ -86,34 +86,37 @@ git clone https://github.com/redasm/Gazer.git
 cd gazer
 ```
 
-### 2. 创建 Python 虚拟环境
+### 2. 路径 A：最小可运行（推荐首次安装）
+
+目标：先把 `python main.py` 跑起来，避免首次安装被重依赖阻塞。
 
 ```bash
-python -m venv .venv
-```
-
-激活虚拟环境：
-
-```bash
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Windows (CMD)
-.venv\Scripts\activate.bat
-
-# macOS / Linux
+# Linux / macOS
+python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install -U pip
+
+# Windows PowerShell
+# py -m venv .venv
+# .venv\Scripts\Activate.ps1
+# python -m pip install -U pip
 ```
 
-### 3. 安装 Python 依赖
-
-安装核心依赖（可编辑模式）：
+安装最小运行依赖：
 
 ```bash
-pip install -e .
+pip install python-dotenv fastapi pydantic uvicorn pyyaml openai litellm click
 ```
 
-按需安装可选依赖组：
+### 3. 路径 B：完全体（全部能力）
+
+目标：安装项目完整依赖与扩展能力（测试、感知、UI、浏览器、卫星节点）。
+
+```bash
+pip install -e ".[dev,perception,ui,browser,satellite]"
+```
+
+按需安装某个扩展组：
 
 | 依赖组 | 命令 | 包含内容 |
 |--------|------|---------|
@@ -123,13 +126,7 @@ pip install -e .
 | `browser` | `pip install -e ".[browser]"` | Playwright 浏览器自动化 |
 | `satellite` | `pip install -e ".[satellite]"` | WebSocket 卫星节点连接 |
 
-一次性安装全部可选依赖：
-
-```bash
-pip install -e ".[dev,perception,ui,browser,satellite]"
-```
-
-> **注意**：`perception` 组中的 `pyaudio` 在 Windows 上可能需要预先安装系统级音频库，macOS 需要 `portaudio`（`brew install portaudio`）。
+> **注意**：`perception` 组中的 `pyaudio` 在 Linux/WSL 和 Windows 上都可能需要额外系统库。首次安装建议先走“最小可运行”路径，再按需补齐扩展组。
 
 ### 4. 配置环境变量
 
@@ -183,6 +180,13 @@ gazer doctor
 ```
 
 该命令会检查 Python 版本、核心依赖、配置文件、API 密钥、端口可用性等。
+
+### 8. 常见问题
+
+- `python: command not found`：在 Linux/WSL 使用 `python3` 创建虚拟环境。
+- `The virtual environment was not created successfully because ensurepip is not available`：先安装 `python3-venv` 后再执行 `python3 -m venv .venv`。
+- `ModuleNotFoundError: No module named 'dotenv'`：先执行 `pip install python-dotenv`，确认当前解释器来自 `.venv`（`which python`）。
+- `pyaudio` 构建失败：先使用“最小可运行”路径启动，后续再补 `perception` 依赖及系统库。
 
 ## 启动
 
