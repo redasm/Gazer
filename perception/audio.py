@@ -6,13 +6,19 @@ import tempfile
 import time
 import wave
 import numpy as np
-import sounddevice as sd
-import edge_tts
 import asyncio
 from typing import Any, Optional
 
 logger = logging.getLogger("GazerAudio")
 
+try:
+    import sounddevice as sd
+except Exception:  # pragma: no cover - optional dependency
+    sd = None
+try:
+    import edge_tts
+except Exception:  # pragma: no cover - optional dependency
+    edge_tts = None
 try:
     import httpx
 except Exception:  # pragma: no cover - optional dependency
@@ -382,6 +388,10 @@ class GazerAudio:
                 logger.warning(f"Cloud TTS failed ({last_error}), fallback disabled.")
                 return
 
+        if edge_tts is None:
+            logger.warning("edge-tts not installed; TTS unavailable.")
+            return
+
         ssml_text = self._construct_ssml(clean_text, voice, style)
         try:
             communicate = edge_tts.Communicate(ssml_text, voice)
@@ -397,6 +407,9 @@ class GazerAudio:
     async def _play_pcm_audio(self, audio_np: np.ndarray, sample_rate: int = 24000) -> None:
         """Play PCM float32 audio and emit amplitude frames to UI."""
         if audio_np is None or len(audio_np) <= 0:
+            return
+        if sd is None:
+            logger.warning("sounddevice not installed; audio playback unavailable.")
             return
 
         def callback(outdata, frames, time_info, status):

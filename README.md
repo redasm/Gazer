@@ -102,11 +102,13 @@ python -m pip install -U pip
 # python -m pip install -U pip
 ```
 
-安装最小运行依赖：
+安装核心运行依赖：
 
 ```bash
-pip install python-dotenv fastapi pydantic uvicorn pyyaml openai litellm click
+pip install -e .
 ```
+
+> 此命令基于 `pyproject.toml` 中的 `dependencies` 安装所有核心包。感知（音频/视觉）等可选能力按需在路径 B 中补齐。
 
 ### 3. 路径 B：完全体（全部能力）
 
@@ -185,8 +187,9 @@ gazer doctor
 
 - `python: command not found`：在 Linux/WSL 使用 `python3` 创建虚拟环境。
 - `The virtual environment was not created successfully because ensurepip is not available`：先安装 `python3-venv` 后再执行 `python3 -m venv .venv`。
-- `ModuleNotFoundError: No module named 'dotenv'`：先执行 `pip install python-dotenv`，确认当前解释器来自 `.venv`（`which python`）。
-- `pyaudio` 构建失败：先使用“最小可运行”路径启动，后续再补 `perception` 依赖及系统库。
+- `ModuleNotFoundError: No module named 'dotenv'`：确认虚拟环境已激活（`which python`），再执行 `pip install -e .`。
+- `pyaudio` 构建失败：Linux/WSL 需先 `sudo apt install portaudio19-dev`，Windows 需安装 PortAudio。首次可先走“最小可运行”路径，后续再补 `perception` 组。
+- `sounddevice`/`edge-tts` 缺失警告：属于 `perception` 可选组，核心启动已做 graceful fallback 不受影响。如需音频功能请 `pip install -e ".[perception]"`。
 
 ## 启动
 
