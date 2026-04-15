@@ -82,7 +82,7 @@ Gazer/
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/your-org/gazer.git
+git clone https://github.com/redasm/Gazer.git
 cd gazer
 ```
 
