@@ -61,6 +61,7 @@ const OceanSlider = ({ label, labelZh, value, onChange, color }) => (
 const Personality = ({ t, showToast }) => {
     const [state, setState] = useState(null);
     const [ocean, setOcean] = useState(null);
+    const [stateError, setStateError] = useState(null);
     const [promptText, setPromptText] = useState('');
     const [promptDirty, setPromptDirty] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -86,11 +87,16 @@ const Personality = ({ t, showToast }) => {
             if (res.data?.status === 'ok') {
                 setState(res.data);
                 setOcean(res.data.ocean);
+                setStateError(null);
                 if (!promptDirtyRef.current) {
                     setPromptText(res.data.system_prompt || '');
                 }
+            } else {
+                setStateError(res.data?.reason || 'unavailable');
             }
-        } catch { /* backend offline */ }
+        } catch {
+            setStateError('backend_offline');
+        }
     }, []);
 
     const fetchEvolution = useCallback(async () => {
@@ -216,7 +222,16 @@ const Personality = ({ t, showToast }) => {
                     </div>
                 </div>
 
-                {ocean ? (
+                {stateError ? (
+                    <div style={{ color: '#f87171', fontSize: 13, padding: '10px 0' }}>
+                        {stateError === 'personality_not_initialized'
+                            ? (t.personalityUnavailable || 'Personality module is not running. Start the Gazer brain to enable this feature.')
+                            : stateError === 'backend_offline'
+                            ? (t.backendOffline || 'Backend offline — check server connection.')
+                            : `${t.personalityUnavailable || 'Unavailable'}: ${stateError}`
+                        }
+                    </div>
+                ) : ocean ? (
                     <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 32px' }}>
                         <OceanSlider label="Openness" labelZh={t.oceanOpenness} value={ocean.openness} color="#8b5cf6"
