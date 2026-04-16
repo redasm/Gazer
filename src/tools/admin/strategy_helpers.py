@@ -17,14 +17,14 @@ import tools.admin.state as _state
 from tools.admin.state import (
     _policy_audit_buffer,
     _strategy_change_history,
-    _workflow_run_history,
+
     _mcp_rate_counts,
     _mcp_audit_buffer,
     _POLICY_AUDIT_LOG_PATH,
     _STRATEGY_SNAPSHOT_LOG_PATH,
     get_llm_router,
 )
-from devices.satellite_protocol import SatelliteProtocolError
+
 from tools.admin.utils import _append_jsonl_record, _read_jsonl_tail
 
 logger = logging.getLogger('GazerAdminAPI')
@@ -193,42 +193,6 @@ def _merge_error_code_counts(rows: List[Dict[str, int]]) -> Dict[str, int]:
             merged[marker] = merged.get(marker, 0) + max(0, count)
     return merged
 
-def _append_workflow_run_metric(
-    *,
-    workflow_id: str,
-    workflow_name: str,
-    result: Dict[str, Any],
-) -> None:
-    metrics = result.get("metrics", {}) if isinstance(result, dict) else {}
-    trace_items = result.get("trace", []) if isinstance(result, dict) else []
-    status = str(result.get("status", "error")).strip().lower() if isinstance(result, dict) else "error"
-    error_text = str(result.get("error", "")).strip() if isinstance(result, dict) else ""
-    failed_node_id = str(result.get("failed_node_id", "")).strip() if isinstance(result, dict) else ""
-    try:
-        total_duration_ms = int(metrics.get("total_duration_ms", 0) or 0)
-    except (TypeError, ValueError):
-        total_duration_ms = 0
-    try:
-        trace_nodes = int(metrics.get("trace_nodes", len(trace_items)) or 0)
-    except (TypeError, ValueError):
-        trace_nodes = len(trace_items) if isinstance(trace_items, list) else 0
-    try:
-        node_duration_ms = int(metrics.get("node_duration_ms", 0) or 0)
-    except (TypeError, ValueError):
-        node_duration_ms = 0
-    _workflow_run_history.append(
-        {
-            "timestamp": datetime.utcnow().isoformat(),
-            "workflow_id": workflow_id,
-            "workflow_name": workflow_name or workflow_id,
-            "status": status,
-            "error": error_text,
-            "failed_node_id": failed_node_id,
-            "total_duration_ms": max(0, total_duration_ms),
-            "trace_nodes": max(0, trace_nodes),
-            "node_duration_ms": max(0, node_duration_ms),
-        }
-    )
 
 _DEFAULT_RELEASE_GATE_HEALTH_THRESHOLDS: Dict[str, Any] = {
     "warning_success_rate": 0.90,
@@ -348,66 +312,6 @@ def _persona_runtime_thresholds() -> Dict[str, Any]:
         "retain": retain,
     }
 
-def _get_satellite_node_config(node_id: str) -> dict:
-    """Read satellite node config from devices.satellite.<node_id>"""
-    satellites = config.get("devices.satellite", {})
-    if isinstance(satellites, dict):
-        node_cfg = satellites.get(node_id, {})
-        if isinstance(node_cfg, dict):
-            return node_cfg
-    return {}
-
-def _validate_satellite_node_auth(node_id: str, token: str) -> tuple[bool, str]:
-    node_id = str(node_id or "").strip()
-    token = str(token or "").strip()
-    if not node_id:
-        return False, "Node ID is required."
-    if not token:
-        return False, "Node token is required."
-    node_cfg = _get_satellite_node_config(node_id)
-    expected_token = str(node_cfg.get("token", "")).strip()
-    if not expected_token:
-        return False, f"Node '{node_id}' is not configured for satellite auth."
-    if token != expected_token:
-        return False, "Invalid node token."
-    return True, ""
-
-def _decode_frame_payload(frame: Dict[str, Any]) -> bytes:
-    payload = frame.get("payload")
-    if not isinstance(payload, str) or not payload.strip():
-        raise SatelliteProtocolError("frame.payload must be a non-empty base64 string.")
-    try:
-        return base64.b64decode(payload.encode("utf-8"), validate=True)
-    except Exception as exc:
-        raise SatelliteProtocolError(f"Invalid frame payload: {exc}") from exc
-
-def _consume_satellite_frame_budget(
-    *,
-    state: Dict[str, Any],
-    size_bytes: int,
-    now_ts: Optional[float] = None,
-    window_seconds: float = 2.0,
-    max_bytes_per_window: int = 4 * 1024 * 1024,
-) -> bool:
-    """Enforce rolling per-connection frame budget for backpressure."""
-    now = float(now_ts) if now_ts is not None else time.time()
-    window = max(0.1, float(window_seconds or 2.0))
-    max_bytes = max(1, int(max_bytes_per_window or (4 * 1024 * 1024)))
-    queue = state.setdefault("frames", collections.deque())
-    total = int(state.get("total_bytes", 0) or 0)
-
-    while queue and (now - float(queue[0][0])) > window:
-        _ts, old_size = queue.popleft()
-        total = max(0, total - int(old_size))
-
-    candidate = max(0, int(size_bytes))
-    if total + candidate > max_bytes:
-        state["total_bytes"] = total
-        return False
-
-    queue.append((now, candidate))
-    state["total_bytes"] = total + candidate
-    return True
 
 def _get_tool_governance_snapshot(limit: int = 50) -> Dict[str, Any]:
     safe_limit = max(1, min(int(limit), 500))

@@ -6,8 +6,8 @@ Shared state lives in ``tools.admin.state``; helpers in sibling modules.
 from tools.admin import (
     auth, git, cron, skills, websockets, gateway,
     evolution, plugins, config_routes, deployment, policy,
-    memory, workflows, mcp_routes, logs,
-    observability, debug, satellite, system,
+    memory, mcp_routes, logs,
+    observability, debug, system,
     whatsapp_webhook, channel_webhooks, multi_agent_monitor,
 )
 
@@ -31,12 +31,12 @@ ROUTERS = [
     (_get_router(deployment), "", ["deployment"]),
     (_get_router(policy), "", ["policy"]),
     (_get_router(memory), "", ["memory"]),
-    (_get_router(workflows), "", ["workflows"]),
+
     (_get_router(mcp_routes), "", ["mcp"]),
     (_get_router(logs), "", ["logs"]),
     (_get_router(observability), "", ["observability"]),
     (_get_router(debug), "", ["debug"]),
-    (_get_router(satellite), "", ["satellite"]),
+
     (_get_router(system), "", ["system"]),
     (_get_router(gateway), "", ["gateway"]),
     (_get_router(whatsapp_webhook), "", ["whatsapp"]),

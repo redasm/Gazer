@@ -7,14 +7,13 @@
 - 抽象节点协议：`DeviceNode`（`src/devices/registry.py`）。
 - 注册/路由节点：`DeviceRegistry`（按 `target` 或默认节点调度）。
 - 统一动作结果：`NodeActionResult`（`src/devices/models.py`）。
-- 提供本地、卫星、机体硬件三类节点实现。
+- 提供本地桌面、机体硬件两类节点实现。
 
 ## 关键代码
 
 - 节点抽象与注册中心：`src/devices/registry.py`
 - 数据模型：`src/devices/models.py`
 - 本地桌面节点：`src/devices/adapters/local_desktop.py`
-- 远程卫星节点：`src/devices/adapters/remote_satellite.py`
 - 机体硬件节点：`src/devices/adapters/body_hardware.py`
 - 启动装配：`src/runtime/brain.py`（`_init_devices`）
 
@@ -31,15 +30,12 @@
 ## 当前节点模式
 
 - 本地模式：注册 `LocalDesktopNode`，可执行本机截图、输入等动作。
-- 卫星模式：存在 `perception.satellite_ids` 时注册多个 `RemoteSatelliteNode`。
 - 机体模式：`devices.body_node.enabled=true` 时注册 `BodyHardwareNode`，底层由**硬件抽象层**（BodyDriver）驱动机械臂、球形/头显、LED、音频等，详见 [硬件抽象层（Hardware Abstraction Layer）](./hardware-abstraction.md)。
 
 ## 配置关注项
 
 - `devices.default_target`
 - `devices.local.backend`
-- `devices.satellite.nodes.*`
-- `devices.satellite.invoke_timeout_seconds`
 - `devices.body_node.*`
 
 配置文件：`config/settings.yaml`

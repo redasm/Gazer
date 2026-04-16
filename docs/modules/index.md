@@ -20,7 +20,6 @@
 
 - [设备节点（Device Node）](./device-node.md)
 - [硬件抽象层（Hardware Abstraction Layer）](./hardware-abstraction.md) — 机械臂、球形显示、LED、BodyDriver
-- [卫星模式（Satellite Mode）](./satellite-mode.md)
 - [安全模型（Security）](./security.md)
 
 ## 平台与扩展

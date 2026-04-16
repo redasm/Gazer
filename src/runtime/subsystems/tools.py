@@ -1,4 +1,4 @@
-"""Tool chain initializer — registers core tools, plugins, flows and security policy."""
+"""Tool chain initializer — registers core tools, plugins and security policy."""
 from __future__ import annotations
 
 import logging
@@ -25,14 +25,13 @@ async def setup_tools(
     rust_sidecar_client,
     cron_run_callback,
 ) -> Dict[str, Any]:
-    """Register all tools, plugins, workflows and skill loader.
+    """Register all tools, plugins and skill loader.
 
     Returns a dict of created subsystem objects::
 
         {
             "hook_registry": HookRegistry,
             "cron_scheduler": Optional[CronScheduler],
-            "flow_engine": FlowEngine,
             "plugin_loader": PluginLoader,
             "skill_loader": SkillLoader,
             "rust_sidecar_client": ...,
@@ -192,19 +191,6 @@ async def setup_tools(
     if plugin_loader.failed_ids:
         logger.warning("Failed plugins: %s", plugin_loader.failed_ids)
 
-    # === GazerFlow ===
-    from flow.engine import FlowEngine
-    from flow.tool import FlowRunTool
-
-    flow_dirs = [workspace / "workflows", Path.home() / ".gazer" / "workflows"]
-    flow_engine = FlowEngine(
-        tool_registry=agent.loop.tools,
-        llm_provider=agent.provider,
-        flow_dirs=flow_dirs,
-    )
-    agent.register_tool(FlowRunTool(flow_engine))
-    logger.info("GazerFlow loaded %d workflow(s).", len(flow_engine.list_flows()))
-
     # === Tool security policy ===
     denylist = config.get("security.tool_denylist", [])
     allowlist = config.get("security.tool_allowlist", [])
@@ -224,7 +210,6 @@ async def setup_tools(
     return {
         "hook_registry": hook_registry,
         "cron_scheduler": cron_scheduler,
-        "flow_engine": flow_engine,
         "plugin_loader": plugin_loader,
         "skill_loader": skill_loader,
         "rust_sidecar_client": rust_sidecar_client,

@@ -30,7 +30,6 @@ from tools.admin.state import (
     get_trajectory_store,
     get_usage_tracker,
     _policy_audit_buffer,
-    _workflow_run_history,
 )
 from tools.admin.strategy_helpers import (
     _append_policy_audit,
@@ -305,7 +304,8 @@ def _p95(values: List[float]) -> float:
     return round(numbers[idx], 2)
 
 def _build_workflow_observability_metrics(limit: int = 200) -> Dict[str, Any]:
-    workflow_metrics: Dict[str, Any] = {
+    """Workflow engine has been removed. Return empty metrics for API compatibility."""
+    return {
         "total_runs": 0,
         "failures": 0,
         "success_rate": 1.0,
@@ -315,81 +315,6 @@ def _build_workflow_observability_metrics(limit: int = 200) -> Dict[str, Any]:
         "error_classes": {},
         "workflows": [],
     }
-    workflow_history = list(_workflow_run_history)
-    if not workflow_history:
-        return workflow_metrics
-
-    sampled = workflow_history[-max(1, min(limit, 1000)):]
-    by_workflow: Dict[str, Dict[str, Any]] = {}
-    all_latency: List[float] = []
-    all_node_duration: List[float] = []
-    all_trace_nodes: List[float] = []
-    failures = 0
-    error_classes: Dict[str, int] = {}
-
-    for item in sampled:
-        workflow_id = str(item.get("workflow_id", "")).strip() or "unknown"
-        entry = by_workflow.setdefault(
-            workflow_id,
-            {
-                "workflow_id": workflow_id,
-                "workflow_name": str(item.get("workflow_name", "")).strip() or workflow_id,
-                "runs": 0,
-                "failures": 0,
-                "latencies": [],
-                "node_durations": [],
-                "trace_nodes": [],
-                "error_classes": {},
-            },
-        )
-        entry["runs"] += 1
-        status = str(item.get("status", "")).strip().lower()
-        duration_ms = float(item.get("total_duration_ms", 0) or 0)
-        node_duration_ms = float(item.get("node_duration_ms", 0) or 0)
-        trace_nodes = float(item.get("trace_nodes", 0) or 0)
-        entry["latencies"].append(duration_ms)
-        entry["node_durations"].append(node_duration_ms)
-        entry["trace_nodes"].append(trace_nodes)
-        all_latency.append(duration_ms)
-        all_node_duration.append(node_duration_ms)
-        all_trace_nodes.append(trace_nodes)
-        if status != "ok":
-            failures += 1
-            entry["failures"] += 1
-            err_class = classify_error_message(str(item.get("error", "")))
-            entry["error_classes"][err_class] = entry["error_classes"].get(err_class, 0) + 1
-            error_classes[err_class] = error_classes.get(err_class, 0) + 1
-
-    workflow_items: List[Dict[str, Any]] = []
-    for item in by_workflow.values():
-        runs = int(item["runs"])
-        fails = int(item["failures"])
-        workflow_items.append(
-            {
-                "workflow_id": item["workflow_id"],
-                "workflow_name": item["workflow_name"],
-                "runs": runs,
-                "failures": fails,
-                "success_rate": round((runs - fails) / runs, 4) if runs else 1.0,
-                "p95_latency_ms": _p95(item["latencies"]),
-                "p95_node_duration_ms": _p95(item["node_durations"]),
-                "p95_trace_nodes": _p95(item["trace_nodes"]),
-                "error_classes": item["error_classes"],
-            }
-        )
-    workflow_items.sort(key=lambda x: x["runs"], reverse=True)
-    total_runs = len(sampled)
-    workflow_metrics = {
-        "total_runs": total_runs,
-        "failures": failures,
-        "success_rate": round((total_runs - failures) / total_runs, 4) if total_runs else 1.0,
-        "p95_latency_ms": _p95(all_latency),
-        "p95_node_duration_ms": _p95(all_node_duration),
-        "p95_trace_nodes": _p95(all_trace_nodes),
-        "error_classes": error_classes,
-        "workflows": workflow_items,
-    }
-    return workflow_metrics
 
 def _latest_persona_consistency_signal() -> Dict[str, Any]:
     from tools.admin.persona_routes import _get_persona_eval_manager

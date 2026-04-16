@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from PIL import Image
 
 from devices.adapters.local_desktop import LocalDesktopNode
-from devices.adapters.remote_satellite import RemoteSatelliteNode
 from devices.models import NodeActionResult
 from devices.registry import DeviceRegistry
 from perception.sources.base import CaptureFrame
@@ -84,24 +83,3 @@ def test_local_click_post_verify_failed_can_rollback(monkeypatch):
     assert calls["press"] == 1
 
 
-class _FakeSessionManager:
-    def __init__(self):
-        self.calls = []
-
-    def is_online(self, node_id: str) -> bool:
-        return True
-
-    async def send_invoke(self, *, node_id: str, action: str, args: dict, timeout_seconds: float):
-        self.calls.append((node_id, action, dict(args), timeout_seconds))
-        return NodeActionResult(ok=True, message="ok")
-
-
-def test_remote_click_guardrail_rejects_negative_coordinates():
-    node = RemoteSatelliteNode(
-        node_id="sat-01",
-        session_manager=_FakeSessionManager(),
-        capture_manager=_VerificationCaptureManager(),
-    )
-    result = asyncio.run(node.invoke("input.mouse.click", {"x": -1, "y": 10}))
-    assert result.ok is False
-    assert result.code == "DEVICE_ACTION_OUT_OF_BOUNDS"

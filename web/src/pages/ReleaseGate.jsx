@@ -3,7 +3,6 @@ import axios from 'axios';
 import API_BASE from '../config';
 import NoticeBanner from '../components/NoticeBanner';
 import useNotice from '../hooks/useNotice';
-import WorkflowObservabilityCard from '../components/WorkflowObservabilityCard';
 import ToggleSwitch from '../components/ToggleSwitch';
 
 const ReleaseGate = ({ t }) => {
@@ -156,7 +155,6 @@ const ReleaseGate = ({ t }) => {
                     </div>
                 </div>
             </details>
-            <WorkflowObservabilityCard t={t} compact={false} limit={5} />
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#9fb3c8' }}>

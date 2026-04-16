@@ -119,16 +119,6 @@ def get_google_chat_channel():
     return ctx.google_chat_channel if ctx else None
 
 
-# Satellite
-SATELLITE_SOURCES: Dict[str, Any] = {}
-_SATELLITE_SESSION_MANAGER: Optional[Any] = None
-
-def get_satellite_session_manager():
-    global _SATELLITE_SESSION_MANAGER
-    if _SATELLITE_SESSION_MANAGER is None:
-        from devices.satellite_session import create_satellite_session_manager
-        _SATELLITE_SESSION_MANAGER = create_satellite_session_manager(config)
-    return _SATELLITE_SESSION_MANAGER
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +147,7 @@ def get_owner_manager():
 # ---------------------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/tools/admin -> project root
 _FAVICON_ICO_PATH = _PROJECT_ROOT / "web" / "public" / "favicon.ico"
-_WORKFLOW_GRAPH_DIR = _PROJECT_ROOT / "workflows" / "graphs"
+
 _POLICY_AUDIT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "policy_audit.jsonl"
 _STRATEGY_SNAPSHOT_LOG_PATH = _PROJECT_ROOT / "data" / "observability" / "strategy_snapshot.jsonl"
 _WEB_ONBOARDING_GUIDE_PATH = _PROJECT_ROOT / "assets" / "WEB_ONBOARDING_GUIDE.md"
@@ -188,7 +178,7 @@ _log_buffer: collections.deque = collections.deque(maxlen=500)
 _policy_audit_buffer: collections.deque = collections.deque(maxlen=300)
 _strategy_change_history: collections.deque = collections.deque(maxlen=300)
 _llm_history: collections.deque = collections.deque(maxlen=200)
-_workflow_run_history: collections.deque = collections.deque(maxlen=300)
+
 _alert_buffer: collections.deque = collections.deque(maxlen=500)
 
 # Coding / benchmark history

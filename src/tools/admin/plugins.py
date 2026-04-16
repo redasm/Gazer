@@ -4,17 +4,71 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from tools.admin.state import config, logger
-from tools.admin.workflow_helpers import (
-    _plugin_loader, _plugin_install_base,
-    _scan_plugin_source_for_threats, _plugin_market_snapshot,
-)
 from tools.admin.strategy_helpers import _append_policy_audit
 from .auth import verify_admin_token
+from plugins.loader import PluginLoader
+from security.threat_scan import scan_directory as threat_scan_directory
+
+
+def _plugin_loader() -> PluginLoader:
+    return PluginLoader(workspace=Path.cwd())
+
+
+def _plugin_install_base(global_install: bool = False) -> Path:
+    if global_install:
+        return Path.home() / ".gazer" / "extensions"
+    return Path("extensions")
+
+
+def _scan_plugin_source_for_threats(source: Path) -> Dict[str, Any]:
+    scan_cfg = config.get("security.threat_scan", {}) or {}
+    if not isinstance(scan_cfg, dict):
+        scan_cfg = {}
+    return threat_scan_directory(source, scan_cfg)
+
+
+def _plugin_market_snapshot() -> Dict[str, Any]:
+    loader = _plugin_loader()
+    manifests = loader.discover()
+    enabled = {
+        str(item).strip()
+        for item in (config.get("plugins.enabled", []) or [])
+        if str(item).strip()
+    }
+    disabled = {
+        str(item).strip()
+        for item in (config.get("plugins.disabled", []) or [])
+        if str(item).strip()
+    }
+    items: List[Dict[str, Any]] = []
+    for manifest in manifests.values():
+        items.append(
+            {
+                "id": manifest.id,
+                "name": manifest.name,
+                "version": manifest.version,
+                "slot": manifest.slot.value,
+                "optional": bool(manifest.optional),
+                "description": manifest.description,
+                "base_dir": str(manifest.base_dir) if manifest.base_dir else "",
+                "enabled": manifest.id in enabled and manifest.id not in disabled,
+                "disabled": manifest.id in disabled,
+                "integrity_ok": bool(manifest.integrity_ok),
+                "signature_ok": bool(manifest.signature_ok),
+                "verification_error": str(manifest.verification_error or ""),
+            }
+        )
+    items.sort(key=lambda item: item["id"])
+    return {
+        "items": items,
+        "total": len(items),
+        "failed_ids": sorted(loader.failed_ids),
+    }
 
 router = APIRouter(tags=["plugins"])
 

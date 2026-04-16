@@ -3,7 +3,6 @@ import axios from 'axios';
 import API_BASE from '../config';
 import NoticeBanner from '../components/NoticeBanner';
 import useNotice from '../hooks/useNotice';
-import WorkflowObservabilityCard from '../components/WorkflowObservabilityCard';
 
 const TrainerJobs = ({ t }) => {
     const jobsGridTemplate = 'minmax(280px, 2fr) minmax(220px, 1.2fr) minmax(140px, 1fr) minmax(120px, 1fr) 92px 92px';
@@ -130,7 +129,6 @@ const TrainerJobs = ({ t }) => {
             </p>
 
             <NoticeBanner notice={notice} />
-            <WorkflowObservabilityCard t={t} compact={false} limit={5} />
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 10 }}>

@@ -28,7 +28,7 @@
 - `trainer.*`：训练样本、实验、发布策略
 - `discord.*`：Discord 渠道配置
 - `multi_agent.*`：多 Agent 协同配置
-- `runtime.*` / `satellite.*`：Python/Rust backend 切换与 sidecar 参数
+- `runtime.*`：Python/Rust backend 切换与 sidecar 参数
 
 ## 关键示例：多 Agent 协同
 
@@ -127,13 +127,6 @@ devices:
   local:
     backend: python     # python | rust
 
-satellite:
-  transport_backend: python   # python | rust
-  max_pending_requests_per_node: 64
-  pending_ttl_seconds: 30.0
-  heartbeat_timeout_seconds: 45.0
-  frame_window_seconds: 2.0
-  max_frame_bytes_per_window: 4194304
 ```
 
 ## 关键示例：OpenViking 记忆后端预检

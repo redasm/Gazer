@@ -66,8 +66,6 @@ class InteractiveCLI:
 
         self._cron_scheduler: Optional[CronScheduler] = None
 
-        self._flow_engine = None  # Initialized in _setup()
-
         # Slash command registry: name -> handler (sync or async)
         self._commands: Dict[str, Callable[..., Any]] = {
             "help": self._cmd_help,
@@ -84,7 +82,6 @@ class InteractiveCLI:
             "cron": self._cmd_cron,
             "doctor": self._cmd_doctor,
             "canvas": self._cmd_canvas,
-            "flow": self._cmd_flow,
         }
 
     # ------------------------------------------------------------------
@@ -148,30 +145,14 @@ class InteractiveCLI:
         self.agent.set_skill_loader(loader)
         read_skill.set_skill_loader(loader)
 
-        # GazerFlow — workflow engine
-        from flow.engine import FlowEngine
-        from flow.tool import FlowRunTool
-
-        flow_dirs = [
-            ws / "workflows",
-            Path.home() / ".gazer" / "workflows",
-        ]
-        self._flow_engine = FlowEngine(
-            tool_registry=self.agent.loop.tools,
-            llm_provider=self.agent.provider,
-            flow_dirs=flow_dirs,
-        )
-        self.agent.register_tool(FlowRunTool(self._flow_engine))
-
         # Tool security policy
         denylist = config.get("security.tool_denylist", [])
         if denylist:
             self.agent.loop.tools.set_denylist(denylist)
 
-        flow_count = len(self._flow_engine.list_flows())
         logger.info(
             f"CLI registered {len(self.agent.loop.tools)} tools, "
-            f"{len(loader.skills)} skills, {flow_count} workflow(s)."
+            f"{len(loader.skills)} skills."
         )
 
     async def _run_cron_job(self, job) -> Optional[str]:
@@ -205,7 +186,6 @@ class InteractiveCLI:
   {_GREEN}/cron{_RESET} [list]     List/manage cron jobs
   {_GREEN}/doctor{_RESET}          Run system diagnostics
   {_GREEN}/canvas{_RESET}          Show canvas panel summary
-  {_GREEN}/flow{_RESET} [list|run]  Manage GazerFlow workflows
   {_GREEN}/quit{_RESET}            Exit the CLI
 """)
 
@@ -308,69 +288,6 @@ class InteractiveCLI:
             print(f"{_BOLD}Canvas:{_RESET}\n{result}")
         except Exception as exc:
             print(f"{_YELLOW}Canvas error: {exc}{_RESET}")
-
-    async def _cmd_flow(self, args: str) -> None:
-        """Manage GazerFlow workflows: /flow list, /flow run <name> [key=val ...]."""
-        if not self._flow_engine:
-            print(f"{_YELLOW}Flow engine not initialized.{_RESET}")
-            return
-
-        parts = args.strip().split(None, 1)
-        action = parts[0] if parts else "list"
-        rest = parts[1] if len(parts) > 1 else ""
-
-        if action == "list":
-            flows = self._flow_engine.list_flows()
-            if not flows:
-                print(f"{_DIM}No workflows found.{_RESET}")
-                return
-            print(f"{_BOLD}Workflows ({len(flows)}):{_RESET}")
-            for f in flows:
-                desc = f" — {f['description'][:60]}" if f.get('description') else ""
-                print(f"  {_GREEN}{f['name']}{_RESET}{desc}")
-
-        elif action == "run":
-            if not rest:
-                print(f"{_YELLOW}Usage: /flow run <name> [key=val ...]{_RESET}")
-                return
-            run_parts = rest.split()
-            flow_name = run_parts[0]
-            flow_args = {}
-            for kv in run_parts[1:]:
-                if "=" in kv:
-                    k, _, v = kv.partition("=")
-                    import json as _json
-                    try:
-                        v = _json.loads(v)
-                    except (ValueError, _json.JSONDecodeError):
-                        pass
-                    flow_args[k.strip()] = v
-            print(f"{_DIM}Running workflow '{flow_name}'...{_RESET}")
-            result = await self._flow_engine.run(flow_name, flow_args)
-            import json as _json
-            print(_json.dumps(result.to_dict(), indent=2, ensure_ascii=False, default=str))
-            if result.status == "needs_approval":
-                print(f"\n{_YELLOW}Paused at approval gate '{result.pending_step}'.{_RESET}")
-                print(f"Use: /flow resume <token>")
-
-        elif action == "resume":
-            if not rest:
-                print(f"{_YELLOW}Usage: /flow resume <token>{_RESET}")
-                return
-            result = await self._flow_engine.resume(rest.strip())
-            import json as _json
-            print(_json.dumps(result.to_dict(), indent=2, ensure_ascii=False, default=str))
-
-        elif action == "status":
-            if not rest:
-                print(f"{_YELLOW}Usage: /flow status <name>{_RESET}")
-                return
-            import json as _json
-            info = self._flow_engine.status(rest.strip())
-            print(_json.dumps(info, indent=2, ensure_ascii=False, default=str))
-
-        else:
-            print(f"{_YELLOW}Unknown flow action: {action}. Use: list, run, resume, status{_RESET}")
 
     async def _cmd_doctor(self, _args: str) -> None:
         """Run local diagnostic checks."""

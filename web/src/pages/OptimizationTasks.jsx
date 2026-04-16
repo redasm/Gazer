@@ -3,7 +3,6 @@ import axios from 'axios';
 import API_BASE from '../config';
 import NoticeBanner from '../components/NoticeBanner';
 import useNotice from '../hooks/useNotice';
-import WorkflowObservabilityCard from '../components/WorkflowObservabilityCard';
 
 const OptimizationTasks = ({ t }) => {
     const [items, setItems] = useState([]);
@@ -59,7 +58,6 @@ const OptimizationTasks = ({ t }) => {
                 {t.optimizationTasksDesc || 'Track benchmark gate failure tasks and close optimization loops.'}
             </p>
             <NoticeBanner notice={notice} />
-            <WorkflowObservabilityCard t={t} compact={true} limit={3} />
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(180px, 1fr))', gap: 12 }}>

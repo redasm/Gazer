@@ -5,6 +5,8 @@ import copy
 import json
 import logging
 import re
+import shlex
+import subprocess
 import time
 import uuid
 import tempfile
@@ -20,8 +22,7 @@ from tools.admin.state import (
     _gui_simple_benchmark_history,
     _PROJECT_ROOT,
 )
-from tools.admin.utils import _TOOL_ERROR_PATTERN
-from tools.admin.workflow_helpers import _run_verify_command, _safe_task_path
+from tools.admin.utils import _TOOL_ERROR_PATTERN, _is_subpath
 from tools.admin.observability_helpers import _get_eval_benchmark_manager
 from runtime.task_store import TaskExecutionStore
 
@@ -31,6 +32,64 @@ if TYPE_CHECKING:
     from eval.benchmark import EvalBenchmarkManager
 
 logger = logging.getLogger('GazerAdminAPI')
+
+
+def _safe_task_path(rel_path: str) -> Path:
+    candidate = Path(rel_path).expanduser()
+    if candidate.is_absolute():
+        raise ValueError("Absolute paths are not allowed")
+    target = (_PROJECT_ROOT / candidate).resolve()
+    if not _is_subpath(_PROJECT_ROOT, target):
+        raise ValueError("Path traversal detected")
+    return target
+
+
+def _run_verify_command(cmd: str, cwd: Path, timeout_seconds: int = 120) -> Dict[str, Any]:
+    blocked_metachars = [";", "&", "|", ">", "<", "`", "$(", "${"]
+    for char in blocked_metachars:
+        if char in cmd:
+            return {
+                "ok": False,
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"Error: Command contains blocked shell metacharacters: {char}",
+            }
+    first_word = cmd.strip().split()[0].lower() if cmd.strip() else ""
+    blocked_execs = ["powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "zsh"]
+    if first_word in blocked_execs:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": f"Error: blocked verify executable: {first_word}",
+        }
+    try:
+        args = shlex.split(cmd, posix=True)
+        if not args:
+            return {"ok": False, "returncode": -1, "stdout": "", "stderr": "Error: verify command is empty"}
+        res = subprocess.run(
+            args, shell=False, cwd=str(cwd),
+            capture_output=True, text=True, timeout=timeout_seconds,
+        )
+        return {
+            "ok": True,
+            "exit_code": res.returncode,
+            "returncode": res.returncode,
+            "logs": res.stdout + "\n" + res.stderr,
+            "stdout": res.stdout,
+            "stderr": res.stderr,
+        }
+    except subprocess.TimeoutExpired as e:
+        return {
+            "ok": False,
+            "exit_code": 124,
+            "returncode": 124,
+            "logs": f"Timeout after {timeout_seconds}s\n" + (e.stdout or "") + "\n" + (e.stderr or ""),
+            "stdout": e.stdout or "",
+            "stderr": f"Timeout after {timeout_seconds}s\n" + (e.stderr or ""),
+        }
+    except Exception as e:
+        return {"ok": False, "exit_code": 1, "returncode": 1, "logs": str(e), "stdout": "", "stderr": str(e)}
 
 
 def _record_coding_quality_event(event: Dict[str, Any]):
@@ -476,11 +535,9 @@ def _run_coding_benchmark_suite(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
 
             import tools.admin.state as _state
-            import tools.admin.workflow_helpers as _workflow_helpers
             old_root = _state._PROJECT_ROOT
             try:
                 _state._PROJECT_ROOT = root
-                _workflow_helpers._PROJECT_ROOT = root
                 globals()["_PROJECT_ROOT"] = root
                 out = _execute_deterministic_coding_loop(
                     task_id=f"bench_{suite_name}_{case_name}",
@@ -527,7 +584,6 @@ def _run_coding_benchmark_suite(payload: Dict[str, Any]) -> Dict[str, Any]:
                 )
             finally:
                 _state._PROJECT_ROOT = old_root
-                _workflow_helpers._PROJECT_ROOT = old_root
                 globals()["_PROJECT_ROOT"] = old_root
 
     total = len(case_results)

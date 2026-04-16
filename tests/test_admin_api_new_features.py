@@ -18,7 +18,6 @@ import tools.admin.observability as _observability
 import tools.admin.observability_helpers as _observability_helpers
 import tools.admin.debug as _debug
 import tools.admin.state as _state
-import tools.admin.workflow_helpers as _workflow_helpers
 import tools.admin.mcp_routes as _mcp_routes
 
 
@@ -28,11 +27,6 @@ def _patch_config(mp, cfg):
     mp.setattr(_training_helpers, "config", cfg)
     mp.setattr(_strategy_helpers, "config", cfg)
     mp.setattr(_coding_helpers, "config", cfg)
-    mp.setattr(_workflow_helpers, "config", cfg)
-
-def _patch_history(mp, history):
-    mp.setattr(admin_api, "_workflow_run_history", history)
-    mp.setattr(_admin_state, "_workflow_run_history", history)
 
 
 def _patch_store(mp, store):
@@ -238,32 +232,6 @@ async def test_mcp_initialize_tools_list_and_call(monkeypatch):
     monkeypatch.setattr(_training_helpers, "_get_eval_benchmark_manager", lambda: _FakeEvalManager())
     monkeypatch.setattr(admin_api, "_get_training_job_manager", lambda: _FakeTrainingManager())
     _patch_config(monkeypatch, _FakeConfig({"personality": {"name": "Gazer"}}))
-    _patch_history(monkeypatch,
-        collections.deque(
-            [
-                {
-                    "workflow_id": "wf_main",
-                    "workflow_name": "MainFlow",
-                    "status": "ok",
-                    "error": "",
-                    "total_duration_ms": 120,
-                    "trace_nodes": 3,
-                    "node_duration_ms": 95,
-                },
-                {
-                    "workflow_id": "wf_main",
-                    "workflow_name": "MainFlow",
-                    "status": "error",
-                    "error": "timeout",
-                    "total_duration_ms": 220,
-                    "trace_nodes": 4,
-                    "node_duration_ms": 180,
-                },
-            ],
-            maxlen=300,
-        ),
-    )
-
     init_payload = await admin_api.mcp_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
     assert init_payload["result"]["serverInfo"]["name"] == "gazer-admin-mcp"
 
@@ -601,38 +569,14 @@ async def test_release_gate_health_uses_configurable_thresholds(monkeypatch):
             }
         ),
     )
-    _patch_history(monkeypatch,
-        collections.deque(
-            [
-                {
-                    "workflow_id": "wf_a",
-                    "workflow_name": "wf_a",
-                    "status": "ok",
-                    "error": "",
-                    "total_duration_ms": 1800,
-                    "trace_nodes": 3,
-                    "node_duration_ms": 1600,
-                },
-                {
-                    "workflow_id": "wf_a",
-                    "workflow_name": "wf_a",
-                    "status": "error",
-                    "error": "timeout",
-                    "total_duration_ms": 4200,
-                    "trace_nodes": 4,
-                    "node_duration_ms": 3900,
-                },
-            ],
-            maxlen=300,
-        ),
-    )
-
     payload = await admin_api.get_release_gate_status()
     assert payload["status"] == "ok"
-    assert payload["health"]["level"] == "critical"
-    assert payload["health"]["recommend_block_high_risk"] is True
+    # Workflow engine removed — metrics are always empty; health is "unknown" when no run data.
+    assert payload["health"]["level"] == "unknown"
+    assert payload["health"]["recommend_block_high_risk"] is False
+    # Configurable thresholds are still loaded from config and returned.
     assert payload["thresholds"]["critical_p95_latency_ms"] == 3000
-    assert payload["workflow"]["total_runs"] == 2
+    assert payload["workflow"]["total_runs"] == 0
 
 
 @pytest.mark.asyncio
@@ -1849,7 +1793,7 @@ async def test_task_run_coding_loop_deterministic_success(monkeypatch, tmp_path:
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
+
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -1881,7 +1825,7 @@ async def test_task_run_coding_loop_deterministic_failure_rolls_back(monkeypatch
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
+
     monkeypatch.setattr(
         _coding_helpers,
         "_run_verify_command",
@@ -1947,7 +1891,7 @@ async def test_task_run_coding_loop_deterministic_supports_advanced_operations(m
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
+
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -1982,7 +1926,7 @@ async def test_task_run_coding_loop_deterministic_atomic_apply(monkeypatch, tmp_
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
+
     monkeypatch.setattr(
         admin_api,
         "_run_verify_command",
@@ -2016,7 +1960,7 @@ async def test_task_run_coding_loop_records_recovery_count(monkeypatch, tmp_path
     monkeypatch.setattr(admin_api, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_coding_helpers, "_PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(_admin_state, "_PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(_workflow_helpers, "_PROJECT_ROOT", tmp_path)
+
     calls = {"n": 0}
 
     def _flaky_verify(command, cwd, timeout_seconds):

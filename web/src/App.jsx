@@ -27,7 +27,6 @@ const ReleaseGate = React.lazy(() => import('./pages/ReleaseGate'));
 const OptimizationTasks = React.lazy(() => import('./pages/OptimizationTasks'));
 const TrainerJobs = React.lazy(() => import('./pages/TrainerJobs'));
 const Observability = React.lazy(() => import('./pages/Observability'));
-const WorkflowStudio = React.lazy(() => import('./pages/WorkflowStudio'));
 const Personality = React.lazy(() => import('./pages/Personality'));
 
 const PageFallback = () => (
@@ -260,7 +259,6 @@ function App() {
           <Route path="policy/optimization-tasks" element={<Suspense fallback={<PageFallback />}><OptimizationTasks t={t} /></Suspense>} />
           <Route path="policy/trainer-jobs" element={<Suspense fallback={<PageFallback />}><TrainerJobs t={t} /></Suspense>} />
           <Route path="policy/observability" element={<Suspense fallback={<PageFallback />}><Observability t={t} /></Suspense>} />
-          <Route path="workflow" element={<Suspense fallback={<PageFallback />}><WorkflowStudio t={t} showNotice={showToast} /></Suspense>} />
           <Route path="policy/audit" element={<Suspense fallback={<PageFallback />}><PolicyAudit t={t} /></Suspense>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />

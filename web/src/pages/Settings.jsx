@@ -1281,7 +1281,7 @@ const TabSafety = ({ config, handleUpdate, inputClass, labelClass, sectionClass,
 );
 
 /* ================================================================== */
-/*  Tab: Hardware (Perception + Satellite)                             */
+/*  Tab: Hardware (Perception)                                         */
 /* ================================================================== */
 const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelClass, sectionClass, t }) => {
     const providerNames = Object.keys(modelProviders || {}).sort();
@@ -1290,10 +1290,6 @@ const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelCl
             <section className={sectionClass}>
                 <SectionHeader icon={<Eye size={20} />} color="#4ade80" title={t.perceptionSection} desc={t.perceptionDesc} />
                 {(() => {
-                    const satelliteIds = Array.isArray(config.perception?.satellite_ids)
-                        ? config.perception.satellite_ids.filter((id) => String(id).trim().length > 0)
-                        : [];
-                    const satelliteModeActive = satelliteIds.length > 0;
                     return (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
@@ -1301,7 +1297,6 @@ const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelCl
                                     label={t.screenEnabled}
                                     checked={config.perception?.screen_enabled ?? true}
                                     onChange={(v) => handleUpdate("perception.screen_enabled", v)}
-                                    disabled={satelliteModeActive}
                                 />
                                 <ToggleRow label={t.cameraEnabled}
                                     checked={config.perception?.camera_enabled ?? false}
@@ -1321,16 +1316,6 @@ const TabHardware = ({ config, modelProviders, handleUpdate, inputClass, labelCl
                                         value={config.perception?.capture_interval ?? 60}
                                         onChange={(e) => handleUpdate("perception.capture_interval", parseInt(e.target.value) || 60)} />
                                 </div>
-                            </div>
-                            <div>
-                                <label className={labelClass}>{t.satelliteIds}</label>
-                                <TagInput
-                                    tags={config.perception?.satellite_ids || []}
-                                    onChange={(v) => handleUpdate("perception.satellite_ids", v)}
-                                    placeholder={t.addTag} />
-                                <p style={{ color: '#6b7280', fontSize: 12, marginTop: 6 }}>
-                                    {t.perceptionModeExclusiveHint || "Local and satellite screen modes are mutually exclusive. Configuring satellite IDs disables local screen capture."}
-                                </p>
                             </div>
                             <div style={{ marginTop: 10 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <ToggleRow
@@ -1567,19 +1552,6 @@ const Settings = ({ config, setConfig, saveConfig, fetchConfig, modelProviders, 
                 newConfig.perception = {};
             }
 
-            if (path === "perception.satellite_ids") {
-                const normalizedSatelliteIds = Array.isArray(value)
-                    ? value.map((id) => String(id).trim()).filter((id) => id.length > 0)
-                    : [];
-                newConfig.perception.satellite_ids = normalizedSatelliteIds;
-                if (normalizedSatelliteIds.length > 0) {
-                    newConfig.perception.screen_enabled = false;
-                }
-            }
-
-            if (path === "perception.screen_enabled" && value === true) {
-                newConfig.perception.satellite_ids = [];
-            }
 
             return newConfig;
         });

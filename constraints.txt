@@ -1,7 +1,7 @@
 # Deterministic dependency constraints for production deployments.
 # Usage:
 #   pip install -r requirements.txt -c constraints.txt
-#   pip install -e ".[dev,perception,ui,browser,satellite]" -c constraints.txt
+#   pip install -e ".[dev,perception,ui,browser]" -c constraints.txt
 #
 # Update policy:
 # - Modify this file in a dedicated dependency update PR.

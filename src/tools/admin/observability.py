@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 from tools.admin.auth import verify_admin_token
-from tools.admin.system import _build_workflow_observability_metrics, _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary, _invoke_gui_action_via_tool_registry
+from tools.admin.system import _latest_persona_consistency_signal, _build_training_bridge_policy_scoreboard, _build_inbound_media_profile, _build_alignment_baseline_panel, _build_efficiency_window_summary, _invoke_gui_action_via_tool_registry
 from eval.gui_simple_benchmark import GuiSimpleBenchmarkRunner, build_default_gui_simple_cases
 from runtime.resilience import classify_error_message
 from tools.admin.memory import _resolve_openviking_backend_dir
@@ -31,7 +31,6 @@ from tools.admin.state import (
     _gui_simple_benchmark_history,
     logger,
     _policy_audit_buffer,
-    _workflow_run_history,
 )
 from tools.admin.strategy_helpers import _append_policy_audit, _get_tool_governance_snapshot
 from tools.admin.utils import _resolve_export_output_path
@@ -117,26 +116,12 @@ def _append_alert(level: str, category: str, message: str, details: Optional[Dic
 
 def _build_observability_trends(window: int = 50) -> Dict[str, Any]:
     policy_entries = list(_policy_audit_buffer)[-max(1, min(window, 500)) :]
-    workflow_entries = list(_workflow_run_history)[-max(1, min(window, 500)) :]
     alert_entries = list(_alert_buffer)[-max(1, min(window, 500)) :]
 
     actions: Dict[str, int] = {}
     for item in policy_entries:
         action = str(item.get("action", "")).strip() or "unknown"
         actions[action] = actions.get(action, 0) + 1
-
-    workflow_failures = 0
-    workflow_successes = 0
-    workflow_latencies: List[float] = []
-    for item in workflow_entries:
-        status = str(item.get("status", "")).strip().lower()
-        if status in {"ok", "success"}:
-            workflow_successes += 1
-        else:
-            workflow_failures += 1
-        latency = item.get("total_duration_ms")
-        if isinstance(latency, (int, float)):
-            workflow_latencies.append(float(latency))
 
     alerts_by_level: Dict[str, int] = {}
     for item in alert_entries:
@@ -146,12 +131,7 @@ def _build_observability_trends(window: int = 50) -> Dict[str, Any]:
     return {
         "window": max(1, min(window, 500)),
         "policy_actions": actions,
-        "workflow": {
-            "runs": len(workflow_entries),
-            "successes": workflow_successes,
-            "failures": workflow_failures,
-            "p95_latency_ms": _p95(workflow_latencies),
-        },
+        "workflow": {},
         "alerts": {
             "count": len(alert_entries),
             "by_level": alerts_by_level,
@@ -1420,7 +1400,6 @@ async def get_observability_metrics(limit: int = 200):
                 }
             )
 
-    workflow_metrics = _build_workflow_observability_metrics(limit=limit)
     persona_metrics = _latest_persona_consistency_signal()
     llm_tool_profile = _build_llm_tool_failure_profile(limit=limit)
     failure_attribution = (
@@ -1438,7 +1417,7 @@ async def get_observability_metrics(limit: int = 200):
         "provider": provider_metrics,
         "model": model_metrics,
         "agent": agent_items,
-        "workflow": workflow_metrics,
+        "workflow": {},
         "persona": persona_metrics,
         "llm_tool": llm_tool_profile,
         "failure_attribution": failure_attribution,

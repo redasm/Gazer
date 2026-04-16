@@ -57,12 +57,6 @@ class TestConfigManager:
         assert cm.get("runtime.rust_sidecar.rollout.owner_only") is False
         assert cm.get("runtime.rust_sidecar.rollout.channels") == []
         assert cm.get("devices.local.backend") == "python"
-        assert cm.get("satellite.transport_backend") == "python"
-        assert cm.get("satellite.max_pending_requests_per_node") == 64
-        assert cm.get("satellite.pending_ttl_seconds") == 30.0
-        assert cm.get("satellite.heartbeat_timeout_seconds") == 45.0
-        assert cm.get("satellite.frame_window_seconds") == 2.0
-        assert cm.get("satellite.max_frame_bytes_per_window") == 4 * 1024 * 1024
         assert cm.get("devices.body_node.node_id") == "body-main"
         assert cm.get("personality.evolution.auto_optimize.enabled") is False
         assert cm.get("personality.evolution.auto_optimize.min_feedback_total") == 6

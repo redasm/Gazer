@@ -1,11 +1,11 @@
 class Facade:
     _MODULES = [
-        'system', 'workflows', 'memory', 'observability', 'debug', 'websockets',
+        'system', 'memory', 'observability', 'debug', 'websockets',
         'state', 'auth', 'config_routes', 'mcp_routes', 'persona_routes',
         'training_routes', 'logs', 'error_handlers', 'gateway', 'evolution',
-        'satellite', 'deployment', 'channel_webhooks', 'cron', 'git', 'plugins',
+        'deployment', 'channel_webhooks', 'cron', 'git', 'plugins',
         'policy', 'skills', 'utils', 'validation',
-        'strategy_helpers', 'coding_helpers', 'workflow_helpers',
+        'strategy_helpers', 'coding_helpers',
         'training_helpers', 'observability_helpers',
     ]
 

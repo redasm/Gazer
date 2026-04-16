@@ -247,7 +247,7 @@ DEFAULT_CONFIG = {
         "camera_enabled": False,
         "camera_device_index": 0,
         "capture_interval": 60,
-        "satellite_ids": [],
+
         "action_enabled": True,
         "spatial_enabled": False,
         "spatial": {
@@ -307,28 +307,6 @@ DEFAULT_CONFIG = {
             "label": "Physical Body",
             "allow_connect_control": True,
         },
-        "satellite": {
-            "enabled": True,
-            "invoke_timeout_seconds": 15,
-            "nodes": {},
-            "default_allow_actions": [
-                "screen.observe",
-                "screen.screenshot",
-                "input.mouse.click",
-                "input.keyboard.type",
-                "input.keyboard.hotkey",
-                "file.send",
-            ],
-        },
-    },
-    "satellite": {
-        # python | rust
-        "transport_backend": "python",
-        "max_pending_requests_per_node": 64,
-        "pending_ttl_seconds": 30.0,
-        "heartbeat_timeout_seconds": 45.0,
-        "frame_window_seconds": 2.0,
-        "max_frame_bytes_per_window": 4 * 1024 * 1024,
     },
     "coding": {
         # local | sandbox | ssh | rust

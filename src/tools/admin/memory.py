@@ -22,9 +22,125 @@ from tools.admin.state import (
     logger,
 )
 from tools.admin.utils import _dedupe_dict_rows, _read_jsonl_tail, _resolve_export_output_path
-from tools.admin.workflow_helpers import _apply_memory_recall_gate_linkage, _memory_recall_regression_settings
+from tools.admin.observability_helpers import _get_eval_benchmark_manager as _get_eval_bm
 
 app = APIRouter()
+
+
+def _memory_recall_regression_settings() -> Dict[str, Any]:
+    raw = config.get("memory.recall_regression", {}) or {}
+    if not isinstance(raw, dict):
+        raw = {}
+    thresholds = raw.get("thresholds", {}) if isinstance(raw.get("thresholds", {}), dict) else {}
+    gate = raw.get("gate", {}) if isinstance(raw.get("gate", {}), dict) else {}
+
+    def _as_int(value: Any, default: int, low: int, high: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(low, min(parsed, high))
+
+    def _as_float(value: Any, default: float, low: float, high: float) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(low, min(parsed, high))
+
+    mode = str(gate.get("mode", "warn")).strip().lower() or "warn"
+    if mode not in {"warn", "block", "disabled"}:
+        mode = "warn"
+
+    return {
+        "enabled": bool(raw.get("enabled", True)),
+        "window_days": _as_int(raw.get("window_days", 7), 7, 1, 30),
+        "query_set_path": str(raw.get("query_set_path", "")).strip(),
+        "top_k": _as_int(raw.get("top_k", 5), 5, 1, 20),
+        "min_match_score": _as_float(raw.get("min_match_score", 0.18), 0.18, 0.0, 1.0),
+        "thresholds": {
+            "min_precision_proxy": _as_float(thresholds.get("min_precision_proxy", 0.45), 0.45, 0.0, 1.0),
+            "min_recall_proxy": _as_float(thresholds.get("min_recall_proxy", 0.45), 0.45, 0.0, 1.0),
+            "warning_drop": _as_float(thresholds.get("warning_drop", 0.05), 0.05, 0.0, 1.0),
+            "critical_drop": _as_float(thresholds.get("critical_drop", 0.12), 0.12, 0.0, 1.0),
+        },
+        "gate": {
+            "link_release_gate": bool(gate.get("link_release_gate", True)),
+            "mode": mode,
+            "source": str(gate.get("source", "memory_recall_regression")).strip() or "memory_recall_regression",
+            "reason_warning": str(gate.get("reason_warning", "memory_recall_regression_warning")).strip()
+            or "memory_recall_regression_warning",
+            "reason_critical": str(gate.get("reason_critical", "memory_recall_regression_critical")).strip()
+            or "memory_recall_regression_critical",
+        },
+    }
+
+
+def _apply_memory_recall_gate_linkage(
+    *,
+    report: Dict[str, Any],
+    enabled: bool,
+    apply_gate: bool,
+    gate_cfg: Dict[str, Any],
+) -> Dict[str, Any]:
+    manager = _get_eval_bm()
+    current_gate = manager.get_release_gate_status()
+    level = str((report.get("gate", {}) or {}).get("level", "healthy")).strip().lower()
+    mode = str(gate_cfg.get("mode", "warn")).strip().lower() or "warn"
+    linkage: Dict[str, Any] = {
+        "enabled": bool(enabled and gate_cfg.get("link_release_gate", True)),
+        "applied": bool(apply_gate),
+        "mode": mode,
+        "level": level,
+        "alert_only": mode != "block",
+        "changed_gate": False,
+        "gate": current_gate,
+        "signal": {
+            "active": level in {"warning", "critical"},
+            "reason": str(
+                gate_cfg.get("reason_critical", "memory_recall_regression_critical")
+                if level == "critical"
+                else gate_cfg.get("reason_warning", "memory_recall_regression_warning")
+            ),
+        },
+    }
+    if not linkage["enabled"] or not apply_gate or mode in {"disabled", ""}:
+        return linkage
+
+    if mode == "block":
+        should_block = level == "critical"
+        reason = str(
+            gate_cfg.get("reason_critical", "memory_recall_regression_critical")
+            if should_block
+            else "memory_recall_regression_recovered"
+        )
+        source = str(gate_cfg.get("source", "memory_recall_regression")).strip() or "memory_recall_regression"
+        current_blocked = bool(current_gate.get("blocked", False))
+        current_source = str(current_gate.get("source", "")).strip()
+        should_update = False
+        if should_block:
+            should_update = (not current_blocked) or (current_source != source)
+        else:
+            should_update = current_blocked and current_source == source
+        if should_update:
+            current_gate = manager.set_release_gate_status(
+                blocked=should_block,
+                reason=reason,
+                source=source,
+                metadata={
+                    "report": "memory_recall_regression",
+                    "level": level,
+                    "quality_score": (report.get("current_window", {}).get("metrics", {}) or {}).get(
+                        "quality_score", 0.0
+                    ),
+                },
+            )
+            linkage["changed_gate"] = True
+            linkage["gate"] = current_gate
+        return linkage
+
+    return linkage
+
 
 _memory_manager = None
 

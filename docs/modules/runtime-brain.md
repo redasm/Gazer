@@ -23,7 +23,7 @@
 - Agent 初始化（含 MessageBus / ToolRegistry / LLM Provider）
 - Orchestrator 初始化（多 Agent + SLA + 资源锁）
 - Capture/Device/Channel 初始化
-- PluginLoader / SkillLoader / FlowEngine 装配
+- PluginLoader / SkillLoader 装配
 - CronScheduler / HeartbeatRunner 启停
 
 ## 运行中循环

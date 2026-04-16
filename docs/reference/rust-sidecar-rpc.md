@@ -93,12 +93,9 @@ sidecar -> Python（节选）：
 - `runtime.rust_sidecar.rollout.channels`
 - `coding.exec_backend: local|sandbox|ssh|rust`
 - `devices.local.backend: python|rust`
-- `satellite.transport_backend: python|rust`
-
 ## 当前落地范围
 
 - `coding.exec_backend=rust` 时，启动阶段会先探测 sidecar 健康端点，再注入 `ShellOperations/FileOperations` 的 Rust 适配实现。
-- `devices.local.backend` 与 `satellite.transport_backend` 已接入配置与观测字段，用于后续 Phase 1/3 的执行下沉。
 - `devices.local.backend=rust` 时，`LocalDesktopNode` 的以下动作走 sidecar RPC：
   - `screen.screenshot` -> `desktop.screen.screenshot`
   - `input.mouse.click` -> `desktop.input.mouse.click`
@@ -120,24 +117,6 @@ sidecar -> Python（节选）：
 - `coding.max_parallel_tool_calls`：远端执行并发上限（信号量）
 
 上述限制在 Python backend 与 Rust backend 适配层都生效，保证输出体积与并发可控。
-
-## Phase 3 传输治理（Satellite）
-
-- Session manager 支持：
-  - invoke request/response 多路复用（request_id -> pending future）
-  - pending TTL 清理与断连回收
-  - heartbeat 超时剔除离线会话
-- WebSocket `/ws/satellite` 增加大帧背压预算：
-  - `satellite.frame_window_seconds`
-  - `satellite.max_frame_bytes_per_window`
-- 新增状态接口：
-  - `GET /satellite/session/status`
-  - `manager.last_observation` 至少包含 `trace_id` / `latency_ms` / `error_code`
-
-Rust backend 兼容路径：
-
-- `satellite.transport_backend=rust` 时使用 `RustSatelliteSessionManager`；
-- 优先尝试 `satellite.invoke` sidecar RPC，不可用时回退 Python 会话路径。
 
 自动回退策略（执行后端）：
 
@@ -166,5 +145,4 @@ Rust backend 兼容路径：
   - 统一输出截断、超时、并发上限；
   - Rust 通路受灰度门控，未命中条件自动落回 Python backend。
 - 观测与审计字段丢失：
-  - 卫星状态保留 `trace_id/latency_ms/error_code`；
-  - 管理端可通过 `/satellite/session/status` 与策略审计接口核验。
+  - 管理端可通过策略审计接口核验。

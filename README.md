@@ -64,7 +64,6 @@ Gazer/
   perception/                # 感知子系统（屏幕 / 相机 / 音频）
   hardware/                  # 硬件串口驱动抽象
   electronics/               # KiCad 硬件设计
-  satellite/                 # 卫星链路示例
 ```
 
 ## 先决条件
@@ -112,10 +111,10 @@ pip install -e .
 
 ### 3. 路径 B：完全体（全部能力）
 
-目标：安装项目完整依赖与扩展能力（测试、感知、UI、浏览器、卫星节点）。
+目标：安装项目完整依赖与扩展能力（测试、感知、UI、浏览器）。
 
 ```bash
-pip install -e ".[dev,perception,ui,browser,satellite]"
+pip install -e ".[dev,perception,ui,browser]"
 ```
 
 按需安装某个扩展组：
@@ -126,7 +125,6 @@ pip install -e ".[dev,perception,ui,browser,satellite]"
 | `perception` | `pip install -e ".[perception]"` | OpenCV、MediaPipe、Whisper、TTS、音频 |
 | `ui` | `pip install -e ".[ui]"` | PySide6 面部 UI |
 | `browser` | `pip install -e ".[browser]"` | Playwright 浏览器自动化 |
-| `satellite` | `pip install -e ".[satellite]"` | WebSocket 卫星节点连接 |
 
 > **注意**：`perception` 组中的 `pyaudio` 在 Linux/WSL 和 Windows 上都可能需要额外系统库。首次安装建议先走“最小可运行”路径，再按需补齐扩展组。
 

@@ -533,28 +533,6 @@ async def test_clear_admin_session_deletes_cookie(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_export_path_rejects_outside_allowed_dirs(monkeypatch):
-    fake_cfg = _FakeConfig({})
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-    outside = (Path(admin_api._PROJECT_ROOT).parent / "outside_report.md").resolve()
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.export_flowise_roundtrip_report({"output_path": str(outside)})
-    assert exc.value.status_code == 400
-    assert "allowed export dirs" in str(exc.value.detail)
-
-
-@pytest.mark.asyncio
-async def test_export_path_rejects_protected_config_file(monkeypatch):
-    fake_cfg = _FakeConfig({"api": {"export_allowed_dirs": ["config"]}})
-    monkeypatch.setattr(admin_api, "config", fake_cfg)
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_api.export_flowise_roundtrip_report({"output_path": "config/settings.yaml"})
-    assert exc.value.status_code == 400
-    assert "protected config file" in str(exc.value.detail)
-
-
-@pytest.mark.asyncio
 async def test_clear_policy_audit_blocked_by_default(monkeypatch):
     monkeypatch.setattr(
         admin_api,

@@ -14,7 +14,7 @@ from hardware import create_body_driver, BodyDriver
 from memory import MemoryManager
 from memory.openviking_bootstrap import ensure_openviking_ready
 from agent.adapter import GazerAgent
-from tools.admin.state import get_satellite_session_manager, SATELLITE_SOURCES
+
 from devices.registry import DeviceRegistry
 from runtime.app_context import AppContext, set_app_context
 
@@ -82,13 +82,13 @@ class GazerBrain:
         self.app_context.hook_bus = self.agent.bus
         self.app_context.hook_token = config.get("hooks.token", "") or None
 
-        self.capture_manager = init_capture(config, self.memory_manager, SATELLITE_SOURCES)
+        self.capture_manager = init_capture(config, self.memory_manager)
         self.device_registry = DeviceRegistry(
             default_target=config.get("devices.default_target", "local-desktop"),
         )
         self._rust_sidecar_client = init_devices(
             config, self.device_registry, self.capture_manager,
-            get_satellite_session_manager(), self.body, self.spatial,
+            self.body, self.spatial,
             self.audio, self.ui_queue, self._rust_sidecar_client,
         )
 
@@ -160,7 +160,7 @@ class GazerBrain:
         )
         self.hook_registry = result["hook_registry"]
         self.cron_scheduler = result["cron_scheduler"]
-        self.flow_engine = result["flow_engine"]
+
         self.plugin_loader = result["plugin_loader"]
         self._rust_sidecar_client = result["rust_sidecar_client"]
 

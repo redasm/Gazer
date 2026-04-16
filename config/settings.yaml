@@ -215,7 +215,7 @@ perception:
   camera_enabled: false
   camera_device_index: 0
   capture_interval: 60
-  satellite_ids: []
+
   action_enabled: true
   spatial_enabled: false
   spatial:
@@ -260,24 +260,8 @@ devices:
     node_id: body-main
     label: Physical Body
     allow_connect_control: true
-  satellite:
-    enabled: true
-    invoke_timeout_seconds: 15
-    nodes: {}
-    default_allow_actions:
-    - screen.observe
-    - screen.screenshot
-    - input.mouse.click
-    - input.keyboard.type
-    - input.keyboard.hotkey
-    - file.send
-satellite:
-  transport_backend: python
-  max_pending_requests_per_node: 64
-  pending_ttl_seconds: 30.0
-  heartbeat_timeout_seconds: 45.0
-  frame_window_seconds: 2.0
-  max_frame_bytes_per_window: 4194304
+
+
 coding:
   exec_backend: local
   max_output_chars: 100000

@@ -229,7 +229,7 @@ class ToolExecutionMixin:
         tool = self.tools.get(name)
         provider = str(getattr(tool, "provider", "") or "").strip().lower() if tool is not None else ""
 
-        if provider in {"devices", "desktop", "satellite", "hardware"}:
+        if provider in {"devices", "desktop", "hardware"}:
             return "device"
         if provider in {"web", "browser", "email", "hooks"}:
             return "network"

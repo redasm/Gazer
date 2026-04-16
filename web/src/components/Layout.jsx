@@ -15,7 +15,6 @@ import {
     Clock,
     Layers,
     SlidersHorizontal,
-    Workflow,
 } from 'lucide-react';
 import { translations } from '../i18n';
 
@@ -45,7 +44,6 @@ const Layout = ({ lang, setLang, status }) => {
                 { path: '/memory', icon: <BookOpen size={18} />, label: t.memory },
                 { path: '/cron', icon: <Clock size={18} />, label: t.cronJobs || 'Cron' },
                 { path: '/canvas', icon: <Layers size={18} />, label: t.canvas || 'Canvas' },
-                { path: '/workflow', icon: <Workflow size={18} />, label: t.workflowBuilder || 'Workflow' },
             ],
         },
         {
