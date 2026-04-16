@@ -86,7 +86,7 @@ const Skills = ({ t }) => {
     const fetchSkills = async () => {
         try {
             const res = await axios.get(`${API_BASE}/skills`);
-            setSkills(res.data);
+            setSkills(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error("Failed to fetch skills", err);
         }

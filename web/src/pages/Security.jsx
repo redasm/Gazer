@@ -382,39 +382,44 @@ const Security = ({ t, config, setConfig, fetchConfig }) => {
         ) : (
           <>
             {/* Overall status */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
-              background: doctor.overall === 'healthy'
-                ? 'rgba(74,222,128,0.08)'
-                : doctor.overall === 'degraded'
-                ? 'rgba(250,204,21,0.08)'
-                : 'rgba(239,68,68,0.08)',
-              borderRadius: 12, marginBottom: 16,
-              border: `1px solid ${
-                doctor.overall === 'healthy' ? 'rgba(74,222,128,0.2)' :
-                doctor.overall === 'degraded' ? 'rgba(250,204,21,0.2)' :
-                'rgba(239,68,68,0.2)'
-              }`,
-            }}>
-              {doctor.overall === 'healthy'
-                ? <CheckCircle size={20} color="#4ade80" />
-                : doctor.overall === 'degraded'
-                ? <AlertTriangle size={20} color="#facc15" />
-                : <XCircle size={20} color="#ef4444" />
-              }
-              <div>
-                <span style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>
-                  {doctor.overall.toUpperCase()}
-                </span>
-                <span style={{ color: '#888', fontSize: 13, marginLeft: 12 }}>
-                  {doctor.warnings} warning(s), {doctor.errors} error(s)
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const overall = doctor.overall ?? 'unknown';
+              return (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
+                  background: overall === 'healthy'
+                    ? 'rgba(74,222,128,0.08)'
+                    : overall === 'degraded'
+                    ? 'rgba(250,204,21,0.08)'
+                    : 'rgba(239,68,68,0.08)',
+                  borderRadius: 12, marginBottom: 16,
+                  border: `1px solid ${
+                    overall === 'healthy' ? 'rgba(74,222,128,0.2)' :
+                    overall === 'degraded' ? 'rgba(250,204,21,0.2)' :
+                    'rgba(239,68,68,0.2)'
+                  }`,
+                }}>
+                  {overall === 'healthy'
+                    ? <CheckCircle size={20} color="#4ade80" />
+                    : overall === 'degraded'
+                    ? <AlertTriangle size={20} color="#facc15" />
+                    : <XCircle size={20} color="#ef4444" />
+                  }
+                  <div>
+                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>
+                      {overall.toUpperCase()}
+                    </span>
+                    <span style={{ color: '#888', fontSize: 13, marginLeft: 12 }}>
+                      {doctor.warnings ?? 0} warning(s), {doctor.errors ?? 0} error(s)
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Check list */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {doctor.checks.map((check, idx) => (
+              {(doctor.checks ?? []).map((check, idx) => (
                 <div key={idx} style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
                   background: 'rgba(0,0,0,0.15)', borderRadius: 10,

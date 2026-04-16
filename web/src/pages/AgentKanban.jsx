@@ -676,7 +676,7 @@ export default function AgentKanban({ config, setConfig, saveConfig, t }) {
       <div className="agent-kanban-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0 }}>
-            <Bot size={20} style={{ color: '#22d3ee' }} />
+            <Bot size={20} style={{ color: 'var(--accent-red)' }} />
             {t.agentKanbanTitle || 'Multi-Agent Board'}
           </h2>
           <p style={{ fontSize: 13, color: '#667', margin: '4px 0 0 0' }}>{t.agentKanbanSubtitle || labels.subtitle}</p>

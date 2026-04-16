@@ -21,7 +21,7 @@ const ConfirmModal = ({ open, title, message, confirmText, cancelText, onConfirm
             <div
                 onClick={e => e.stopPropagation()}
                 style={{
-                    background: '#0f1a30',
+                    background: 'rgba(12,12,12,0.97)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     borderRadius: '16px',
                     padding: '24px',
@@ -57,7 +57,7 @@ const ConfirmModal = ({ open, title, message, confirmText, cancelText, onConfirm
                     <button
                         onClick={onConfirm}
                         style={{
-                            background: danger ? '#ef4444' : '#3b82f6',
+                            background: danger ? '#ef233c' : 'rgba(255,255,255,0.12)',
                             border: 'none',
                             color: '#fff',
                             padding: '8px 16px',
