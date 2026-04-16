@@ -76,7 +76,7 @@ const PolicyAudit = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.policyAudit || 'Policy Audit'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.policyAuditDesc || 'Track policy and router strategy changes for governance and debugging.'}
             </p>
             <NoticeBanner notice={notice} />
@@ -110,9 +110,9 @@ const PolicyAudit = ({ t }) => {
                 <div style={{ maxHeight: 460, overflowY: 'auto' }}>
                     {entries.map((item, idx) => (
                         <div key={`${item.timestamp || 'ts'}_${idx}`} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#dbeafe', fontSize: 12 }}>{item.action}</div>
+                            <div style={{ color: '#e2e8f0', fontSize: 12 }}>{item.action}</div>
                             <div style={{ color: '#7f8ea3', fontSize: 11 }}>{item.timestamp}</div>
-                            <div style={{ color: '#9fb3c8', fontSize: 11 }}>{JSON.stringify(item.details || {})}</div>
+                            <div style={{ color: '#6b7280', fontSize: 11 }}>{JSON.stringify(item.details || {})}</div>
                         </div>
                     ))}
                     {entries.length === 0 && (

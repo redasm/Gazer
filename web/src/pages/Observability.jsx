@@ -9,7 +9,7 @@ import ToggleSwitch from '../components/ToggleSwitch';
 const StatCard = ({ label, value }) => (
     <div className="card" style={{ padding: 12 }}>
         <div style={{ color: '#7f8ea3', fontSize: 12 }}>{label}</div>
-        <div style={{ color: '#dbeafe', fontSize: 20, fontWeight: 700 }}>{value}</div>
+        <div style={{ color: '#e2e8f0', fontSize: 20, fontWeight: 700 }}>{value}</div>
     </div>
 );
 
@@ -305,7 +305,7 @@ const Observability = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.observability || 'Observability'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.observabilityDesc || 'Unified model/provider/agent metrics: success rate, P95, errors, budget usage.'}
             </p>
 
@@ -331,7 +331,7 @@ const Observability = ({ t }) => {
             </div>
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 8 }}>
+                <div style={{ color: '#e2e8f0', marginBottom: 8 }}>
                     {t.efficiencyBaseline || 'Efficiency Baseline'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(140px, 1fr))', gap: 10 }}>
@@ -340,7 +340,7 @@ const Observability = ({ t }) => {
                     <StatCard label="baseline.avg_tokens_run" value={baselineCurrent.avg_tokens_per_run ?? 0} />
                     <StatCard label="baseline.tool_error_rate" value={baselineCurrent.tool_error_rate ?? 0} />
                 </div>
-                <div style={{ marginTop: 8, color: '#9fb3c8', fontSize: 12 }}>
+                <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>
                     Δ success_rate={baselineDelta.success_rate ?? 0} · Δ p95={baselineDelta.p95_latency_ms ?? 0}
                     · Δ avg_tokens={baselineDelta.avg_tokens_per_run ?? 0}
                     · Δ tool_error_rate={baselineDelta.tool_error_rate ?? 0}
@@ -349,7 +349,7 @@ const Observability = ({ t }) => {
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                    <div style={{ color: '#dbeafe' }}>
+                    <div style={{ color: '#e2e8f0' }}>
                         {t.memoryQualityReport || 'Memory Quality Report'}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -373,7 +373,7 @@ const Observability = ({ t }) => {
                             style={{ width: 90 }}
                             title="stale_days"
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 130, color: '#9fb3c8', fontSize: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 130, color: '#6b7280', fontSize: 12 }}>
                             <span>persona drift</span>
                             <ToggleSwitch
                                 checked={memoryIncludePersonaDrift}
@@ -411,50 +411,50 @@ const Observability = ({ t }) => {
                             <StatCard label="memory.timeliness_score" value={memoryScores.timeliness_score ?? 0} />
                             <StatCard label="memory.stability_score" value={memoryScores.stability_score ?? 0} />
                         </div>
-                        <div style={{ marginTop: 8, color: '#9fb3c8', fontSize: 12 }}>
+                        <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>
                             quality_level={memoryScores.quality_level || 'unknown'} · trend={memoryTrend.direction || 'stable'}
                             · Δ quality_score={memoryTrend.quality_score_delta ?? 0}
                             {memoryPersonaDrift?.joint_risk_level ? ` · joint_risk=${memoryPersonaDrift.joint_risk_level}` : ''}
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 10, marginTop: 10 }}>
-                            <div style={{ color: '#9fb3c8', fontSize: 12 }}>
+                            <div style={{ color: '#6b7280', fontSize: 12 }}>
                                 relevance: yield={memoryRelevance.yield_rate ?? 0}, binding={memoryRelevance.source_binding_rate ?? 0}, align={memoryRelevance.alignment_avg ?? 0}
                             </div>
-                            <div style={{ color: '#9fb3c8', fontSize: 12 }}>
+                            <div style={{ color: '#6b7280', fontSize: 12 }}>
                                 timeliness: stale_ratio={memoryTimeliness.stale_ratio ?? 0}, median_age={memoryTimeliness.median_age_days ?? 0}
                             </div>
-                            <div style={{ color: '#9fb3c8', fontSize: 12 }}>
+                            <div style={{ color: '#6b7280', fontSize: 12 }}>
                                 conflict: conflict_rate={memoryConflict.conflict_rate ?? 0}, duplicate={memoryConflict.duplicate_key_ratio ?? 0}
                             </div>
                         </div>
-                        <div style={{ marginTop: 10, color: '#dbeafe', fontSize: 12 }}>Top Issues</div>
+                        <div style={{ marginTop: 10, color: '#e2e8f0', fontSize: 12 }}>Top Issues</div>
                         {memoryIssues.length === 0 ? (
                             <div style={{ color: '#889', fontSize: 12, marginTop: 4 }}>{t.noData || 'No data'}</div>
                         ) : memoryIssues.map((issue, idx) => (
                             <div
                                 key={`${issue?.code || 'issue'}_${idx}`}
-                                style={{ color: '#9fb3c8', fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                                style={{ color: '#6b7280', fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
                             >
                                 [{issue?.severity || 'info'}] {issue?.code || 'unknown'}: {issue?.detail || ''}
                             </div>
                         ))}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
                             <div>
-                                <div style={{ color: '#9fb3c8', fontSize: 12, marginBottom: 4 }}>stale samples</div>
+                                <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4 }}>stale samples</div>
                                 {staleSamples.length === 0 ? (
                                     <div style={{ color: '#889', fontSize: 12 }}>{t.noData || 'No data'}</div>
                                 ) : staleSamples.slice(0, 3).map((item, idx) => (
-                                    <div key={`stale_${idx}`} style={{ color: '#9fb3c8', fontSize: 12, padding: '3px 0' }}>
+                                    <div key={`stale_${idx}`} style={{ color: '#6b7280', fontSize: 12, padding: '3px 0' }}>
                                         {item?.timestamp || '-'} · age_days={item?.age_days ?? 0}
                                     </div>
                                 ))}
                             </div>
                             <div>
-                                <div style={{ color: '#9fb3c8', fontSize: 12, marginBottom: 4 }}>conflicting keys</div>
+                                <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4 }}>conflicting keys</div>
                                 {conflictingSamples.length === 0 ? (
                                     <div style={{ color: '#889', fontSize: 12 }}>{t.noData || 'No data'}</div>
                                 ) : conflictingSamples.slice(0, 3).map((item, idx) => (
-                                    <div key={`conflict_${idx}`} style={{ color: '#9fb3c8', fontSize: 12, padding: '3px 0' }}>
+                                    <div key={`conflict_${idx}`} style={{ color: '#6b7280', fontSize: 12, padding: '3px 0' }}>
                                         {item?.key || '-'} · decisions={Array.isArray(item?.decisions) ? item.decisions.join(',') : '-'}
                                     </div>
                                 ))}
@@ -466,7 +466,7 @@ const Observability = ({ t }) => {
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                    <div style={{ color: '#dbeafe' }}>
+                    <div style={{ color: '#e2e8f0' }}>
                         Memory Turn Health
                     </div>
                     <button className="btn-secondary" onClick={loadMemoryTurnHealth} disabled={memoryTurnHealthLoading}>
@@ -485,14 +485,14 @@ const Observability = ({ t }) => {
                             <StatCard label="recall_count.avg" value={memoryTurnSummary.avg_recall_count ?? 0} />
                             <StatCard label="persist_ok_rate" value={memoryTurnSummary.persist_ok_rate ?? 0} />
                         </div>
-                        <div style={{ marginTop: 10, color: '#9fb3c8', fontSize: 12 }}>
+                        <div style={{ marginTop: 10, color: '#6b7280', fontSize: 12 }}>
                             tool_result_persistence: mode={toolPersistPolicy.mode || 'allowlist'} · enabled={String(toolPersistPolicy.enabled ?? true)}
                             · memory={toolPersistCounts.memory ?? 0} · trajectory_only={toolPersistCounts.trajectory_only ?? 0}
                         </div>
                         <div style={{ marginTop: 10, overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                 <thead>
-                                    <tr style={{ color: '#8aa0bd', textAlign: 'left' }}>
+                                    <tr style={{ color: '#6b7280', textAlign: 'left' }}>
                                         <th style={{ padding: '6px 8px' }}>ts</th>
                                         <th style={{ padding: '6px 8px' }}>status</th>
                                         <th style={{ padding: '6px 8px' }}>memory_context_chars</th>
@@ -503,13 +503,13 @@ const Observability = ({ t }) => {
                                 <tbody>
                                     {memoryTurnItems.slice(-20).reverse().map((row, idx) => (
                                         <tr key={`${row?.ts || 'row'}_${idx}`} style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                                            <td style={{ padding: '6px 8px', color: '#9fb3c8' }}>
+                                            <td style={{ padding: '6px 8px', color: '#6b7280' }}>
                                                 {row?.ts ? new Date(row.ts * 1000).toLocaleString() : '-'}
                                             </td>
-                                            <td style={{ padding: '6px 8px', color: '#dbeafe' }}>{row?.status || '-'}</td>
-                                            <td style={{ padding: '6px 8px', color: '#dbeafe' }}>{row?.memory_context_chars ?? 0}</td>
-                                            <td style={{ padding: '6px 8px', color: '#dbeafe' }}>{row?.recall_count ?? 0}</td>
-                                            <td style={{ padding: '6px 8px', color: '#dbeafe' }}>{String(row?.persist_ok)}</td>
+                                            <td style={{ padding: '6px 8px', color: '#e2e8f0' }}>{row?.status || '-'}</td>
+                                            <td style={{ padding: '6px 8px', color: '#e2e8f0' }}>{row?.memory_context_chars ?? 0}</td>
+                                            <td style={{ padding: '6px 8px', color: '#e2e8f0' }}>{row?.recall_count ?? 0}</td>
+                                            <td style={{ padding: '6px 8px', color: '#e2e8f0' }}>{String(row?.persist_ok)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -559,74 +559,74 @@ const Observability = ({ t }) => {
             </div>
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Providers</div>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Providers</div>
                 {(provider.providers || []).map((item) => (
                     <div key={item.name} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ color: '#dbeafe' }}>{item.name}</span>
-                        <span style={{ color: '#9fb3c8' }}>{item.model}</span>
-                        <span style={{ color: '#9fb3c8' }}>ok={item.success_rate}</span>
-                        <span style={{ color: '#9fb3c8' }}>p95={item.p95_latency_ms}</span>
-                        <span style={{ color: '#9fb3c8' }}>rpm={item.capacity_rpm}</span>
-                        <span style={{ color: '#9fb3c8' }}>{JSON.stringify(item.error_classes || {})}</span>
+                        <span style={{ color: '#e2e8f0' }}>{item.name}</span>
+                        <span style={{ color: '#6b7280' }}>{item.model}</span>
+                        <span style={{ color: '#6b7280' }}>ok={item.success_rate}</span>
+                        <span style={{ color: '#6b7280' }}>p95={item.p95_latency_ms}</span>
+                        <span style={{ color: '#6b7280' }}>rpm={item.capacity_rpm}</span>
+                        <span style={{ color: '#6b7280' }}>{JSON.stringify(item.error_classes || {})}</span>
                     </div>
                 ))}
             </div>
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Models</div>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Models</div>
                 {models.map((item) => (
                     <div key={item.model} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1.2fr', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ color: '#dbeafe' }}>{item.model}</span>
-                        <span style={{ color: '#9fb3c8' }}>calls={item.calls}</span>
-                        <span style={{ color: '#9fb3c8' }}>ok={item.success_rate}</span>
-                        <span style={{ color: '#9fb3c8' }}>p95={item.p95_latency_ms}</span>
-                        <span style={{ color: '#9fb3c8' }}>{JSON.stringify(item.error_classes || {})}</span>
+                        <span style={{ color: '#e2e8f0' }}>{item.model}</span>
+                        <span style={{ color: '#6b7280' }}>calls={item.calls}</span>
+                        <span style={{ color: '#6b7280' }}>ok={item.success_rate}</span>
+                        <span style={{ color: '#6b7280' }}>p95={item.p95_latency_ms}</span>
+                        <span style={{ color: '#6b7280' }}>{JSON.stringify(item.error_classes || {})}</span>
                     </div>
                 ))}
             </div>
 
             <div className="card" style={{ padding: 16 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Agents</div>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Agents</div>
                 {agents.map((item) => (
                     <div key={item.agent_id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1.2fr', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ color: '#dbeafe' }}>{item.agent_id}</span>
-                        <span style={{ color: '#9fb3c8' }}>turns={item.turns}</span>
-                        <span style={{ color: '#9fb3c8' }}>ok={item.success_rate}</span>
-                        <span style={{ color: '#9fb3c8' }}>p95={item.p95_latency_ms}</span>
-                        <span style={{ color: '#9fb3c8' }}>{JSON.stringify(item.error_classes || {})}</span>
+                        <span style={{ color: '#e2e8f0' }}>{item.agent_id}</span>
+                        <span style={{ color: '#6b7280' }}>turns={item.turns}</span>
+                        <span style={{ color: '#6b7280' }}>ok={item.success_rate}</span>
+                        <span style={{ color: '#6b7280' }}>p95={item.p95_latency_ms}</span>
+                        <span style={{ color: '#6b7280' }}>{JSON.stringify(item.error_classes || {})}</span>
                     </div>
                 ))}
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Workflows</div>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Workflows</div>
                 {(workflow.workflows || []).map((item) => (
                     <div key={item.workflow_id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1.2fr', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ color: '#dbeafe' }}>{item.workflow_name || item.workflow_id}</span>
-                        <span style={{ color: '#9fb3c8' }}>runs={item.runs}</span>
-                        <span style={{ color: '#9fb3c8' }}>ok={item.success_rate}</span>
-                        <span style={{ color: '#9fb3c8' }}>p95={item.p95_latency_ms}</span>
-                        <span style={{ color: '#9fb3c8' }}>nodes={item.p95_trace_nodes}</span>
-                        <span style={{ color: '#9fb3c8' }}>{JSON.stringify(item.error_classes || {})}</span>
+                        <span style={{ color: '#e2e8f0' }}>{item.workflow_name || item.workflow_id}</span>
+                        <span style={{ color: '#6b7280' }}>runs={item.runs}</span>
+                        <span style={{ color: '#6b7280' }}>ok={item.success_rate}</span>
+                        <span style={{ color: '#6b7280' }}>p95={item.p95_latency_ms}</span>
+                        <span style={{ color: '#6b7280' }}>nodes={item.p95_trace_nodes}</span>
+                        <span style={{ color: '#6b7280' }}>{JSON.stringify(item.error_classes || {})}</span>
                     </div>
                 ))}
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>
                     {t.llmToolFailureProfile || 'LLM / Tool Failure Profile'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                        <div style={{ color: '#9fb3c8', marginBottom: 6, fontSize: 12 }}>
+                        <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 12 }}>
                             {t.llmErrorClasses || 'LLM Error Classes'}
                         </div>
-                        <pre style={{ margin: 0, color: '#9fb3c8', fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                        <pre style={{ margin: 0, color: '#6b7280', fontSize: 12, whiteSpace: 'pre-wrap' }}>
                             {JSON.stringify(llmProfile.error_classes || {}, null, 2)}
                         </pre>
                     </div>
                     <div>
-                        <div style={{ color: '#9fb3c8', marginBottom: 6, fontSize: 12 }}>
+                        <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 12 }}>
                             {t.toolErrorCodes || 'Tool Error Codes'}
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
@@ -652,15 +652,15 @@ const Observability = ({ t }) => {
                         ) : (
                             toolErrorRows.map((row) => (
                                 <div key={row.code} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                    <span style={{ color: '#dbeafe' }}>{row.code}</span>
-                                    <span style={{ color: '#9fb3c8' }}>{row.count}</span>
+                                    <span style={{ color: '#e2e8f0' }}>{row.code}</span>
+                                    <span style={{ color: '#6b7280' }}>{row.count}</span>
                                 </div>
                             ))
                         )}
                     </div>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                    <div style={{ color: '#9fb3c8', marginBottom: 6, fontSize: 12 }}>
+                    <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 12 }}>
                         {t.topToolFailures || 'Top Tool Failures'}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
@@ -687,36 +687,36 @@ const Observability = ({ t }) => {
                     ) : (
                         toolFailureRows.map((item, idx) => (
                             <div key={`${item.tool}_${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                <span style={{ color: '#9fb3c8' }}>#{idx + 1}</span>
-                                <span style={{ color: '#dbeafe' }}>{item.tool}</span>
+                                <span style={{ color: '#6b7280' }}>#{idx + 1}</span>
+                                <span style={{ color: '#e2e8f0' }}>{item.tool}</span>
                                 <span style={{ color: '#f87171' }}>{item.failures}</span>
                             </div>
                         ))
                     )}
-                    <div style={{ color: '#9fb3c8', marginTop: 8, fontSize: 12 }}>
+                    <div style={{ color: '#6b7280', marginTop: 8, fontSize: 12 }}>
                         replan_hints={llmTool.replan_hints ?? 0}
                     </div>
                 </div>
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>
                     {t.inboundMediaProfile || 'Inbound Media Profile'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                        <div style={{ color: '#9fb3c8', marginBottom: 6, fontSize: 12 }}>
+                        <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 12 }}>
                             {t.inboundMediaBySource || 'By Source'}
                         </div>
-                        <pre style={{ margin: 0, color: '#9fb3c8', fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                        <pre style={{ margin: 0, color: '#6b7280', fontSize: 12, whiteSpace: 'pre-wrap' }}>
                             {JSON.stringify(inboundMedia.by_source || {}, null, 2)}
                         </pre>
                     </div>
                     <div>
-                        <div style={{ color: '#9fb3c8', marginBottom: 6, fontSize: 12 }}>
+                        <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 12 }}>
                             {t.inboundMediaByType || 'By Type'}
                         </div>
-                        <pre style={{ margin: 0, color: '#9fb3c8', fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                        <pre style={{ margin: 0, color: '#6b7280', fontSize: 12, whiteSpace: 'pre-wrap' }}>
                             {JSON.stringify(inboundMedia.by_type || {}, null, 2)}
                         </pre>
                     </div>
@@ -724,7 +724,7 @@ const Observability = ({ t }) => {
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>
                     {t.debugTrajectory || 'Trajectories'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: 12 }}>
@@ -748,8 +748,8 @@ const Observability = ({ t }) => {
                                         borderColor: active ? 'rgba(96,165,250,0.8)' : undefined,
                                     }}
                                 >
-                                    <div style={{ color: '#dbeafe', fontSize: 12, fontWeight: 600 }}>{runId}</div>
-                                    <div style={{ color: '#9fb3c8', fontSize: 11 }}>
+                                    <div style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 600 }}>{runId}</div>
+                                    <div style={{ color: '#6b7280', fontSize: 11 }}>
                                         status={item?.status || 'running'} · events={item?.event_count ?? 0}
                                     </div>
                                 </button>
@@ -758,7 +758,7 @@ const Observability = ({ t }) => {
                     </div>
                     <div>
                         {trajectoryLoading ? (
-                            <div style={{ color: '#9fb3c8', fontSize: 12 }}>Loading trajectory...</div>
+                            <div style={{ color: '#6b7280', fontSize: 12 }}>Loading trajectory...</div>
                         ) : !trajectoryDetail ? (
                             <div style={{ color: '#889', fontSize: 12 }}>
                                 {t.debugSelectTrajectory || 'Select one trajectory to inspect.'}
@@ -766,7 +766,7 @@ const Observability = ({ t }) => {
                         ) : (
                             <>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                                    <span style={{ color: '#9fb3c8', fontSize: 12 }}>
+                                    <span style={{ color: '#6b7280', fontSize: 12 }}>
                                         run_id={trajectoryDetail?.run_id || ''}
                                     </span>
                                     <button
@@ -781,7 +781,7 @@ const Observability = ({ t }) => {
                                             : (t.retry || 'Retry')}
                                     </button>
                                 </div>
-                                <div style={{ color: '#9fb3c8', fontSize: 12, marginBottom: 6 }}>
+                                <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 6 }}>
                                     tool_results={trajectoryToolResults.length} · errors={trajectoryToolErrors.length}
                                 </div>
                                 <div style={{ maxHeight: 250, overflowY: 'auto' }}>
@@ -798,14 +798,14 @@ const Observability = ({ t }) => {
                                                 fontSize: 12,
                                             }}
                                         >
-                                            <div style={{ color: '#dbeafe' }}>
+                                            <div style={{ color: '#e2e8f0' }}>
                                                 tool={row.tool} · code={row.errorCode || 'UNKNOWN'}
                                             </div>
                                             {row.traceId && (
-                                                <div style={{ color: '#9fb3c8' }}>trace_id={row.traceId}</div>
+                                                <div style={{ color: '#6b7280' }}>trace_id={row.traceId}</div>
                                             )}
                                             {row.errorHint && (
-                                                <div style={{ color: '#9fb3c8' }}>hint={row.errorHint}</div>
+                                                <div style={{ color: '#6b7280' }}>hint={row.errorHint}</div>
                                             )}
                                             {row.resultPreview && (
                                                 <div style={{ color: '#6b7280' }}>{row.resultPreview}</div>
@@ -820,19 +820,19 @@ const Observability = ({ t }) => {
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Trends</div>
-                <pre style={{ margin: 0, color: '#9fb3c8', fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Trends</div>
+                <pre style={{ margin: 0, color: '#6b7280', fontSize: 12, whiteSpace: 'pre-wrap' }}>
                     {JSON.stringify(trends || {}, null, 2)}
                 </pre>
             </div>
 
             <div className="card" style={{ padding: 16, marginTop: 12 }}>
-                <div style={{ color: '#dbeafe', marginBottom: 10 }}>Alerts</div>
+                <div style={{ color: '#e2e8f0', marginBottom: 10 }}>Alerts</div>
                 {alerts.length === 0 ? (
                     <div style={{ color: '#889' }}>{t.noData || 'No data'}</div>
                 ) : (
                     alerts.map((item, idx) => (
-                        <div key={`${item.timestamp || ''}_${idx}`} style={{ fontSize: 12, color: '#9fb3c8', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div key={`${item.timestamp || ''}_${idx}`} style={{ fontSize: 12, color: '#6b7280', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             [{item.level}] {item.category}: {item.message}
                         </div>
                     ))

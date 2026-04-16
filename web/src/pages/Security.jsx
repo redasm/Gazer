@@ -261,7 +261,7 @@ const Security = ({ t, config, setConfig, fetchConfig }) => {
           <Lock size={18} color="#60a5fa" />
           {t?.ownerChannelIdsTitle || 'Owner Channel IDs'}
         </h2>
-        <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 12, fontSize: 13 }}>
+        <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 12, fontSize: 13 }}>
           {t?.ownerChannelIdsDesc || 'Map channel -> owner sender_id. Example: {"feishu":"ou_xxx"}'}
         </p>
         <textarea

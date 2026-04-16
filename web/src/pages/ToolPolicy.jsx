@@ -174,7 +174,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.toolPolicy || 'Tool Policy'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 18 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 18 }}>
                 {t.toolPolicyDesc || 'Manage tool exposure and execution policy outside general settings.'}
             </p>
             <NoticeBanner notice={notice} />
@@ -292,7 +292,7 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                                     <span style={{ color: item.allowed ? '#4ade80' : '#fca5a5' }}>
                                         {item.allowed ? (t.allowed || 'allowed') : (t.blocked || 'blocked')}
                                     </span>
-                                    <span style={{ color: '#9fb3c8' }}>{item.reason}</span>
+                                    <span style={{ color: '#6b7280' }}>{item.reason}</span>
                                 </div>
                             ))}
                         </div>
@@ -315,25 +315,25 @@ const ToolPolicy = ({ config, setConfig, saveConfig, t }) => {
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
-                        <div style={{ color: '#9fb3c8' }}>
-                            owner_only_tools: <span style={{ color: '#dbeafe' }}>{effectivePolicy.global?.owner_only_count || 0}</span>
+                        <div style={{ color: '#6b7280' }}>
+                            owner_only_tools: <span style={{ color: '#e2e8f0' }}>{effectivePolicy.global?.owner_only_count || 0}</span>
                         </div>
-                        <div style={{ color: '#9fb3c8' }}>
-                            groups: <span style={{ color: '#dbeafe' }}>{effectivePolicy.global?.group_count || 0}</span>
+                        <div style={{ color: '#6b7280' }}>
+                            groups: <span style={{ color: '#e2e8f0' }}>{effectivePolicy.global?.group_count || 0}</span>
                         </div>
-                        <div style={{ color: '#9fb3c8' }}>
-                            global allow_names: <span style={{ color: '#dbeafe' }}>{(effectivePolicy.global?.policy?.allow_names || []).length}</span>
+                        <div style={{ color: '#6b7280' }}>
+                            global allow_names: <span style={{ color: '#e2e8f0' }}>{(effectivePolicy.global?.policy?.allow_names || []).length}</span>
                         </div>
-                        <div style={{ color: '#9fb3c8' }}>
-                            global deny_names: <span style={{ color: '#dbeafe' }}>{(effectivePolicy.global?.policy?.deny_names || []).length}</span>
+                        <div style={{ color: '#6b7280' }}>
+                            global deny_names: <span style={{ color: '#e2e8f0' }}>{(effectivePolicy.global?.policy?.deny_names || []).length}</span>
                         </div>
                         {effectivePolicy.agent && (
                             <>
-                                <div style={{ color: '#9fb3c8' }}>
-                                    agent: <span style={{ color: '#dbeafe' }}>{effectivePolicy.agent.id}</span>
+                                <div style={{ color: '#6b7280' }}>
+                                    agent: <span style={{ color: '#e2e8f0' }}>{effectivePolicy.agent.id}</span>
                                 </div>
-                                <div style={{ color: '#9fb3c8' }}>
-                                    agent allow_names: <span style={{ color: '#dbeafe' }}>{(effectivePolicy.agent?.effective_policy?.allow_names || []).length}</span>
+                                <div style={{ color: '#6b7280' }}>
+                                    agent allow_names: <span style={{ color: '#e2e8f0' }}>{(effectivePolicy.agent?.effective_policy?.allow_names || []).length}</span>
                                 </div>
                             </>
                         )}

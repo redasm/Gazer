@@ -101,7 +101,7 @@ const LlmRouter = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.llmRouter || 'LLM Router'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.llmRouterDesc || 'Observe provider health and switch routing strategy.'}
             </p>
             <NoticeBanner notice={notice} />
@@ -127,12 +127,12 @@ const LlmRouter = ({ t }) => {
                     </div>
 
                     <div className="card" style={{ padding: 16 }}>
-                        <div style={{ fontSize: 12, color: '#9fb3c8', marginBottom: 10, display: 'flex', gap: 16 }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, display: 'flex', gap: 16 }}>
                             <span>total_calls: {data.total_calls ?? 0}</span>
                             <span>total_failures: {data.total_failures ?? 0}</span>
                             <span>avg_latency_ms: {data.avg_latency_ms ?? 0}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#9fb3c8', marginBottom: 10, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                             <span>budget_enabled: {String(data?.budget?.enabled ?? false)}</span>
                             <span>used_calls: {data?.budget?.used_calls ?? 0}</span>
                             <span>max_calls: {data?.budget?.max_calls ?? 0}</span>
@@ -144,11 +144,11 @@ const LlmRouter = ({ t }) => {
                         </div>
                         {(data.providers || []).map((provider) => (
                             <div key={provider.name} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr', gap: 8, fontSize: 12, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <span style={{ color: '#dbeafe' }}>{provider.name}</span>
-                                <span style={{ color: '#9fb3c8' }}>{provider.model}</span>
-                                <span style={{ color: '#9fb3c8' }}>calls: {provider.calls}</span>
-                                <span style={{ color: '#9fb3c8' }}>ok: {provider.success_rate}</span>
-                                <span style={{ color: '#9fb3c8' }}>lat: {provider.last_latency_ms}ms</span>
+                                <span style={{ color: '#e2e8f0' }}>{provider.name}</span>
+                                <span style={{ color: '#6b7280' }}>{provider.model}</span>
+                                <span style={{ color: '#6b7280' }}>calls: {provider.calls}</span>
+                                <span style={{ color: '#6b7280' }}>ok: {provider.success_rate}</span>
+                                <span style={{ color: '#6b7280' }}>lat: {provider.last_latency_ms}ms</span>
                             </div>
                         ))}
                     </div>
@@ -156,7 +156,7 @@ const LlmRouter = ({ t }) => {
                     <div className="card" style={{ padding: 16, marginTop: 12 }}>
                         <label className="label">{t.routerBudget || 'Router Budget Policy'}</label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(220px, 1fr))', gap: 12 }}>
-                            <div style={{ gridColumn: '1 / span 2', color: '#9fb3c8', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ gridColumn: '1 / span 2', color: '#6b7280', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                                 <span>enabled</span>
                                 <ToggleSwitch
                                     checked={Boolean(budget.enabled)}

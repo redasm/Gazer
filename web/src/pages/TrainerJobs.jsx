@@ -124,7 +124,7 @@ const TrainerJobs = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.trainerJobs || 'Trainer Jobs'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.trainerJobsDesc || 'Manage lightning-lite training jobs and inspect generated prompt/policy patches.'}
             </p>
 
@@ -165,7 +165,7 @@ const TrainerJobs = ({ t }) => {
                             </option>
                         ))}
                     </select>
-                    <div style={{ color: '#8aa0bd', alignSelf: 'center', fontSize: 12 }}>
+                    <div style={{ color: '#6b7280', alignSelf: 'center', fontSize: 12 }}>
                         {experiments.length} experiments
                     </div>
                     <button className="btn-secondary" onClick={createExperiment}>Create Exp</button>
@@ -212,10 +212,10 @@ const TrainerJobs = ({ t }) => {
                                 fontSize: 12,
                             }}
                         >
-                            <div style={{ color: '#dbeafe' }}>{job.job_id}</div>
-                            <div style={{ color: '#9fb3c8' }}>{job.dataset_id}</div>
-                            <div style={{ color: '#9fb3c8' }}>{job.source}</div>
-                            <div style={{ color: '#9fb3c8' }}>{job.status}</div>
+                            <div style={{ color: '#e2e8f0' }}>{job.job_id}</div>
+                            <div style={{ color: '#6b7280' }}>{job.dataset_id}</div>
+                            <div style={{ color: '#6b7280' }}>{job.source}</div>
+                            <div style={{ color: '#6b7280' }}>{job.status}</div>
                             <button
                                 className="btn-secondary"
                                 style={{ width: '100%', justifySelf: 'stretch' }}
@@ -268,7 +268,7 @@ const TrainerJobs = ({ t }) => {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                            <div style={{ color: '#dbeafe', fontSize: 14, fontWeight: 600 }}>
+                            <div style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 600 }}>
                                 {selected?.job_id || (t.detail || 'Detail')}
                             </div>
                             <button className="btn-secondary" onClick={() => setDetailOpen(false)}>
@@ -286,7 +286,7 @@ const TrainerJobs = ({ t }) => {
                             }}
                         >
                             {detailLoading ? (
-                                <div style={{ color: '#9fb3c8', fontSize: 12 }}>
+                                <div style={{ color: '#6b7280', fontSize: 12 }}>
                                     {t.loading || 'Loading...'}
                                 </div>
                             ) : (
@@ -295,7 +295,7 @@ const TrainerJobs = ({ t }) => {
                                         margin: 0,
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',
-                                        color: '#dbeafe',
+                                        color: '#e2e8f0',
                                         fontSize: 12,
                                     }}
                                 >

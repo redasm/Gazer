@@ -106,7 +106,7 @@ const ReleaseGate = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.releaseGate || 'Release Gate'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.releaseGateDesc || 'Observe release gate status and manually override during incidents.'}
             </p>
             <NoticeBanner notice={notice} />
@@ -131,33 +131,33 @@ const ReleaseGate = ({ t }) => {
                 </div>
             </div>
             <details className="card" style={{ padding: 12, marginBottom: 12 }}>
-                <summary style={{ cursor: 'pointer', color: '#dbeafe', fontSize: 13, fontWeight: 600 }}>
+                <summary style={{ cursor: 'pointer', color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}>
                     {t.releaseGateHealthThresholdDetails || 'Current Threshold Details'}
                 </summary>
                 <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(220px, 1fr))', gap: 8, fontSize: 12 }}>
-                    <div style={{ color: '#9fb3c8' }}>
-                        warning_success_rate: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.warning_success_rate ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        warning_success_rate: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.warning_success_rate ?? '-'}</span>
                     </div>
-                    <div style={{ color: '#9fb3c8' }}>
-                        critical_success_rate: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.critical_success_rate ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        critical_success_rate: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.critical_success_rate ?? '-'}</span>
                     </div>
-                    <div style={{ color: '#9fb3c8' }}>
-                        warning_failures: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.warning_failures ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        warning_failures: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.warning_failures ?? '-'}</span>
                     </div>
-                    <div style={{ color: '#9fb3c8' }}>
-                        critical_failures: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.critical_failures ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        critical_failures: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.critical_failures ?? '-'}</span>
                     </div>
-                    <div style={{ color: '#9fb3c8' }}>
-                        warning_p95_latency_ms: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.warning_p95_latency_ms ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        warning_p95_latency_ms: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.warning_p95_latency_ms ?? '-'}</span>
                     </div>
-                    <div style={{ color: '#9fb3c8' }}>
-                        critical_p95_latency_ms: <span style={{ color: '#dbeafe' }}>{gateHealth?.thresholds?.critical_p95_latency_ms ?? '-'}</span>
+                    <div style={{ color: '#6b7280' }}>
+                        critical_p95_latency_ms: <span style={{ color: '#e2e8f0' }}>{gateHealth?.thresholds?.critical_p95_latency_ms ?? '-'}</span>
                     </div>
                 </div>
             </details>
 
             <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#9fb3c8' }}>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#6b7280' }}>
                     <span>blocked: {String(gate?.blocked ?? false)}</span>
                     <span>reason: {gate?.reason || '-'}</span>
                     <span>source: {gate?.source || '-'}</span>
@@ -168,7 +168,7 @@ const ReleaseGate = ({ t }) => {
             <div className="card" style={{ padding: 16 }}>
                 <label className="label">{t.releaseGateOverride || 'Manual Override'}</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(220px, 1fr))', gap: 12 }}>
-                    <div style={{ gridColumn: '1 / span 2', color: '#9fb3c8', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div style={{ gridColumn: '1 / span 2', color: '#6b7280', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                         <span>blocked</span>
                         <ToggleSwitch
                             checked={Boolean(form.blocked)}

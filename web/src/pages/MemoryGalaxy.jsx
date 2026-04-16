@@ -34,14 +34,16 @@ const MemoryGalaxy = ({ t }) => {
     useEffect(() => {
         axios.get(`${API_BASE}/memory/graph`)
             .then(res => {
-                const data = res.data;
+                const data = res.data || {};
+                const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+                const links = Array.isArray(data.links) ? data.links : [];
                 const nodeById = {};
-                data.nodes.forEach(n => {
+                nodes.forEach(n => {
                     n._neighbors = [];
                     n._links = [];
                     nodeById[n.id] = n;
                 });
-                data.links.forEach(link => {
+                links.forEach(link => {
                     const sid = typeof link.source === 'object' ? link.source.id : link.source;
                     const tid = typeof link.target === 'object' ? link.target.id : link.target;
                     if (nodeById[sid]) {
@@ -53,7 +55,7 @@ const MemoryGalaxy = ({ t }) => {
                         nodeById[tid]._links.push(link);
                     }
                 });
-                setGraphData(data);
+                setGraphData({ ...data, nodes, links });
             })
             .catch(err => console.error(err));
     }, []);

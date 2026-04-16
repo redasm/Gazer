@@ -9,6 +9,39 @@ export default defineConfig({
     headers: {
       'Cache-Control': 'no-store',
     },
+    proxy: {
+      // Forward all backend API calls and WebSocket connections to the backend server.
+      // This lets config.js fall back to window.location.origin (port 5173) in dev
+      // without breaking anything — Vite proxies matched requests to port 8080.
+      '/ws': {
+        target: 'http://localhost:8080',
+        ws: true,
+        changeOrigin: true,
+      },
+      '/config': { target: 'http://localhost:8080', changeOrigin: true },
+      '/health': { target: 'http://localhost:8080', changeOrigin: true },
+      '/skills': { target: 'http://localhost:8080', changeOrigin: true },
+      '/logs': { target: 'http://localhost:8080', changeOrigin: true },
+      '/model-providers': { target: 'http://localhost:8080', changeOrigin: true },
+      '/auth': { target: 'http://localhost:8080', changeOrigin: true },
+      '/memory': { target: 'http://localhost:8080', changeOrigin: true },
+      '/canvas': { target: 'http://localhost:8080', changeOrigin: true },
+      '/cron': { target: 'http://localhost:8080', changeOrigin: true },
+      '/persona': { target: 'http://localhost:8080', changeOrigin: true },
+      '/policy': { target: 'http://localhost:8080', changeOrigin: true },
+      '/security': { target: 'http://localhost:8080', changeOrigin: true },
+      '/debug': { target: 'http://localhost:8080', changeOrigin: true },
+      '/agents': { target: 'http://localhost:8080', changeOrigin: true },
+      '/llm-router': { target: 'http://localhost:8080', changeOrigin: true },
+      '/plugins': { target: 'http://localhost:8080', changeOrigin: true },
+      '/release-gate': { target: 'http://localhost:8080', changeOrigin: true },
+      '/training': { target: 'http://localhost:8080', changeOrigin: true },
+      '/observability': { target: 'http://localhost:8080', changeOrigin: true },
+      '/evolution': { target: 'http://localhost:8080', changeOrigin: true },
+      '/git': { target: 'http://localhost:8080', changeOrigin: true },
+      '/deployment': { target: 'http://localhost:8080', changeOrigin: true },
+      '/audit': { target: 'http://localhost:8080', changeOrigin: true },
+    },
   },
   resolve: {
     dedupe: ['react', 'react-dom'],

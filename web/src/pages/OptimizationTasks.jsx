@@ -54,7 +54,7 @@ const OptimizationTasks = ({ t }) => {
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 6 }}>
                 {t.optimizationTasks || 'Optimization Tasks'}
             </h2>
-            <p style={{ color: '#8aa0bd', marginTop: 0, marginBottom: 16 }}>
+            <p style={{ color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
                 {t.optimizationTasksDesc || 'Track benchmark gate failure tasks and close optimization loops.'}
             </p>
             <NoticeBanner notice={notice} />
@@ -102,13 +102,13 @@ const OptimizationTasks = ({ t }) => {
                                     fontSize: 12,
                                 }}
                             >
-                                <div style={{ color: '#dbeafe' }}>
+                                <div style={{ color: '#e2e8f0' }}>
                                     <div>{taskId}</div>
                                     <div style={{ color: '#7f8ea3', marginTop: 4 }}>
                                         {item.dataset_id} / streak={item.fail_streak}
                                     </div>
                                 </div>
-                                <div style={{ color: '#9fb3c8' }}>{item.priority || '-'}</div>
+                                <div style={{ color: '#6b7280' }}>{item.priority || '-'}</div>
                                 <div>
                                     <select
                                         className="input"
@@ -120,7 +120,7 @@ const OptimizationTasks = ({ t }) => {
                                         <option value="dismissed">dismissed</option>
                                     </select>
                                 </div>
-                                <div style={{ color: '#9fb3c8' }}>
+                                <div style={{ color: '#6b7280' }}>
                                     {item.created_at ? new Date(item.created_at * 1000).toLocaleString() : '-'}
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
