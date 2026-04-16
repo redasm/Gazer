@@ -245,7 +245,7 @@ const Security = ({ t, config, setConfig, fetchConfig }) => {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-          <Shield size={28} color="#00ffff" />
+          <Shield size={28} color="#ef233c" />
           <h1 style={{ fontSize: 26, margin: 0, color: '#fff', fontWeight: 700 }}>
             {t?.securityTitle || 'Security & Access'}
           </h1>
@@ -332,7 +332,7 @@ const Security = ({ t, config, setConfig, fetchConfig }) => {
         ) : (
           Object.entries(effectiveApproved).map(([channel, senders]) => (
             <div key={channel} style={{ marginBottom: 16 }}>
-              <h3 style={{ color: '#00ffff', fontSize: 14, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>{channel}</h3>
+              <h3 style={{ color: '#ef233c', fontSize: 14, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>{channel}</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {senders.map((sid) => {
                   const isOwnerSender = ownerChannelIdMap[channel] === sid;

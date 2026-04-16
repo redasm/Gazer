@@ -5,7 +5,7 @@ import API_BASE from '../config';
 const MemoryGraphCanvas = React.lazy(() => import('../components/memory/MemoryGraphCanvas'));
 
 const TYPE_COLORS = {
-    root: '#00ffff',
+    root: '#ef233c',
     entity: '#f472b6',
     topic: '#60a5fa',
     event: '#fbbf24',
