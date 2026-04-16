@@ -11,6 +11,16 @@ from eval.store import EvalStore
 from runtime.resilience import classify_error_message
 
 
+def _gepa_config() -> Dict[str, Any]:
+    """Return trainer.gepa config block, tolerating missing config gracefully."""
+    try:
+        from tools.admin.state import config as _cfg
+        raw = _cfg.get("trainer.gepa", {})
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
 def _job_id() -> str:
     return f"train_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
 
@@ -128,7 +138,7 @@ class LightningLiteTrainer:
         if tool_failure_count:
             router_budget["prefer_healthy_provider"] = True
 
-        return {
+        seed_patch = {
             "prompt_patch": {
                 "strategy": "append_rules",
                 "rules": unique_rules,
@@ -150,6 +160,36 @@ class LightningLiteTrainer:
                 "tool_error_code_count": tool_error_code_count,
             },
         }
+
+        # --- Optional GEPA optimisation pass ---
+        gepa_cfg = _gepa_config()
+        if bool(gepa_cfg.get("enabled", False)) and (trajectory_samples or eval_samples):
+            try:
+                from eval.gepa_optimizer import GEPAOptimizer
+                optimizer = GEPAOptimizer(
+                    population_size=int(gepa_cfg.get("population_size", 12)),
+                    generations=int(gepa_cfg.get("generations", 8)),
+                    mutation_rate=float(gepa_cfg.get("mutation_rate", 0.35)),
+                    elite_ratio=float(gepa_cfg.get("elite_ratio", 0.25)),
+                )
+                gepa_result = optimizer.evolve(seed_patch, trajectory_samples, eval_samples)
+                best = gepa_result["best_patch"]
+                # Only accept if GEPA score >= seed score (never degrade)
+                seed_score = optimizer.score_candidate(seed_patch, trajectory_samples, eval_samples)
+                if gepa_result.get("best_score", 0.0) >= seed_score:
+                    best["training_summary"] = seed_patch["training_summary"]
+                    best["gepa_meta"] = {
+                        "generations_run": gepa_result["generations_run"],
+                        "seed_score": round(seed_score, 6),
+                        "best_score": round(gepa_result.get("best_score", 0.0), 6),
+                        "pareto_front_size": len(gepa_result.get("pareto_front", [])),
+                        "generation_scores": gepa_result.get("generation_scores", []),
+                    }
+                    return best
+            except Exception:
+                pass  # Fall through to return seed patch on any error
+
+        return seed_patch
 
 
 class TrainingJobManager(EvalStore):

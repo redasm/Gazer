@@ -469,6 +469,50 @@ class EvalBenchmarkManager(EvalStore):
         items.sort(key=lambda item: float(item.get("created_at", 0.0)), reverse=True)
         return items[:limit]
 
+    def build_dataset_auto(
+        self,
+        *,
+        name: str,
+        samples: List[Dict[str, Any]],
+        strategy: str = "combined",
+        positive_limit: int = 100,
+        negative_limit: int = 50,
+        contract_limit: int = 80,
+        llm_caller=None,
+    ) -> Dict[str, Any]:
+        """Build a benchmark dataset automatically from bridge-export samples.
+
+        ``samples`` should be the ``samples`` list from a ``TrainingBridgeManager``
+        export (produced by ``get_export(include_samples=True)``).
+
+        ``strategy`` may be ``"combined"`` (default), ``"positive_only"``,
+        ``"negative_only"``, or ``"contracts_only"``.
+        """
+        from eval.dataset_auto_builder import DatasetAutoBuilder
+        builder = DatasetAutoBuilder()
+
+        strat = str(strategy or "combined").strip().lower()
+        include_positive = strat in {"combined", "positive_only"}
+        include_negative = strat in {"combined", "negative_only"}
+        include_contracts = strat in {"combined", "contracts_only"}
+
+        combined = builder.build_combined_dataset(
+            samples,
+            include_positive=include_positive,
+            include_negative=include_negative,
+            include_tool_contracts=include_contracts,
+            positive_limit=positive_limit,
+            negative_limit=negative_limit,
+            contract_limit=contract_limit,
+        )
+        dataset = self.build_dataset(
+            name=name,
+            samples=combined["samples"],
+            source="auto_builder",
+        )
+        dataset["auto_meta"] = combined["meta"]
+        return dataset
+
     def set_optimization_task_status(
         self,
         *,

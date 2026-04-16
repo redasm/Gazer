@@ -1172,3 +1172,333 @@ async def get_bootstrap_pipeline_run(pipeline_id: str):
     if payload is None:
         raise HTTPException(status_code=404, detail="Bootstrap pipeline not found")
     return {"status": "ok", "pipeline": payload}
+
+
+# ---------------------------------------------------------------------------
+# Auto dataset builder endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/debug/eval-benchmarks/auto-build", dependencies=[Depends(verify_admin_token)])
+async def auto_build_eval_dataset(payload: Dict[str, Any]):
+    """Build an eval benchmark dataset automatically from a training-bridge export.
+
+    Body fields:
+      - ``name`` (str, required): dataset name
+      - ``export_id`` (str): specific bridge export to use; if omitted, uses latest
+      - ``dataset_id`` (str): filter exports by dataset_id
+      - ``strategy`` (str): "combined" | "positive_only" | "negative_only" | "contracts_only"
+      - ``positive_limit`` (int, default 100)
+      - ``negative_limit`` (int, default 50)
+      - ``contract_limit`` (int, default 80)
+    """
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="'name' is required")
+
+    bridge_mgr = _get_training_bridge_manager()
+    export_id = str(payload.get("export_id", "")).strip()
+    dataset_id_filter = str(payload.get("dataset_id", "")).strip() or None
+
+    if not export_id:
+        recent = bridge_mgr.list_exports(limit=1, dataset_id=dataset_id_filter)
+        if not recent:
+            raise HTTPException(status_code=404, detail="No training bridge export found")
+        export_id = str(recent[0].get("export_id", "")).strip()
+    if not export_id:
+        raise HTTPException(status_code=404, detail="export_id could not be resolved")
+
+    export_data = bridge_mgr.get_export(export_id, include_samples=True)
+    if not isinstance(export_data, dict):
+        raise HTTPException(status_code=404, detail=f"Export '{export_id}' not found")
+
+    bridge_samples = list(export_data.get("samples", []) or [])
+    strategy = str(payload.get("strategy", "combined")).strip() or "combined"
+    try:
+        positive_limit = max(1, min(int(payload.get("positive_limit", 100)), 500))
+        negative_limit = max(1, min(int(payload.get("negative_limit", 50)), 500))
+        contract_limit = max(1, min(int(payload.get("contract_limit", 80)), 500))
+    except (TypeError, ValueError):
+        positive_limit, negative_limit, contract_limit = 100, 50, 80
+
+    eval_mgr = _get_eval_benchmark_manager()
+    dataset = eval_mgr.build_dataset_auto(
+        name=name,
+        samples=bridge_samples,
+        strategy=strategy,
+        positive_limit=positive_limit,
+        negative_limit=negative_limit,
+        contract_limit=contract_limit,
+    )
+    return {
+        "status": "ok",
+        "dataset_id": dataset.get("id"),
+        "name": dataset.get("name"),
+        "sample_count": dataset.get("sample_count", 0),
+        "auto_meta": dataset.get("auto_meta", {}),
+        "source_export_id": export_id,
+    }
+
+
+@app.post("/debug/eval-benchmarks/build-recall-query-set", dependencies=[Depends(verify_admin_token)])
+async def build_recall_query_set(payload: Dict[str, Any]):
+    """Generate a memory-recall query set from the skill registry.
+
+    Body fields:
+      - ``output_path`` (str, required): path to write the JSON query-set file
+      - ``queries_per_skill`` (int, default 3)
+      - ``include_skills`` (list[str]): optional whitelist of skill names
+      - ``skills`` (dict[str, str]): optional explicit ``{skill_name: description}``
+        mapping; if omitted, skills are auto-discovered from the local skill
+        directories via the same scan used by ``GET /skills``.
+    """
+    import json as _json
+    from tools.admin.utils import _resolve_export_output_path
+    from tools.admin.state import _PROJECT_ROOT
+    from eval.dataset_auto_builder import DatasetAutoBuilder
+
+    output_path_raw = str(payload.get("output_path", "")).strip()
+    if not output_path_raw:
+        raise HTTPException(status_code=422, detail="'output_path' is required")
+
+    try:
+        out_path = _resolve_export_output_path(output_path_raw, _PROJECT_ROOT, config)
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    try:
+        queries_per_skill = max(1, min(int(payload.get("queries_per_skill", 3)), 10))
+    except (TypeError, ValueError):
+        queries_per_skill = 3
+
+    include_skills_raw = payload.get("include_skills", [])
+    include_skills = (
+        [str(s).strip() for s in include_skills_raw if str(s).strip()]
+        if isinstance(include_skills_raw, list) else []
+    )
+
+    skill_descriptions: Dict[str, str] = {}
+
+    # Priority 1: explicit skills dict provided by caller
+    explicit_skills = payload.get("skills")
+    if isinstance(explicit_skills, dict):
+        for sname, sdesc in explicit_skills.items():
+            sname = str(sname).strip()
+            sdesc = str(sdesc).strip()
+            if sname and sdesc:
+                if not include_skills or sname in include_skills:
+                    skill_descriptions[sname] = sdesc
+
+    # Priority 2: auto-discover from local skill directories (same logic as GET /skills)
+    if not skill_descriptions:
+        try:
+            from tools.admin.skills import _scan_skill_dir, SKILLS_BUILTIN, SKILLS_EXTENSION
+            all_skills = _scan_skill_dir(SKILLS_BUILTIN, builtin=True)
+            seen = {s["name"] for s in all_skills}
+            for s in _scan_skill_dir(SKILLS_EXTENSION, builtin=False):
+                if s["name"] not in seen:
+                    all_skills.append(s)
+                    seen.add(s["name"])
+            for skill in all_skills:
+                sname = str(skill.get("name", "")).strip()
+                sdesc = str(skill.get("description", "")).strip()
+                if sname and sdesc:
+                    if not include_skills or sname in include_skills:
+                        skill_descriptions[sname] = sdesc
+        except Exception:
+            pass
+
+    if not skill_descriptions:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No skills found. Either install skills in the skill directories, "
+                "or pass an explicit 'skills' dict in the request body: "
+                "{\"skills\": {\"skill_name\": \"description\", ...}}"
+            ),
+        )
+
+    builder = DatasetAutoBuilder()
+    query_set = builder.build_recall_query_set_from_skills(
+        skill_descriptions,
+        queries_per_skill=queries_per_skill,
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        _json.dumps(query_set, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return {
+        "status": "ok",
+        "query_count": len(query_set),
+        "skill_count": len(skill_descriptions),
+        "output_path": str(out_path),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Skill evolution endpoints
+# ---------------------------------------------------------------------------
+
+def _get_skill_evolver():
+    # Creates a new SkillEvolver instance per call. SkillEvolver holds no in-memory
+    # mutable state — all persistence goes through the proposals JSONL file.
+    # FastAPI's default async event loop is single-threaded, so file-level concurrent
+    # writes are not a concern under normal operation. If multi-process deployment is
+    # used, add an external file lock around _write_proposals calls.
+    from eval.skill_evolver import SkillEvolver
+    cfg = config.get("trainer.skill_evolution", {}) if config else {}
+    kw: Dict[str, Any] = {}
+    if isinstance(cfg, dict):
+        if "max_description_chars" in cfg:
+            kw["max_description_chars"] = int(cfg["max_description_chars"])
+        if "min_semantic_preservation" in cfg:
+            kw["min_semantic_preservation"] = float(cfg["min_semantic_preservation"])
+    return SkillEvolver(**kw)
+
+
+@app.get("/debug/skill-evolution/proposals", dependencies=[Depends(verify_admin_token)])
+async def list_skill_evolution_proposals(
+    status: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    limit: int = 50,
+):
+    evolver = _get_skill_evolver()
+    proposals = evolver.list_proposals(
+        status=status,
+        tool_name=tool_name,
+        limit=max(1, min(limit, 200)),
+    )
+    return {
+        "status": "ok",
+        "items": [p.to_dict() for p in proposals],
+        "total": len(proposals),
+    }
+
+
+@app.get("/debug/skill-evolution/proposals/{proposal_id}", dependencies=[Depends(verify_admin_token)])
+async def get_skill_evolution_proposal(proposal_id: str):
+    evolver = _get_skill_evolver()
+    prop = evolver.get_proposal(proposal_id)
+    if prop is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return {"status": "ok", "proposal": prop.to_dict()}
+
+
+@app.post("/debug/skill-evolution/proposals/generate", dependencies=[Depends(verify_admin_token)])
+async def generate_skill_evolution_proposals(payload: Dict[str, Any]):
+    """Analyse tool failures from a bridge export and generate description proposals.
+
+    Body fields:
+      - ``export_id`` (str): bridge export to analyse; if omitted, uses latest
+      - ``dataset_id`` (str): filter exports by dataset_id
+      - ``top_n`` (int, default 5): number of worst-performing tools to target
+      - ``max_proposals`` (int, default 10)
+    """
+    bridge_mgr = _get_training_bridge_manager()
+    export_id = str(payload.get("export_id", "")).strip()
+    dataset_id_filter = str(payload.get("dataset_id", "")).strip() or None
+
+    if not export_id:
+        recent = bridge_mgr.list_exports(limit=1, dataset_id=dataset_id_filter)
+        if not recent:
+            raise HTTPException(status_code=404, detail="No training bridge export found")
+        export_id = str(recent[0].get("export_id", "")).strip()
+
+    export_data = bridge_mgr.get_export(export_id, include_samples=True)
+    if not isinstance(export_data, dict):
+        raise HTTPException(status_code=404, detail=f"Export '{export_id}' not found")
+
+    bridge_samples = list(export_data.get("samples", []) or [])
+    try:
+        top_n = max(1, min(int(payload.get("top_n", 5)), 20))
+        max_proposals = max(1, min(int(payload.get("max_proposals", 10)), 50))
+    except (TypeError, ValueError):
+        top_n, max_proposals = 5, 10
+
+    # Gather current skill descriptions if available
+    skill_descriptions: Dict[str, str] = {}
+    try:
+        from extensions.skill_registry.plugin import list_skills
+        for skill in list_skills():
+            sname = str(skill.get("name", "")).strip().lower()
+            sdesc = str(skill.get("description", "")).strip()
+            if sname and sdesc:
+                skill_descriptions[sname] = sdesc
+    except Exception:
+        pass
+
+    evolver = _get_skill_evolver()
+    profiles = evolver.analyze_tool_failures(
+        bridge_samples,
+        top_n=top_n,
+        skill_descriptions=skill_descriptions,
+    )
+    proposals = evolver.generate_proposals(profiles, max_proposals=max_proposals)
+    evolver.save_proposals(proposals)
+
+    return {
+        "status": "ok",
+        "proposals_created": len(proposals),
+        "source_export_id": export_id,
+        "profiles_analysed": len(profiles),
+        "proposals": [p.to_dict() for p in proposals],
+    }
+
+
+@app.post("/debug/skill-evolution/proposals/{proposal_id}/approve", dependencies=[Depends(verify_admin_token)])
+async def approve_skill_evolution_proposal(proposal_id: str, payload: Dict[str, Any]):
+    actor = str(payload.get("actor", "admin")).strip() or "admin"
+    note = str(payload.get("note", "")).strip()
+    evolver = _get_skill_evolver()
+    prop = evolver.approve_proposal(proposal_id, actor=actor, note=note)
+    if prop is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return {"status": "ok", "proposal": prop.to_dict()}
+
+
+@app.post("/debug/skill-evolution/proposals/{proposal_id}/reject", dependencies=[Depends(verify_admin_token)])
+async def reject_skill_evolution_proposal(proposal_id: str, payload: Dict[str, Any]):
+    actor = str(payload.get("actor", "admin")).strip() or "admin"
+    note = str(payload.get("note", "")).strip()
+    evolver = _get_skill_evolver()
+    prop = evolver.reject_proposal(proposal_id, actor=actor, note=note)
+    if prop is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return {"status": "ok", "proposal": prop.to_dict()}
+
+
+@app.post("/debug/skill-evolution/proposals/{proposal_id}/apply", dependencies=[Depends(verify_admin_token)])
+async def apply_skill_evolution_proposal(proposal_id: str, payload: Dict[str, Any]):
+    """Apply an approved proposal to the skill_overrides config.
+
+    Guards:
+      - proposal must have status == "approved"
+      - ``trainer.skill_evolution.require_approval_before_apply`` must be true (default)
+        — the gate is enforced in SkillEvolver.apply_proposal itself.
+    """
+    cfg = config.get("trainer.skill_evolution", {}) if config else {}
+    require_approval = True
+    if isinstance(cfg, dict):
+        require_approval = bool(cfg.get("require_approval_before_apply", True))
+
+    evolver = _get_skill_evolver()
+    prop = evolver.get_proposal(proposal_id)
+    if prop is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    if require_approval and prop.status != "approved":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Proposal status is '{prop.status}'; must be 'approved' before applying",
+        )
+
+    actor = str(payload.get("actor", "admin")).strip() or "admin"
+    note = str(payload.get("note", "")).strip()
+
+    try:
+        result = evolver.apply_proposal(proposal_id, actor=actor, note=note)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return {"status": "ok", **result}

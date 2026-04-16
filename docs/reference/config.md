@@ -92,6 +92,56 @@ trainer:
 
 - 用于 Sample Store、Experiment、Canary 发布与自动回滚。
 
+## 关键示例：GEPA 遗传进化引擎
+
+```yaml
+trainer:
+  gepa:
+    enabled: false          # true 时在规则引擎 seed patch 之上运行遗传搜索
+    population_size: 12     # 每代候选数量
+    generations: 8          # 进化代数
+    mutation_rate: 0.35     # 每个后代发生变异的概率
+    elite_ratio: 0.25       # 每代保留的精英比例
+```
+
+- `enabled=true` 时，`LightningLiteTrainer.generate_patch()` 在规则引擎输出基础上，
+  运行 GEPA-Lite 遗传搜索，找到适应度 ≥ seed patch 的更优候选。
+- 若 GEPA 最优候选分数不优于 seed，自动回退到原始 seed patch，保证不劣化。
+- 产出的 patch 包含 `gepa_meta` 字段，记录进化元信息（代数、分数、Pareto 前沿大小）。
+
+## 关键示例：技能/工具描述进化
+
+```yaml
+trainer:
+  skill_evolution:
+    enabled: false
+    max_description_chars: 500       # 提议描述的最大字符数（与 hermes 对齐）
+    min_semantic_preservation: 0.75  # 与原描述的最小 Jaccard 相似度
+    require_approval_before_apply: true  # 安全锁：必须人工 approve 才能 apply
+    proposals_per_run: 10
+```
+
+- 管理 API：`POST /debug/skill-evolution/proposals/generate` 分析工具失败并生成提议。
+- 审核流：`POST /debug/skill-evolution/proposals/{id}/approve` → `POST .../apply`。
+- apply 只写 `skill_overrides.<tool>.description` 配置路径，不修改任何 Python 源文件。
+
+## 关键示例：评测基准自动生成
+
+```yaml
+trainer:
+  auto_dataset:
+    enabled: true
+    trigger: gate_fail   # gate_fail | manual
+    positive_limit: 100  # 正例最大数量（高工具成功率轨迹）
+    negative_limit: 50   # 负例最大数量（含 terminal error 轨迹）
+    contract_limit: 80   # 工具合约案例最大数量
+    min_positive_score: 0.75  # reward_proxy tool_success_rate 下限
+```
+
+- 管理 API：`POST /debug/eval-benchmarks/auto-build` 从 bridge export 自动构建数据集。
+- 管理 API：`POST /debug/eval-benchmarks/build-recall-query-set` 从技能清单生成 recall query set。
+- 三类策略：正例（高质量轨迹）、负例（失败轨迹）、工具合约（(tool, expected_status) 模式）。
+
 ## 关键示例：Discord 渠道
 
 ```yaml

@@ -63,9 +63,39 @@ Gazer 已具备"评测—优化—再评测"的工程骨架：
 - 优化任务与训练任务接口
 - 发布门禁联动（高风险动作可硬阻断）
 
-实现线索：`src/tools/admin_api.py` 中的 `debug/eval-benchmarks`、`debug/optimization-tasks`、`debug/training-jobs` 相关接口。
+实现线索：`src/tools/admin/training_routes.py` 中的 `debug/eval-benchmarks`、`debug/optimization-tasks`、`debug/training-jobs` 相关接口。
 
 **价值**：系统能力可持续提升，而非纯手工调 prompt。
+
+## 5.1) 进化质量增强（GEPA + Skill Evolution + Auto Dataset）
+
+在基础进化骨架之上，新增三个子系统进一步提升进化质量：
+
+### GEPA-Lite 遗传进化引擎
+- `LightningLiteTrainer.generate_patch()` 在规则引擎 seed patch 基础上运行微种群遗传搜索。
+- 变异算子：add\_rule / remove\_rule / mutate\_router\_strategy；交叉算子：规则集两点合并。
+- 适应度函数：eval\_pass\_improvement(50%) + rule\_parsimony(20%) + tool\_coverage(20%) + router\_alignment(10%)。
+- 安全保证：GEPA 输出分数 < seed 时自动回退，不劣化原始 patch。
+- 配置开关：`trainer.gepa.enabled`（默认 false）。
+
+实现线索：`src/eval/gepa_optimizer.py`、`src/eval/trainer.py`。
+
+### 技能/工具描述进化（Skill Evolver）
+- 从轨迹数据中提取 per-tool 失败画像（失败次数、错误码分布、坏输入样本）。
+- 通过 LLM meta-prompt 或启发式模板生成描述改进提案（Proposal）。
+- 双重安全门：字符数 ≤ 500，Jaccard 语义保留率 ≥ 0.75（均可配置）。
+- 审核流：pending → approved → applied；apply 只写 `skill_overrides` 配置，不改源码。
+- API：`POST /debug/skill-evolution/proposals/generate` → `POST .../approve` → `POST .../apply`。
+
+实现线索：`src/eval/skill_evolver.py`、`src/tools/admin/training_routes.py`。
+
+### 评测基准自动生成（Dataset Auto Builder）
+- 三种策略自动从 bridge export 构建 eval 数据集：正例（高成功率轨迹）、负例（失败轨迹）、工具合约（(tool, expected\_status) 模式）。
+- 无需手动标注，gate 连续失败后系统可自动扩充测试集覆盖率。
+- recall query set 生成：从本地 SKILL.md 文件自动生成与 memory recall regression 兼容的查询集。
+- API：`POST /debug/eval-benchmarks/auto-build`、`POST /debug/eval-benchmarks/build-recall-query-set`。
+
+实现线索：`src/eval/dataset_auto_builder.py`、`src/eval/benchmark.py`（`build_dataset_auto`）。
 
 ## 6) 具身与硬件支持
 

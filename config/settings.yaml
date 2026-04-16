@@ -611,6 +611,25 @@ trainer:
   auto_run_on_gate_fail: true
   max_samples_per_job: 200
   auto_publish_on_pass: false
+  gepa:
+    enabled: false          # set to true to enable genetic prompt evolution
+    population_size: 12
+    generations: 8
+    mutation_rate: 0.35
+    elite_ratio: 0.25
+  skill_evolution:
+    enabled: false
+    max_description_chars: 500
+    min_semantic_preservation: 0.75
+    require_approval_before_apply: true
+    proposals_per_run: 10
+  auto_dataset:
+    enabled: true
+    trigger: gate_fail      # gate_fail | manual
+    positive_limit: 100
+    negative_limit: 50
+    contract_limit: 80
+    min_positive_score: 0.75
   online_policy_loop:
     enabled: true
     require_review: true
