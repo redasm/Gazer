@@ -2,6 +2,12 @@
 
 Gazer 是一个桌面级具身 AI 伴侣系统，采用 `Runtime + Agent + Tools + Memory + Soul + Devices` 的分层架构。
 
+## 界面预览
+
+| 对话 | 记忆图谱 | 人格定制 |
+|:---:|:---:|:---:|
+| ![对话界面](docs/images/chat.jpg) | ![记忆图谱](docs/images/memory.jpg) | ![人格定制](docs/images/personality.jpg) |
+
 ## 核心能力
 
 - **双脑执行路径** — 快响应与深度推理分层（`fast_brain` / `slow_brain`）。
