@@ -56,23 +56,25 @@ const Cron = ({ t }) => {
 
     const inputStyle = {
         width: '100%',
-        background: 'rgba(0,0,0,0.3)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        background: 'rgba(8,8,8,0.8)',
+        border: '1px solid rgba(255,255,255,0.10)',
         borderRadius: '8px',
         padding: '8px 12px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontSize: '13px',
         outline: 'none',
+        fontFamily: 'inherit',
+        transition: 'border-color 0.15s',
     };
 
-    const labelStyle = { fontSize: '12px', color: '#889', marginBottom: '4px', display: 'block' };
+    const labelStyle = { fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '5px', display: 'block' };
 
     return (
         <div style={{ maxWidth: '800px' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Clock size={20} style={{ color: '#60a5fa' }} />
+                    <Clock size={20} style={{ color: 'var(--accent-red)' }} />
                     {t.cronJobs || 'Cron Jobs'}
                 </h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -86,7 +88,7 @@ const Cron = ({ t }) => {
             {/* Create form */}
             {showForm && (
                 <form onSubmit={handleCreate} style={{
-                    background: 'rgba(15, 25, 50, 0.65)',
+                    background: 'rgba(10,10,10,0.6)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: '12px',
                     padding: '16px',
@@ -121,10 +123,7 @@ const Cron = ({ t }) => {
                     </div>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">{t.cancel || 'Cancel'}</button>
-                        <button type="submit" style={{
-                            background: '#3b82f6', border: 'none', color: '#fff', padding: '8px 16px',
-                            borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
-                        }}>{t.create || 'Create'}</button>
+                        <button type="submit" className="btn-primary">{t.create || 'Create'}</button>
                     </div>
                 </form>
             )}
@@ -134,7 +133,7 @@ const Cron = ({ t }) => {
                 <div style={{ color: '#556', textAlign: 'center', padding: '40px' }}>Loading...</div>
             ) : jobs.length === 0 ? (
                 <div style={{
-                    background: 'rgba(15, 25, 50, 0.65)',
+                    background: 'rgba(10,10,10,0.6)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: '12px',
                     padding: '40px',
@@ -149,7 +148,7 @@ const Cron = ({ t }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {jobs.map(job => (
                         <div key={job.id} style={{
-                            background: 'rgba(15, 25, 50, 0.65)',
+                            background: 'rgba(10,10,10,0.6)',
                             border: '1px solid rgba(255,255,255,0.08)',
                             borderRadius: '12px',
                             padding: '14px 16px',

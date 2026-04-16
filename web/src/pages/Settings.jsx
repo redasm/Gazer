@@ -20,8 +20,8 @@ const ToggleSwitch = ({ checked, onChange, disabled = false }) => (
         }}
         style={{
             position: 'relative', width: 44, height: 24, borderRadius: 12,
-            background: checked ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-            border: '1px solid rgba(255,255,255,0.15)',
+            background: checked ? 'rgba(239,35,60,0.7)' : 'rgba(255,255,255,0.08)',
+            border: checked ? '1px solid #ef233c' : '1px solid rgba(255,255,255,0.12)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             flexShrink: 0,
             opacity: disabled ? 0.45 : 1,
@@ -64,8 +64,8 @@ const TagInput = ({ tags = [], onChange, placeholder }) => {
                 <span key={i} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     padding: '3px 10px', borderRadius: 6, fontSize: 13,
-                    background: 'rgba(59,130,246,0.2)', color: '#93c5fd',
-                    border: '1px solid rgba(59,130,246,0.3)',
+                    background: 'rgba(239,35,60,0.10)', color: '#ef233c',
+                    border: '1px solid rgba(239,35,60,0.25)',
                 }}>
                     {tag}
                     <X size={12} style={{ cursor: 'pointer', opacity: 0.7 }}
@@ -483,7 +483,7 @@ const TabVoice = ({ config, modelProviders, handleUpdate, inputClass, labelClass
                         <label className={labelClass}>{t.sensitivity}</label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <input type="range" min="0" max="1" step="0.05"
-                                style={{ flex: 1, accentColor: '#3b82f6' }}
+                                style={{ flex: 1, accentColor: '#ef233c' }}
                                 value={config.wake_word?.sensitivity || 0.5}
                                 onChange={(e) => handleUpdate("wake_word.sensitivity", parseFloat(e.target.value))} />
                             <span style={{ color: '#9ca3af', fontSize: 13, minWidth: 36, textAlign: 'right' }}>

@@ -6,30 +6,30 @@ import { Plus, Save, FileText, Cpu, Package, Eye, Pencil, ChevronRight, FolderOp
 import API_BASE from '../config';
 
 const mdComponents = {
-    h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0f0ff', margin: '16px 0 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 8 }}>{children}</h1>,
-    h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 600, color: '#c0d8f0', margin: '14px 0 6px' }}>{children}</h2>,
-    h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: '#a0b8d0', margin: '10px 0 4px' }}>{children}</h3>,
-    p: ({ children }) => <p style={{ margin: '6px 0', lineHeight: 1.7, color: '#b0c0d8' }}>{children}</p>,
-    ul: ({ children }) => <ul style={{ margin: '6px 0', paddingLeft: 20, color: '#b0c0d8' }}>{children}</ul>,
-    ol: ({ children }) => <ol style={{ margin: '6px 0', paddingLeft: 20, color: '#b0c0d8' }}>{children}</ol>,
+    h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 700, color: '#f0f0f0', margin: '16px 0 8px', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: 8 }}>{children}</h1>,
+    h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 600, color: '#d0d0d0', margin: '14px 0 6px' }}>{children}</h2>,
+    h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: '#b8b8b8', margin: '10px 0 4px' }}>{children}</h3>,
+    p: ({ children }) => <p style={{ margin: '6px 0', lineHeight: 1.7, color: '#a8a8a8' }}>{children}</p>,
+    ul: ({ children }) => <ul style={{ margin: '6px 0', paddingLeft: 20, color: '#a8a8a8' }}>{children}</ul>,
+    ol: ({ children }) => <ol style={{ margin: '6px 0', paddingLeft: 20, color: '#a8a8a8' }}>{children}</ol>,
     li: ({ children }) => <li style={{ marginBottom: 3, lineHeight: 1.6 }}>{children}</li>,
     code({ className, children }) {
         const isBlock = className || String(children).includes('\n');
         if (isBlock) {
             return (
-                <pre style={{ background: '#0d1117', borderRadius: 8, padding: 12, margin: '8px 0', overflow: 'auto', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <code style={{ fontSize: 13, lineHeight: 1.5, color: '#c9d1d9' }}>{children}</code>
+                <pre style={{ background: 'rgba(0,0,0,0.6)', borderRadius: 8, padding: 12, margin: '8px 0', overflow: 'auto', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <code style={{ fontSize: 13, lineHeight: 1.5, color: '#d0d0d0' }}>{children}</code>
                 </pre>
             );
         }
-        return <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 5px', borderRadius: 4, fontSize: '0.9em', color: '#c9d1d9' }}>{children}</code>;
+        return <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: '0.9em', color: '#d0d0d0' }}>{children}</code>;
     },
-    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#58a6ff' }}>{children}</a>,
-    blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid rgba(96,165,250,0.4)', margin: '8px 0', paddingLeft: 14, color: '#8899ac' }}>{children}</blockquote>,
+    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#ef233c' }}>{children}</a>,
+    blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid rgba(239,35,60,0.35)', margin: '8px 0', paddingLeft: 14, color: '#888' }}>{children}</blockquote>,
     hr: () => <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', margin: '12px 0' }} />,
     table: ({ children }) => <table style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0', fontSize: 13 }}>{children}</table>,
-    th: ({ children }) => <th style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', textAlign: 'left', fontWeight: 600 }}>{children}</th>,
-    td: ({ children }) => <td style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#b0c0d8' }}>{children}</td>,
+    th: ({ children }) => <th style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#888', textAlign: 'left', fontWeight: 600 }}>{children}</th>,
+    td: ({ children }) => <td style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#a8a8a8' }}>{children}</td>,
 };
 
 const SkillCard = ({ skill, selected, onClick }) => (
@@ -39,31 +39,31 @@ const SkillCard = ({ skill, selected, onClick }) => (
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            padding: '12px 14px',
-            borderRadius: 10,
+            padding: '10px 12px',
+            borderRadius: 8,
             cursor: 'pointer',
-            background: selected ? 'rgba(139,92,246,0.12)' : 'rgba(255,255,255,0.02)',
-            border: selected ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(255,255,255,0.05)',
+            background: selected ? 'rgba(239,35,60,0.08)' : 'rgba(255,255,255,0.02)',
+            border: selected ? '1px solid rgba(239,35,60,0.3)' : '1px solid rgba(255,255,255,0.05)',
             transition: 'all 0.15s',
         }}
         onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
         onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
     >
         <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: skill.builtin ? 'rgba(96,165,250,0.12)' : 'rgba(74,222,128,0.12)',
+            width: 32, height: 32, borderRadius: 7,
+            background: selected ? 'rgba(239,35,60,0.12)' : 'rgba(255,255,255,0.05)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
             {skill.builtin
-                ? <Package size={16} color="#60a5fa" />
-                : <Cpu size={16} color="#4ade80" />
+                ? <Package size={15} color={selected ? '#ef233c' : '#888'} />
+                : <Cpu size={15} color={selected ? '#ef233c' : '#6ee7b7'} />
             }
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: selected ? '#fff' : '#c0d0e0' }}>{skill.name}</div>
-            <div style={{ fontSize: 11, color: '#667', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{skill.description}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: selected ? '#fff' : '#c0c0c0' }}>{skill.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{skill.description}</div>
         </div>
-        <ChevronRight size={14} color={selected ? '#a78bfa' : '#445'} />
+        <ChevronRight size={14} color={selected ? '#ef233c' : '#444'} />
     </div>
 );
 
@@ -164,8 +164,8 @@ const Skills = ({ t }) => {
         return (
             <div style={{ marginBottom: 20 }}>
                 <div style={{
-                    fontSize: 10, fontWeight: 600, color: '#556',
-                    textTransform: 'uppercase', letterSpacing: 1.5,
+                    fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.14em',
                     padding: '0 4px', marginBottom: 8,
                     display: 'flex', alignItems: 'center', gap: 6,
                 }}>
@@ -190,7 +190,7 @@ const Skills = ({ t }) => {
             {/* Left: Skill List */}
             <div style={{
                 width: 280, flexShrink: 0,
-                background: 'rgba(15, 25, 50, 0.65)',
+                background: 'rgba(10,10,10,0.6)',
                 borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
                 display: 'flex', flexDirection: 'column',
                 overflow: 'hidden',
@@ -204,7 +204,7 @@ const Skills = ({ t }) => {
                         fontSize: 15, fontWeight: 600, color: '#fff', margin: 0,
                         display: 'flex', alignItems: 'center', gap: 8,
                     }}>
-                        <Cpu size={18} color="#a78bfa" />
+                        <Cpu size={18} color="var(--accent-red)" />
                         {t.skills}
                     </h2>
                     <button onClick={() => setIsCreating(true)} className="btn-icon" title={t.create}>
@@ -224,10 +224,10 @@ const Skills = ({ t }) => {
                             onChange={(e) => setNewSkillName(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
                             style={{
-                                width: '100%', background: 'rgba(0,0,0,0.3)',
-                                border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6,
-                                padding: '7px 10px', color: '#fff', fontSize: 13, outline: 'none',
-                                marginBottom: 8,
+                                width: '100%', background: 'rgba(8,8,8,0.8)',
+                                border: '1px solid rgba(255,255,255,0.10)', borderRadius: 6,
+                                padding: '7px 10px', color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+                                marginBottom: 8, fontFamily: 'inherit',
                             }}
                         />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
@@ -240,12 +240,12 @@ const Skills = ({ t }) => {
                 <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
                     {renderSkillGroup(
                         t.skillsBuiltin || 'Built-in',
-                        <Package size={10} color="#60a5fa" />,
+                        <Package size={10} color="var(--text-muted)" />,
                         builtinSkills
                     )}
                     {renderSkillGroup(
                         t.skillsExtension || 'Extension',
-                        <Cpu size={10} color="#4ade80" />,
+                        <Cpu size={10} color="var(--text-muted)" />,
                         extensionSkills
                     )}
                     {skills.length === 0 && (
@@ -259,7 +259,7 @@ const Skills = ({ t }) => {
             {/* Right: Content Area */}
             <div style={{
                 flex: 1,
-                background: 'rgba(15, 25, 50, 0.65)',
+                background: 'rgba(10,10,10,0.6)',
                 borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)',
                 display: 'flex', flexDirection: 'column',
                 overflow: 'hidden', minWidth: 0,
@@ -274,7 +274,7 @@ const Skills = ({ t }) => {
                             background: 'rgba(0,0,0,0.15)',
                             flexShrink: 0,
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#c0d0e0', fontSize: 13 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
                                 <FileText size={15} color="#667" />
                                 <span style={{ fontFamily: 'monospace' }}>{selectedSkill.name}/{selectedFile}</span>
                             </div>
@@ -316,9 +316,9 @@ const Skills = ({ t }) => {
                                             display: 'flex', alignItems: 'center', gap: 5,
                                             padding: '4px 10px', borderRadius: 6,
                                             fontSize: 12, cursor: 'pointer',
-                                            border: f === selectedFile ? '1px solid rgba(139,92,246,0.3)' : '1px solid transparent',
-                                            background: f === selectedFile ? 'rgba(139,92,246,0.12)' : 'transparent',
-                                            color: f === selectedFile ? '#c4b5fd' : '#778',
+                                            border: f === selectedFile ? '1px solid rgba(239,35,60,0.3)' : '1px solid transparent',
+                                            background: f === selectedFile ? 'rgba(239,35,60,0.08)' : 'transparent',
+                                            color: f === selectedFile ? '#ef233c' : 'var(--text-muted)',
                                             transition: 'all 0.15s',
                                         }}
                                     >
@@ -344,7 +344,7 @@ const Skills = ({ t }) => {
                                 onChange={(e) => setContent(e.target.value)}
                                 spellCheck={false}
                                 style={{
-                                    flex: 1, background: '#0d1117', color: '#c9d1d9',
+                                    flex: 1, background: 'rgba(0,0,0,0.5)', color: '#d0d0d0',
                                     padding: 20, fontFamily: "'Cascadia Code', 'Fira Code', monospace",
                                     fontSize: 13, lineHeight: 1.6, resize: 'none',
                                     border: 'none', outline: 'none',

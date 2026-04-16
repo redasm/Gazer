@@ -207,7 +207,7 @@ const Logs = ({ t }) => {
             {/* Log Stream */}
             <div style={{
                 flex: 1,
-                background: 'rgba(15, 25, 50, 0.65)',
+                background: 'rgba(10,10,10,0.6)',
                 border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: '12px',
                 overflow: 'hidden',

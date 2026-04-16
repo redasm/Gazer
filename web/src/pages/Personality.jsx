@@ -283,7 +283,7 @@ const Personality = ({ t, showToast }) => {
                     <button onClick={handleSavePrompt} disabled={saving || !promptDirty} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '8px 18px', borderRadius: 10,
-                        background: promptDirty ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'rgba(255,255,255,0.05)',
+                        background: promptDirty ? '#ef233c' : 'rgba(255,255,255,0.05)',
                         color: '#fff', fontWeight: 600, fontSize: 13,
                         cursor: promptDirty ? 'pointer' : 'default',
                         opacity: (saving || !promptDirty) ? 0.5 : 1,
@@ -363,7 +363,7 @@ const Personality = ({ t, showToast }) => {
                     <button onClick={handleOptimize} disabled={optimizing} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '8px 18px', borderRadius: 10,
-                        background: optimizing ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #7c3aed, #2563eb)',
+                        background: optimizing ? 'rgba(255,255,255,0.05)' : '#ef233c',
                         color: '#fff', fontWeight: 600, fontSize: 13, cursor: optimizing ? 'not-allowed' : 'pointer',
                         opacity: optimizing ? 0.6 : 1,
                     }}>

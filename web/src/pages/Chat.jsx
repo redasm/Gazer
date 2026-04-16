@@ -123,10 +123,10 @@ const CodeBlock = ({ children, className }) => {
     return (
         <div style={{
             position: 'relative',
-            background: '#0d1117',
+            background: 'rgba(0,0,0,0.65)',
             borderRadius: '8px',
             margin: '8px 0',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.07)',
         }}>
             <div style={{
                 display: 'flex',
@@ -223,7 +223,7 @@ const markdownComponents = {
         );
     },
     a({ href, children }) {
-        return <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#58a6ff' }}>{children}</a>;
+        return <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#ef233c' }}>{children}</a>;
     },
     p({ children }) {
         return <p style={{ margin: '6px 0', lineHeight: 1.6, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{children}</p>;
@@ -747,7 +747,7 @@ const Chat = ({ t }) => {
                 <div style={{
                     width: '240px',
                     flexShrink: 0,
-                    background: 'rgba(10, 18, 40, 0.8)',
+                    background: 'rgba(8,8,8,0.75)',
                     borderRadius: '16px 0 0 16px',
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRight: 'none',
@@ -772,8 +772,8 @@ const Chat = ({ t }) => {
                                     padding: '8px 10px',
                                     borderRadius: '8px',
                                     cursor: 'pointer',
-                                    background: s.id === activeSessionId ? 'rgba(59,130,246,0.15)' : 'transparent',
-                                    border: s.id === activeSessionId ? '1px solid rgba(59,130,246,0.25)' : '1px solid transparent',
+                                    background: s.id === activeSessionId ? 'rgba(239,35,60,0.10)' : 'transparent',
+                                    border: s.id === activeSessionId ? '1px solid rgba(239,35,60,0.20)' : '1px solid transparent',
                                     marginBottom: '2px',
                                     transition: 'background 0.15s',
                                 }}
@@ -789,7 +789,7 @@ const Chat = ({ t }) => {
                                         onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(s.id); if (e.key === 'Escape') setEditingId(null); }}
                                         onClick={e => e.stopPropagation()}
                                         style={{
-                                            width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(59,130,246,0.4)',
+                                            width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(239,35,60,0.4)',
                                             borderRadius: '4px', padding: '2px 6px', color: '#fff', fontSize: '12px', outline: 'none',
                                         }}
                                     />
@@ -831,7 +831,7 @@ const Chat = ({ t }) => {
             )}
 
             {/* Main Chat Area */}
-            <div className="flex flex-col overflow-hidden" style={{ flex: 1, minWidth: 0, background: 'rgba(15, 25, 50, 0.65)', borderRadius: sidebarOpen ? '0 16px 16px 0' : '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex flex-col overflow-hidden" style={{ flex: 1, minWidth: 0, background: 'rgba(10,10,10,0.6)', borderRadius: sidebarOpen ? '0 16px 16px 0' : '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
                 {/* Header */}
                 <div style={{
                     padding: '12px 16px',
@@ -923,17 +923,17 @@ const Chat = ({ t }) => {
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '50%',
-                                            background: msg.role === 'user' ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.08)',
+                                            background: msg.role === 'user' ? 'rgba(239,35,60,0.15)' : 'rgba(255,255,255,0.08)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             flexShrink: 0,
                                         }}>
                                             {msg.role === 'user'
-                                                ? <User size={14} color="#93c5fd" />
+                                                ? <User size={14} color="#888" />
                                                 : isEvent
-                                                    ? <Wrench size={14} color="#93c5fd" />
-                                                    : <Bot size={14} color="#60a5fa" />}
+                                                    ? <Wrench size={14} color="#888" />
+                                                    : <Bot size={14} color="#ef233c" />}
                                         </div>
                                         <div style={{ minWidth: 0 }}>
                                             {isEvent ? (
@@ -942,8 +942,8 @@ const Chat = ({ t }) => {
                                                 <div style={{
                                                     padding: '10px 14px',
                                                     borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                                                    background: msg.role === 'user' ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                                                    border: msg.role === 'user' ? '1px solid rgba(59,130,246,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                                                    background: msg.role === 'user' ? 'rgba(239,35,60,0.08)' : 'rgba(255,255,255,0.05)',
+                                                    border: msg.role === 'user' ? '1px solid rgba(239,35,60,0.20)' : '1px solid rgba(255,255,255,0.08)',
                                                     color: '#e0e8f0',
                                                     fontSize: '14px',
                                                     lineHeight: 1.6,
@@ -993,7 +993,7 @@ const Chat = ({ t }) => {
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                         }}>
-                                            <Bot size={14} color="#60a5fa" />
+                                            <Bot size={14} color="#ef233c" />
                                         </div>
                                         <div style={{
                                             padding: '10px 14px',
@@ -1051,17 +1051,18 @@ const Chat = ({ t }) => {
                             type="submit"
                             disabled={!connected || !input.trim()}
                             style={{
-                                background: (!connected || !input.trim()) ? 'rgba(59,130,246,0.3)' : '#3b82f6',
+                                background: (!connected || !input.trim()) ? 'rgba(239,35,60,0.12)' : '#ef233c',
                                 border: 'none',
                                 color: '#fff',
                                 padding: '10px',
                                 borderRadius: '10px',
                                 cursor: (!connected || !input.trim()) ? 'not-allowed' : 'pointer',
-                                opacity: (!connected || !input.trim()) ? 0.5 : 1,
-                                transition: 'all 0.2s',
+                                opacity: (!connected || !input.trim()) ? 0.4 : 1,
+                                transition: 'all 0.15s',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
+                                boxShadow: (!connected || !input.trim()) ? 'none' : '0 2px 12px rgba(239,35,60,0.3)',
                             }}
                         >
                             <Send size={18} />

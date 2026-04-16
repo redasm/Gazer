@@ -211,8 +211,8 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                                     borderRadius: 8,
                                     padding: '8px 10px',
                                     marginBottom: 4,
-                                    background: selected === name ? 'rgba(59,130,246,0.25)' : 'transparent',
-                                    color: selected === name ? '#dbeafe' : '#9ca3af',
+                                    background: selected === name ? 'rgba(239,35,60,0.12)' : 'transparent',
+                                    color: selected === name ? '#fff' : '#9ca3af',
                                     cursor: 'pointer',
                                 }}
                             >

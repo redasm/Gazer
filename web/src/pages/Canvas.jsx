@@ -59,7 +59,7 @@ const PanelCard = ({ panel, onUserAction }) => {
 
     return (
         <div style={{
-            background: 'rgba(15, 25, 50, 0.65)',
+            background: 'rgba(10,10,10,0.6)',
             border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: '12px',
             overflow: 'hidden',
@@ -187,7 +187,7 @@ const Canvas = ({ t }) => {
             {/* Panels */}
             {panels.length === 0 ? (
                 <div style={{
-                    background: 'rgba(15, 25, 50, 0.65)',
+                    background: 'rgba(10,10,10,0.6)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: 12,
                     padding: 40,
