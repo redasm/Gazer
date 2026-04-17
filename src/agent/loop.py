@@ -148,7 +148,6 @@ class AgentLoop(
         # Token usage tracking
         self.usage = UsageTracker()
 
-        # Rate limiter: configurable via config, defaults to 20 req / 60s per sender
         from runtime.config_manager import config as _cfg
         self.agent_id: str = str(_cfg.get("agent.id", "") or "")
         self._context_engine_id = str(_cfg.get("models.context_engine", "legacy") or "legacy")
@@ -156,43 +155,9 @@ class AgentLoop(
             max_requests=_cfg.get("security.rate_limit_requests", 20),
             window_seconds=_cfg.get("security.rate_limit_window", 60.0),
         )
-        prompt_cache_cfg = _cfg.get("models.prompt_cache", {}) or {}
-        if not isinstance(prompt_cache_cfg, dict):
-            prompt_cache_cfg = {}
-        self.prompt_cache = PromptSegmentCache(
-            enabled=bool(prompt_cache_cfg.get("enabled", False)),
-            ttl_seconds=int(prompt_cache_cfg.get("ttl_seconds", 300) or 300),
-            max_items=int(prompt_cache_cfg.get("max_items", 512) or 512),
-            segment_policy=str(prompt_cache_cfg.get("segment_policy", "stable_prefix") or "stable_prefix"),
-            chars_per_token=CHARS_PER_TOKEN_ESTIMATE,
-            scope_fields=prompt_cache_cfg.get("scope_fields"),
-            sanitize_sensitive=bool(prompt_cache_cfg.get("sanitize_sensitive", True)),
-        )
-        tool_batch_cfg = _cfg.get("security.tool_batching", {}) or {}
-        if not isinstance(tool_batch_cfg, dict):
-            tool_batch_cfg = {}
-        self.tool_batch_planner = ToolBatchPlanner(
-            enabled=bool(tool_batch_cfg.get("enabled", True)),
-            max_batch_size=int(
-                tool_batch_cfg.get("max_batch_size", DEFAULT_TOOL_BATCH_MAX_SIZE)
-                or DEFAULT_TOOL_BATCH_MAX_SIZE
-            ),
-            dedupe_enabled=bool(tool_batch_cfg.get("dedupe_enabled", False)),
-        )
-        planner_cfg = _cfg.get("security.tool_planner", {}) or {}
-        if not isinstance(planner_cfg, dict):
-            planner_cfg = {}
-        self.tool_planner = ToolPlanner(
-            enabled=bool(planner_cfg.get("enabled", True)),
-            dependency_keys=planner_cfg.get("dependency_keys"),
-            compact_results=bool(planner_cfg.get("compact_results", True)),
-            max_result_chars=int(planner_cfg.get("max_result_chars", 2400) or 2400),
-            error_max_result_chars=int(
-                planner_cfg.get("error_max_result_chars", 4000) or 4000
-            ),
-            head_chars=int(planner_cfg.get("head_chars", 900) or 900),
-            tail_chars=int(planner_cfg.get("tail_chars", 700) or 700),
-        )
+        self.prompt_cache = AgentLoop._build_prompt_cache(_cfg)
+        self.tool_batch_planner = AgentLoop._build_tool_batch_planner(_cfg)
+        self.tool_planner = AgentLoop._build_tool_planner(_cfg)
         self.tool_batching_tracker = ToolBatchingTracker()
         self.channel_command_registry = ChannelCommandRegistry()
         self._register_channel_command_handlers()
@@ -237,6 +202,47 @@ class AgentLoop(
         self._tool_policy_model_provider: str = ""
         self._tool_policy_model_name: str = ""
         self._tool_call_hooks = ToolCallHookManager()
+
+    @staticmethod
+    def _build_prompt_cache(cfg) -> PromptSegmentCache:
+        raw = cfg.get("models.prompt_cache", {}) or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return PromptSegmentCache(
+            enabled=bool(raw.get("enabled", False)),
+            ttl_seconds=int(raw.get("ttl_seconds", 300) or 300),
+            max_items=int(raw.get("max_items", 512) or 512),
+            segment_policy=str(raw.get("segment_policy", "stable_prefix") or "stable_prefix"),
+            chars_per_token=CHARS_PER_TOKEN_ESTIMATE,
+            scope_fields=raw.get("scope_fields"),
+            sanitize_sensitive=bool(raw.get("sanitize_sensitive", True)),
+        )
+
+    @staticmethod
+    def _build_tool_batch_planner(cfg) -> ToolBatchPlanner:
+        raw = cfg.get("security.tool_batching", {}) or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return ToolBatchPlanner(
+            enabled=bool(raw.get("enabled", True)),
+            max_batch_size=int(raw.get("max_batch_size", DEFAULT_TOOL_BATCH_MAX_SIZE) or DEFAULT_TOOL_BATCH_MAX_SIZE),
+            dedupe_enabled=bool(raw.get("dedupe_enabled", False)),
+        )
+
+    @staticmethod
+    def _build_tool_planner(cfg) -> ToolPlanner:
+        raw = cfg.get("security.tool_planner", {}) or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return ToolPlanner(
+            enabled=bool(raw.get("enabled", True)),
+            dependency_keys=raw.get("dependency_keys"),
+            compact_results=bool(raw.get("compact_results", True)),
+            max_result_chars=int(raw.get("max_result_chars", 2400) or 2400),
+            error_max_result_chars=int(raw.get("error_max_result_chars", 4000) or 4000),
+            head_chars=int(raw.get("head_chars", 900) or 900),
+            tail_chars=int(raw.get("tail_chars", 700) or 700),
+        )
 
     async def run(self) -> None:  # noqa: C901
         """Run the agent loop, processing messages from the bus."""
