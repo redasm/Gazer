@@ -1,11 +1,11 @@
-"""Tests for the ToolResult + emit_render_hint side-channel in src.tools.base."""
+"""Tests for the ToolResult + emit_render_hint side-channel in tools.base."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.rendering.types import RenderHint
-from src.tools.base import (
+from rendering.types import RenderHint
+from tools.base import (
     RenderHintScope,
     ToolResult,
     emit_render_hint,

@@ -19,7 +19,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, Union
 
-from src.rendering.constants import (
+from rendering.constants import (
     MAX_RENDER_HINT_DATA_BYTES,
     PROTOCOL_VERSION,
 )

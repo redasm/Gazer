@@ -1,4 +1,4 @@
-"""Tests for src.rendering.types — RenderHint and MessageBlock contracts."""
+"""Tests for rendering.types — RenderHint and MessageBlock contracts."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import json
 
 import pytest
 
-from src.rendering.constants import (
+from rendering.constants import (
     MAX_RENDER_HINT_DATA_BYTES,
     PROTOCOL_VERSION,
 )
-from src.rendering.types import RenderHint, RenderHintError
+from rendering.types import RenderHint, RenderHintError
 
 
 class TestRenderHint:

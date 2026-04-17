@@ -27,12 +27,12 @@ import json
 import re
 from typing import Sequence
 
-from src.rendering.constants import (
+from rendering.constants import (
     MAX_BLOCKS_PER_MESSAGE,
     MAX_FALLBACK_PREVIEW_CHARS,
 )
-from src.rendering.fence_registry import resolve_fence_component
-from src.rendering.types import MessageBlock, RenderHint
+from rendering.fence_registry import resolve_fence_component
+from rendering.types import MessageBlock, RenderHint
 
 _FENCE_RE = re.compile(r"```(\w+)[ \t]*\n([\s\S]*?)```", re.MULTILINE)
 

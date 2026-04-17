@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import List
 
-from src.rendering.types import RenderHint
+from rendering.types import RenderHint
 from tools.base import RenderHintScope
 from tools.cron_tool import CronTool
 

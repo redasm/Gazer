@@ -6,7 +6,7 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict
 
-from src.rendering.types import RenderHint
+from rendering.types import RenderHint
 from tools.base import Tool, emit_render_hint
 
 logger = logging.getLogger("CronTool")

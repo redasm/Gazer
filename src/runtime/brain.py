@@ -213,37 +213,26 @@ class GazerBrain:
         self._update_ui_status("Initializing...")
 
         await self._setup_tools()
+        channel_tasks = await self._start_services()
+        self._update_ui_status("Vision Active")
 
+        try:
+            await self._run_presence_loop()
+        finally:
+            for task in channel_tasks:
+                task.cancel()
+
+    async def _start_services(self) -> list[asyncio.Task]:
+        """Launch all background services and return channel tasks for later cancel."""
         self._api_server_task = asyncio.create_task(self._start_admin_api())
         self._agent_task = asyncio.create_task(self.agent.start())
 
-        if self.cron_scheduler:
-            self._cron_task = asyncio.create_task(self.cron_scheduler.start())
-            logger.info("CronScheduler started.")
+        self._start_cron_task()
+        self._start_heartbeat_task()
 
-        if config.get("scheduler.heartbeat_enabled", True):
-            from scheduler.heartbeat import HeartbeatRunner
-            workspace_path = resolve_runtime_root(config)
-            self.heartbeat_runner = HeartbeatRunner(
-                workspace=workspace_path,
-                run_callback=self._run_heartbeat,
-                interval_seconds=config.get("scheduler.heartbeat_interval", 300),
-            )
-            self._heartbeat_task = asyncio.create_task(self.heartbeat_runner.start())
-            logger.info("HeartbeatRunner started.")
+        channel_tasks = self._start_channel_tasks()
 
-        channel_tasks = []
-        for ch in self.channels:
-            task = asyncio.create_task(ch.start())
-            channel_tasks.append(task)
-            logger.info("Channel '%s' activated.", ch.channel_name)
-
-        if self._gmail_push_manager:
-            gmail_ok = await self._gmail_push_manager.setup()
-            if gmail_ok:
-                logger.info("Gmail Pub/Sub watch registered.")
-            else:
-                logger.warning("Gmail Pub/Sub setup failed (missing deps or credentials).")
+        await self._setup_gmail_push()
 
         if self.capture_manager:
             await self.capture_manager.start()
@@ -253,16 +242,50 @@ class GazerBrain:
         if config.get("wake_word.enabled", False):
             self._setup_wake_word()
 
-        self._update_ui_status("Vision Active")
+        return channel_tasks
 
+    def _start_cron_task(self) -> None:
+        if self.cron_scheduler:
+            self._cron_task = asyncio.create_task(self.cron_scheduler.start())
+            logger.info("CronScheduler started.")
+
+    def _start_heartbeat_task(self) -> None:
+        if not config.get("scheduler.heartbeat_enabled", True):
+            return
+        from scheduler.heartbeat import HeartbeatRunner
+        workspace_path = resolve_runtime_root(config)
+        self.heartbeat_runner = HeartbeatRunner(
+            workspace=workspace_path,
+            run_callback=self._run_heartbeat,
+            interval_seconds=config.get("scheduler.heartbeat_interval", 300),
+        )
+        self._heartbeat_task = asyncio.create_task(self.heartbeat_runner.start())
+        logger.info("HeartbeatRunner started.")
+
+    def _start_channel_tasks(self) -> list[asyncio.Task]:
+        tasks: list[asyncio.Task] = []
+        for ch in self.channels:
+            tasks.append(asyncio.create_task(ch.start()))
+            logger.info("Channel '%s' activated.", ch.channel_name)
+        return tasks
+
+    async def _setup_gmail_push(self) -> None:
+        if not self._gmail_push_manager:
+            return
+        if await self._gmail_push_manager.setup():
+            logger.info("Gmail Pub/Sub watch registered.")
+        else:
+            logger.warning("Gmail Pub/Sub setup failed (missing deps or credentials).")
+
+    async def _run_presence_loop(self) -> None:
+        """Idle loop: reload config, drive breathe gesture while no one is present."""
         while self.is_running:
             try:
                 if config.check_reload():
                     self.app_context.hook_token = config.get("hooks.token", "") or None
 
                 if self.spatial:
-                    attention = self.spatial.get_attention_level()
-                    is_present = attention > 0
+                    is_present = self.spatial.get_attention_level() > 0
                 else:
                     is_present = False
 
@@ -274,9 +297,6 @@ class GazerBrain:
             except Exception as e:
                 logger.error("Brain loop error: %s", e, exc_info=True)
                 await asyncio.sleep(1)
-
-        for task in channel_tasks:
-            task.cancel()
 
     def _setup_wake_word(self) -> None:
         """Wire GazerAudio wake word detection to publish InboundMessages."""

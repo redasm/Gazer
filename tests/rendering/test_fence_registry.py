@@ -1,10 +1,10 @@
-"""Tests for src.rendering.fence_registry."""
+"""Tests for rendering.fence_registry."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.rendering.fence_registry import (
+from rendering.fence_registry import (
     FENCE_COMPONENT_MAP,
     RENDERABLE_FENCES,
     is_renderable_fence,

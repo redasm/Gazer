@@ -1,4 +1,4 @@
-"""Tests for src.rendering.parser — MessageParser behavior.
+"""Tests for rendering.parser — MessageParser behavior.
 
 Covers all must-have cases from REFACTOR_MESSAGE_RENDERING.md §4.1
 plus additional edge cases to lock in the contract.
@@ -10,9 +10,9 @@ import json
 
 import pytest
 
-from src.rendering.constants import MAX_BLOCKS_PER_MESSAGE
-from src.rendering.parser import MessageParser
-from src.rendering.types import RenderHint
+from rendering.constants import MAX_BLOCKS_PER_MESSAGE
+from rendering.parser import MessageParser
+from rendering.types import RenderHint
 
 
 @pytest.fixture

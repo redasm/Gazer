@@ -10,10 +10,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Ensure project root is on sys.path so all imports work
+# `src/` is added to sys.path via pyproject.toml's [tool.pytest.ini_options] pythonpath.
+# PROJECT_ROOT is only used below for os.chdir so tests that rely on relative paths work.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 # ---------------------------------------------------------------------------
 # Mock heavy native dependencies that are not installed in test environments

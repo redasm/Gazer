@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from bus.events import OutboundMessage
-from src.rendering.types import RenderHint
+from rendering.types import RenderHint
 from tools.base import RenderHintScope, emit_render_hint
 
 

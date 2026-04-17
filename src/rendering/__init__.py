@@ -9,20 +9,20 @@ Subsequent stages add ``ToolResult.render`` adoption, the frontend
 component registry, and the channel-aware ``RenderRouter``.
 """
 
-from src.rendering.constants import (
+from rendering.constants import (
     MAX_BLOCKS_PER_MESSAGE,
     MAX_FALLBACK_PREVIEW_CHARS,
     MAX_RENDER_HINT_DATA_BYTES,
     PROTOCOL_VERSION,
 )
-from src.rendering.fence_registry import (
+from rendering.fence_registry import (
     FENCE_COMPONENT_MAP,
     RENDERABLE_FENCES,
     is_renderable_fence,
     resolve_fence_component,
 )
-from src.rendering.parser import MessageParser
-from src.rendering.types import (
+from rendering.parser import MessageParser
+from rendering.types import (
     CodeBlock,
     MessageBlock,
     RenderBlock,
