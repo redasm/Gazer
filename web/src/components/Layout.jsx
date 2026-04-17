@@ -1,5 +1,7 @@
-import React from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import { Outlet, NavLink, useLocation } from 'react-router-dom';
+
+const Chat = React.lazy(() => import('../pages/Chat'));
 import {
     LayoutDashboard,
     MessageSquare,
@@ -19,6 +21,8 @@ import { translations } from '../i18n';
 
 const Layout = ({ lang, setLang, status }) => {
     const t = translations[lang];
+    const location = useLocation();
+    const isChat = location.pathname === '/chat';
 
     const navGroups = [
         {
@@ -188,7 +192,11 @@ const Layout = ({ lang, setLang, status }) => {
                     display: 'flex',
                     flexDirection: 'column',
                 }}>
-                    <Outlet />
+                    {/* Chat stays mounted across navigation to preserve WebSocket + in-flight state */}
+                    <div style={{ display: isChat ? 'flex' : 'none', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <Suspense fallback={null}><Chat t={t} /></Suspense>
+                    </div>
+                    {!isChat && <Outlet />}
                 </main>
             </div>
         </div>

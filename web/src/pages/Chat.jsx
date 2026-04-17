@@ -836,10 +836,10 @@ const Chat = ({ t }) => {
                     overflow: 'hidden',
                 }}>
                     <div style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: '6px' }}>
-                        <button onClick={handleNewSession} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
+                        <button onClick={handleNewSession} className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
                             <Plus size={14} /> {t.newSession || 'New Chat'}
                         </button>
-                        <button onClick={() => setSidebarOpen(false)} className="btn-ghost" style={{ padding: '6px' }}>
+                        <button onClick={() => setSidebarOpen(false)} className="btn btn-ghost" style={{ padding: '6px' }}>
                             <PanelLeftClose size={14} />
                         </button>
                     </div>
@@ -923,7 +923,7 @@ const Chat = ({ t }) => {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {!sidebarOpen && (
-                            <button onClick={() => setSidebarOpen(true)} className="btn-ghost" style={{ padding: '6px' }}>
+                            <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost" style={{ padding: '6px' }}>
                                 <PanelLeft size={16} />
                             </button>
                         )}
@@ -1130,20 +1130,8 @@ const Chat = ({ t }) => {
                         <button
                             type="submit"
                             disabled={!connected || !input.trim()}
-                            style={{
-                                background: (!connected || !input.trim()) ? 'rgba(239,35,60,0.12)' : '#ef233c',
-                                border: 'none',
-                                color: '#fff',
-                                padding: '10px',
-                                borderRadius: '10px',
-                                cursor: (!connected || !input.trim()) ? 'not-allowed' : 'pointer',
-                                opacity: (!connected || !input.trim()) ? 0.4 : 1,
-                                transition: 'all 0.15s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                boxShadow: (!connected || !input.trim()) ? 'none' : '0 2px 12px rgba(239,35,60,0.3)',
-                            }}
+                            className="btn btn-primary"
+                            style={{ padding: '10px', borderRadius: '10px', justifyContent: 'center' }}
                         >
                             <Send size={18} />
                         </button>

@@ -10,7 +10,7 @@ axios.defaults.withCredentials = true;
 // Route-level code splitting via React.lazy
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Settings = React.lazy(() => import('./pages/Settings'));
-const Chat = React.lazy(() => import('./pages/Chat'));
+// Chat is always-mounted in Layout to preserve WebSocket state across navigation
 const Skills = React.lazy(() => import('./pages/Skills'));
 const MemoryGalaxy = React.lazy(() => import('./pages/MemoryGalaxy'));
 const Logs = React.lazy(() => import('./pages/Logs'));
@@ -216,7 +216,7 @@ function App() {
               />
             </Suspense>
           } />
-          <Route path="chat" element={<Suspense fallback={<PageFallback />}><Chat t={t} /></Suspense>} />
+          <Route path="chat" element={null} />
           <Route path="multi-agent" element={
             <Suspense fallback={<PageFallback />}>
               <AgentKanban

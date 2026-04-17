@@ -32,6 +32,8 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    // Incremented after each server fetch to force JSON re-sync without depending on modelProviders
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const selectedCfg = selected ? (modelProviders?.[selected] || emptyProvider) : emptyProvider;
 
@@ -66,7 +68,8 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
             setSelected(activeName);
         }
         refreshProviderJson(activeName);
-    }, [modelProviders, providerNames, selected]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [providerNames, selected, refreshKey]); // excludes modelProviders: updateLocal changes it but must not reset JSON textarea edits
 
     const updateLocal = (patch) => {
         if (!selected) return;
@@ -140,6 +143,7 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                 provider: payload,
             });
             await fetchModelProviders();
+            setRefreshKey(k => k + 1);
         } finally {
             setIsSaving(false);
         }
@@ -165,6 +169,7 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
         setIsRefreshing(true);
         try {
             await fetchModelProviders();
+            setRefreshKey(k => k + 1);
         } finally {
             setIsRefreshing(false);
         }
@@ -179,7 +184,7 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                         {t.modelProvidersDesc || 'Manage provider endpoints/keys outside settings.yaml.'}
                     </p>
                 </div>
-                <button className="btn-secondary" onClick={onRefresh} disabled={isRefreshing}>
+                <button className="btn btn-secondary" onClick={onRefresh} disabled={isRefreshing}>
                     {isRefreshing ? (t.refreshing || 'Refreshing...') : (t.refresh || 'Refresh')}
                 </button>
             </header>
@@ -192,7 +197,7 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                         onChange={(e) => setNewName(e.target.value)}
                         placeholder={t.enterProviderName || 'Enter provider name'}
                     />
-                    <button className="btn-primary" onClick={addProvider} disabled={isCreating}>
+                    <button className="btn btn-primary" onClick={addProvider} disabled={isCreating}>
                         {isCreating ? (t.creating || 'Creating...') : (t.addProvider || 'Add Provider')}
                     </button>
                 </div>
@@ -295,12 +300,12 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                             placeholder="agents JSON"
                         />
                         <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn-primary" onClick={saveProvider} disabled={!selected || isSaving}>
+                            <button className="btn btn-primary" onClick={saveProvider} disabled={!selected || isSaving}>
                                 {isSaving ? (t.saving || 'Saving...') : (t.saveConfig || 'Save')}
                             </button>
                             {!confirmDelete ? (
                                 <button
-                                    className="btn-secondary"
+                                    className="btn btn-secondary"
                                     onClick={() => setConfirmDelete(true)}
                                     disabled={!selected || isDeleting}
                                 >
@@ -309,14 +314,14 @@ const ModelProviders = ({ modelProviders, setModelProviders, fetchModelProviders
                             ) : (
                                 <>
                                     <button
-                                        className="btn-secondary"
+                                        className="btn btn-secondary"
                                         onClick={() => setConfirmDelete(false)}
                                         disabled={isDeleting}
                                     >
                                         {t.cancel || 'Cancel'}
                                     </button>
                                     <button
-                                        className="btn-primary"
+                                        className="btn btn-primary"
                                         onClick={removeProvider}
                                         disabled={!selected || isDeleting}
                                     >
