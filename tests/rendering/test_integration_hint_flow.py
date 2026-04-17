@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bus.events import OutboundMessage
+from bus.events import OutboundMessage
 from src.rendering.types import RenderHint
-from src.tools.base import RenderHintScope, emit_render_hint
+from tools.base import RenderHintScope, emit_render_hint
 
 
 def _serialize_hints_into_metadata(hints: List[RenderHint]) -> Dict[str, Any]:
@@ -111,7 +111,7 @@ class TestHintFlowIntegration:
 class TestWebChannelBroadcast:
     @pytest.mark.asyncio
     async def test_chat_end_frame_carries_render_hints(self) -> None:
-        from src.channels.web import WebChannel
+        from channels.web import WebChannel
 
         ch = WebChannel.__new__(WebChannel)
         ch.ui_queue = None
@@ -130,8 +130,8 @@ class TestWebChannelBroadcast:
         )
 
         broadcast_mock = AsyncMock()
-        with patch("src.tools.admin.websockets.chat_manager") as chat_manager, \
-                patch("src.tools.admin.websockets.manager"):
+        with patch("tools.admin.websockets.chat_manager") as chat_manager, \
+                patch("tools.admin.websockets.manager"):
             chat_manager.broadcast = broadcast_mock
             await ch.send(out)
 
@@ -145,7 +145,7 @@ class TestWebChannelBroadcast:
 
     @pytest.mark.asyncio
     async def test_chat_end_omits_render_hints_when_absent(self) -> None:
-        from src.channels.web import WebChannel
+        from channels.web import WebChannel
 
         ch = WebChannel.__new__(WebChannel)
         ch.ui_queue = None
@@ -154,8 +154,8 @@ class TestWebChannelBroadcast:
         out = OutboundMessage(channel="web", chat_id="c1", content="plain")
 
         broadcast_mock = AsyncMock()
-        with patch("src.tools.admin.websockets.chat_manager") as chat_manager, \
-                patch("src.tools.admin.websockets.manager"):
+        with patch("tools.admin.websockets.chat_manager") as chat_manager, \
+                patch("tools.admin.websockets.manager"):
             chat_manager.broadcast = broadcast_mock
             await ch.send(out)
 

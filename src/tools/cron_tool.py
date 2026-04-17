@@ -6,7 +6,8 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict
 
-from tools.base import Tool
+from src.rendering.types import RenderHint
+from tools.base import Tool, emit_render_hint
 
 logger = logging.getLogger("CronTool")
 
@@ -108,10 +109,32 @@ class CronTool(Tool):
         if not jobs:
             return "No cron jobs configured."
         lines = []
+        rows = []
         for j in jobs:
             status = "enabled" if j.enabled else "disabled"
             lines.append(f"- {j.id}: {j.name} [{j.cron_expr}] ({status}) agent={j.agent_id}")
-        return "\n".join(lines)
+            rows.append({
+                "id": j.id,
+                "name": j.name,
+                "schedule": j.cron_expr,
+                "status": status,
+                "agent": j.agent_id,
+            })
+        text = "\n".join(lines)
+        try:
+            emit_render_hint(
+                RenderHint(
+                    component="TableBlock",
+                    data={
+                        "columns": ["id", "name", "schedule", "status", "agent"],
+                        "rows": rows,
+                    },
+                    fallback_text=text,
+                )
+            )
+        except Exception as exc:
+            logger.debug("Cron list render hint dropped: %s", exc)
+        return text
 
     def _add(self, **kwargs: Any) -> str:
         from scheduler.cron import CronJob
