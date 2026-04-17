@@ -3,6 +3,8 @@ import { Send, User, Bot, Loader, Plus, Copy, Check, MessageSquare, Trash2, Penc
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import API_BASE from '../config';
+import BlockRenderer from '../components/chat/BlockRenderer.jsx';
+import { parseBlocks } from '../components/chat/parseBlocks.js';
 
 const wsBase = API_BASE.replace(/^http/, 'ws');
 
@@ -335,9 +337,23 @@ const ToolEventCard = ({ msg }) => {
     );
 };
 
-/** Split content into text and <think> blocks for rendering. */
-const renderMessageContent = (content) => {
-    if (!content) return null;
+/**
+ * Render an assistant message: split off `<think>...</think>` blocks for
+ * streaming reasoning, then pass the remaining text through the shared
+ * MessageBlock pipeline so fenced renderable payloads (chart/options/…)
+ * and tool-emitted `render_hints` land as inline UI instead of prose.
+ */
+const renderMessageContent = (msg) => {
+    const content = (msg && typeof msg === 'object') ? (msg.content || '') : (msg || '');
+    const renderHints = (msg && typeof msg === 'object' && Array.isArray(msg.renderHints))
+        ? msg.renderHints
+        : [];
+    const messageId = msg && typeof msg === 'object'
+        ? (msg.clientMessageId || msg.id || '')
+        : '';
+
+    if (!content && renderHints.length === 0) return null;
+
     const parts = [];
     const regex = /<think>([\s\S]*?)<\/think>/g;
     let lastIndex = 0;
@@ -353,17 +369,52 @@ const renderMessageContent = (content) => {
     if (incMatch) {
         if (incMatch[1].trim()) parts.push({ t: 'text', c: incMatch[1] });
         parts.push({ t: 'think_open', c: incMatch[2].trim() });
-    } else if (remaining.trim()) {
+    } else if (remaining.trim() || renderHints.length > 0) {
         parts.push({ t: 'text', c: remaining });
     }
-    if (parts.length === 0 || (parts.length === 1 && parts[0].t === 'text')) {
-        return <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>;
-    }
-    return parts.map((p, i) => {
-        if (p.t === 'think') return <ThinkBlock key={i}>{p.c}</ThinkBlock>;
-        if (p.t === 'think_open') return <ThinkBlock key={i} defaultOpen>{p.c}</ThinkBlock>;
-        return p.c.trim() ? <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={markdownComponents}>{p.c}</ReactMarkdown> : null;
+
+    const rendered = [];
+    let appendedHints = false;
+
+    parts.forEach((p, i) => {
+        if (p.t === 'think') {
+            rendered.push(<ThinkBlock key={`think-${i}`}>{p.c}</ThinkBlock>);
+            return;
+        }
+        if (p.t === 'think_open') {
+            rendered.push(<ThinkBlock key={`think-open-${i}`} defaultOpen>{p.c}</ThinkBlock>);
+            return;
+        }
+        const hintsForThisPart = (!appendedHints && i === parts.length - 1) ? renderHints : [];
+        if (!p.c.trim() && hintsForThisPart.length === 0) return;
+
+        const blocks = parseBlocks(p.c, hintsForThisPart);
+        if (hintsForThisPart.length > 0) appendedHints = true;
+        blocks.forEach((block, bi) => {
+            rendered.push(
+                <BlockRenderer
+                    key={`b-${i}-${bi}`}
+                    block={block}
+                    messageId={messageId}
+                />
+            );
+        });
     });
+
+    if (!appendedHints && renderHints.length > 0) {
+        const blocks = parseBlocks('', renderHints);
+        blocks.forEach((block, bi) => {
+            rendered.push(
+                <BlockRenderer
+                    key={`h-${bi}`}
+                    block={block}
+                    messageId={messageId}
+                />
+            );
+        });
+    }
+
+    return rendered.length ? rendered : null;
 };
 
 const Chat = ({ t }) => {
@@ -581,17 +632,19 @@ const Chat = ({ t }) => {
             } else if (data.type === 'chat_end') {
                 setIsTyping(false);
                 clearResponseTimeout();
+                const endHints = Array.isArray(data.render_hints) ? data.render_hints : [];
                 setMessages(prev => {
                     const last = prev[prev.length - 1];
                     if (last && last.role === 'assistant' && last.streaming) {
-                        return [...prev.slice(0, -1), { ...last, content: data.content, streaming: false, replyTo: data.reply_to || last.replyTo || '' }];
+                        return [...prev.slice(0, -1), { ...last, content: data.content, streaming: false, renderHints: endHints, replyTo: data.reply_to || last.replyTo || '' }];
                     }
-                    return [...prev, { role: 'assistant', content: data.content, time: new Date(), replyTo: data.reply_to || '' }];
+                    return [...prev, { role: 'assistant', content: data.content, time: new Date(), renderHints: endHints, replyTo: data.reply_to || '' }];
                 });
             } else if (data.type === 'chat_response') {
                 setIsTyping(false);
                 clearResponseTimeout();
-                setMessages(prev => [...prev, { role: 'assistant', content: data.content, time: new Date(), replyTo: data.reply_to || '' }]);
+                const respHints = Array.isArray(data.render_hints) ? data.render_hints : [];
+                setMessages(prev => [...prev, { role: 'assistant', content: data.content, time: new Date(), renderHints: respHints, replyTo: data.reply_to || '' }]);
             } else if (data.type === 'error') {
                 setIsTyping(false);
                 clearResponseTimeout();
@@ -626,6 +679,33 @@ const Chat = ({ t }) => {
             }
         };
     }, [connectWs, activeSessionId, clearResponseTimeout]);
+
+    // OptionsBlock dispatches CustomEvent('gazer:chat-option'); forward the
+    // chosen value to the backend as a user message so agents can react.
+    useEffect(() => {
+        const onOption = (event) => {
+            const { value, label } = event.detail || {};
+            const content = String(value ?? label ?? '').trim();
+            if (!content) return;
+            if (ws.current?.readyState !== WebSocket.OPEN) return;
+            const clientMessageId = genMessageId();
+            setMessages(prev => [...prev, { role: 'user', content, time: new Date(), clientMessageId }]);
+            setIsTyping(true);
+            startResponseTimeout();
+            ws.current.send(JSON.stringify({
+                content,
+                session_id: sessionRef.current || 'web-main',
+                metadata: {
+                    reply_to: clientMessageId,
+                    client_message_id: clientMessageId,
+                    source: 'option_click',
+                },
+            }));
+        };
+        window.addEventListener('gazer:chat-option', onOption);
+        return () => window.removeEventListener('gazer:chat-option', onOption);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const sendMessage = (e) => {
         e.preventDefault();
@@ -958,7 +1038,7 @@ const Chat = ({ t }) => {
                                                         </div>
                                                     )}
                                                     {msg.role === 'assistant' ? (
-                                                        renderMessageContent(msg.content)
+                                                        renderMessageContent(msg)
                                                     ) : (
                                                         <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</div>
                                                     )}

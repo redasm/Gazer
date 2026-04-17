@@ -13,7 +13,6 @@ import {
     Bug,
     Globe,
     Clock,
-    Layers,
     SlidersHorizontal,
 } from 'lucide-react';
 import { translations } from '../i18n';
@@ -43,7 +42,6 @@ const Layout = ({ lang, setLang, status }) => {
                 { path: '/skills', icon: <Cpu size={16} />, label: t.skills },
                 { path: '/memory', icon: <BookOpen size={16} />, label: t.memory },
                 { path: '/cron', icon: <Clock size={16} />, label: t.cronJobs || 'Cron' },
-                { path: '/canvas', icon: <Layers size={16} />, label: t.canvas || 'Canvas' },
             ],
         },
         {

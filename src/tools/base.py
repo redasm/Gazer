@@ -2,7 +2,11 @@
 
 import asyncio
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
+
+from src.rendering.types import RenderHint
 
 
 class CancellationToken:
@@ -223,3 +227,96 @@ class Tool(ABC):
                 "parameters": self.parameters,
             },
         }
+
+
+# ---------------------------------------------------------------------------
+# ToolResult + RenderHint side-channel (P0-2)
+# ---------------------------------------------------------------------------
+#
+# Historically ``Tool.execute()`` returns a plain ``str``; that contract is
+# preserved for backward compatibility. To let tools attach inline UI
+# intent without changing their signatures, we expose:
+#
+#   1. A :class:`ToolResult` dataclass tools *may* return directly.
+#   2. A ContextVar-scoped collector — tools call :func:`emit_render_hint`
+#      during ``execute()`` and the caller (AgentLoop) reads
+#      :func:`pop_render_hints` after the call completes.
+#
+# Both paths are additive; an untouched tool returning ``str`` continues to
+# behave exactly as before.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ToolResult:
+    """Structured return value with optional inline rendering intent.
+
+    ``text`` is always consumed by the LLM for subsequent reasoning; any
+    :class:`RenderHint` attached via ``render`` is surfaced to UI-capable
+    channels and silently ignored on text-only channels.
+    """
+
+    success: bool
+    text: str
+    render: Optional[RenderHint] = None
+    error: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+_render_hint_sink: ContextVar[Optional[List[RenderHint]]] = ContextVar(
+    "gazer_render_hint_sink", default=None,
+)
+
+
+class RenderHintScope:
+    """Context manager that opens a per-call render-hint collection scope.
+
+    The AgentLoop wraps each tool invocation in this scope; any tool that
+    calls :func:`emit_render_hint` during execution contributes one or
+    more hints that the loop then attaches to the assistant message
+    payload.
+    """
+
+    def __init__(self) -> None:
+        self._token = None
+        self._sink: List[RenderHint] = []
+
+    def __enter__(self) -> "RenderHintScope":
+        self._token = _render_hint_sink.set(self._sink)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._token is not None:
+            _render_hint_sink.reset(self._token)
+            self._token = None
+
+    @property
+    def hints(self) -> List[RenderHint]:
+        """Return hints collected during the scope (read after exit)."""
+        return list(self._sink)
+
+
+def emit_render_hint(hint: RenderHint) -> bool:
+    """Attach a :class:`RenderHint` to the current tool call, if any.
+
+    Returns ``True`` when a scope is active and the hint was accepted.
+    When called outside a scope (e.g. unit tests or legacy code paths)
+    the hint is dropped and ``False`` is returned — never raises.
+    """
+    sink = _render_hint_sink.get()
+    if sink is None:
+        return False
+    if not isinstance(hint, RenderHint):
+        raise TypeError(f"emit_render_hint expected RenderHint, got {type(hint)!r}")
+    sink.append(hint)
+    return True
+
+
+def pop_render_hints() -> List[RenderHint]:
+    """Drain hints from the active scope without closing it."""
+    sink = _render_hint_sink.get()
+    if sink is None:
+        return []
+    drained = list(sink)
+    sink.clear()
+    return drained

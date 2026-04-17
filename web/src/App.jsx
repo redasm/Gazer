@@ -17,7 +17,6 @@ const Logs = React.lazy(() => import('./pages/Logs'));
 const Debug = React.lazy(() => import('./pages/Debug'));
 const Security = React.lazy(() => import('./pages/Security'));
 const Cron = React.lazy(() => import('./pages/Cron'));
-const Canvas = React.lazy(() => import('./pages/Canvas'));
 const ToolPolicy = React.lazy(() => import('./pages/ToolPolicy'));
 const LlmRouter = React.lazy(() => import('./pages/LlmRouter'));
 const ModelProviders = React.lazy(() => import('./pages/ModelProviders'));
@@ -243,7 +242,6 @@ function App() {
             </Suspense>
           } />
           <Route path="cron" element={<Suspense fallback={<PageFallback />}><Cron t={t} /></Suspense>} />
-          <Route path="canvas" element={<Suspense fallback={<PageFallback />}><Canvas t={t} /></Suspense>} />
           <Route path="policy/tools" element={
             <Suspense fallback={<PageFallback />}>
               <ToolPolicy
