@@ -115,13 +115,12 @@ class ToolExecutionMixin:
                 payload=payload,
             )
 
-        params["_progress_callback"] = _progress_callback
-
         blocked = self._tool_call_hooks.before_tool_call(
             session_key=session_key,
             tool_name=name,
             params=params,
         )
+        params["_progress_callback"] = _progress_callback
         if isinstance(blocked, dict):
             code = str(blocked.get("code", "TOOL_BLOCKED_BY_HOOK")).strip() or "TOOL_BLOCKED_BY_HOOK"
             message = str(blocked.get("message", "blocked by governance hook")).strip() or "blocked by governance hook"

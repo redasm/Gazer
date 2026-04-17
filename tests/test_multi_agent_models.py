@@ -21,7 +21,7 @@ class TestTaskStatus:
         assert TaskStatus.BLOCKED == "blocked"
 
     def test_all_statuses_exist(self):
-        expected = {"pending", "ready", "running", "done", "failed", "blocked"}
+        expected = {"pending", "ready", "running", "done", "failed", "blocked", "waiting_planner"}
         actual = {s.value for s in TaskStatus}
         assert actual == expected
 

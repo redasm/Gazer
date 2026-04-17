@@ -347,12 +347,14 @@ async def test_verify_admin_token_accepts_cookie_token(monkeypatch):
     monkeypatch.setattr(
         admin_api,
         "get_owner_manager",
-        lambda: SimpleNamespace(validate_session=lambda token: token == "cookie-token"),
+        lambda: SimpleNamespace(
+            validate_session=lambda token, **_kwargs: token == "cookie-token"
+        ),
     )
     monkeypatch.setattr(admin_api, "config", SimpleNamespace(get=lambda *_args, **_kwargs: False))
 
     request = _make_request(cookie="admin_token=cookie-token")
-    await admin_api.verify_admin_token(request)
+    admin_api.verify_admin_token(request)
 
 
 @pytest.mark.asyncio
@@ -407,7 +409,11 @@ async def test_create_admin_session_sets_cookie(monkeypatch):
     monkeypatch.setattr(
         admin_api,
         "get_owner_manager",
-        lambda: SimpleNamespace(validate_session=lambda token: token == "valid-token"),
+        lambda: SimpleNamespace(
+            validate_admin_token=lambda token: token == "valid-token",
+            validate_session=lambda token, **_kwargs: False,
+            create_session=lambda **_kwargs: "sess_new_1",
+        ),
     )
     monkeypatch.setattr(
         admin_api,
@@ -425,7 +431,7 @@ async def test_create_admin_session_sets_cookie(monkeypatch):
     response = await admin_api.create_admin_session({"token": "valid-token"}, request)
     set_cookie = response.headers.get("set-cookie", "")
     assert response.status_code == 200
-    assert "admin_token=valid-token" in set_cookie
+    assert "admin_token=sess_new_1" in set_cookie
     assert "HttpOnly" in set_cookie
     assert "Max-Age=3600" in set_cookie
     assert "SameSite=strict" in set_cookie
@@ -559,7 +565,7 @@ async def test_update_config_blocks_nested_protected_keys(monkeypatch):
     monkeypatch.setattr(admin_api, "config", fake_cfg)
 
     with pytest.raises(HTTPException) as exc:
-        await admin_api.update_config({"security": {"dm_policy": "open"}})
+        await admin_api.update_config({"security": {"auto_approve_privileged": True}})
     assert exc.value.status_code == 403
     assert fake_cfg.set_many_calls == []
 

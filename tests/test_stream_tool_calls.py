@@ -103,6 +103,11 @@ async def test_agent_loop_emits_tool_call_stream_events(monkeypatch, tmp_path):
         "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
+    # Disable planning so the mocked LLM responses map directly to iteration turns.
+    monkeypatch.setattr(
+        "agent.loop_mixins.planning.PlanningMixin._should_plan",
+        classmethod(lambda cls, message, *, history_len=0: False),
+    )
 
     bus = MessageBus()
     streamed = []
@@ -202,10 +207,11 @@ async def test_agent_loop_fake_tool_call_guard_retries(monkeypatch, tmp_path):
     assert provider.calls == 2
 
 
-def test_web_channel_forwards_tool_call_event_to_ipc():
-    ipc_in = Queue()
-    ipc_out = Queue()
-    channel = WebChannel(ipc_in, ipc_out)
+def test_web_channel_forwards_tool_call_event_to_websocket():
+    """WebChannel.send should broadcast tool_call_event frames via chat_manager."""
+    from unittest.mock import AsyncMock, patch
+
+    channel = WebChannel()
 
     partial = OutboundMessage(
         channel="web",
@@ -218,9 +224,17 @@ def test_web_channel_forwards_tool_call_event_to_ipc():
             "payload": {"tool": "read_file"},
         },
     )
-    asyncio.run(channel.send(partial))
-    assert not ipc_out.empty()
-    msg = ipc_out.get()
-    assert msg["type"] == "tool_call_event"
-    assert msg["event_type"] == "call"
-    assert msg["payload"]["tool"] == "read_file"
+
+    broadcast_mock = AsyncMock()
+    with patch("tools.admin.websockets.chat_manager") as chat_manager, \
+            patch("tools.admin.websockets.manager"):
+        chat_manager.broadcast = broadcast_mock
+        asyncio.run(channel.send(partial))
+
+    broadcast_mock.assert_awaited_once()
+    args = broadcast_mock.call_args.args
+    assert args[0] == "web-main"
+    frame = args[1]
+    assert frame["type"] == "tool_call_event"
+    assert frame["event_type"] == "call"
+    assert frame["payload"]["tool"] == "read_file"

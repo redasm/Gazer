@@ -300,7 +300,10 @@ async def test_mcp_initialize_tools_list_and_call(monkeypatch):
     assert "ds_eval" in eval_latest["result"]["contents"][0]["text"]
     eval_latest_payload = json.loads(eval_latest["result"]["contents"][0]["text"])
     assert eval_latest_payload["include_workflow"] is True
-    assert eval_latest_payload["workflow_observability"]["total_runs"] >= 2
+    # Workflow engine was removed; metrics now return an empty stub for API compatibility.
+    workflow_obs = eval_latest_payload["workflow_observability"]
+    assert "total_runs" in workflow_obs
+    assert isinstance(workflow_obs.get("workflows"), list)
 
     eval_latest_with_compare = await admin_api.mcp_jsonrpc(
         {

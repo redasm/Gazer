@@ -176,6 +176,7 @@ async def test_loop_execute_tool_calls_with_batching(monkeypatch, tmp_path):
         retry_budget=RetryBudget.from_total(4),
         sender_id="u1",
         channel="web",
+        chat_id="c1",
         max_parallel_calls=4,
     )
 

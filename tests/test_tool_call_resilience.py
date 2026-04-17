@@ -287,6 +287,7 @@ async def test_parallel_tool_lanes_isolate_device_calls(monkeypatch, tmp_path):
         retry_budget=RetryBudget.from_total(4),
         sender_id="u1",
         channel="web",
+        chat_id="c1",
         max_parallel_calls=4,
     )
     assert len(results) == 4

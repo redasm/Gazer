@@ -183,6 +183,10 @@ async def test_agent_loop_blocks_when_tool_calls_exceed_turn_limit(monkeypatch, 
         "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
     )
+    monkeypatch.setattr(
+        "agent.loop_mixins.planning.PlanningMixin._should_plan",
+        classmethod(lambda cls, message, *, history_len=0: False),
+    )
 
     provider = _SequenceProvider(
         [
@@ -233,6 +237,10 @@ async def test_agent_loop_parallel_tool_execution_respects_config_limit(monkeypa
     monkeypatch.setattr(
         "security.owner.get_owner_manager",
         lambda: SimpleNamespace(is_owner_sender=lambda *_args, **_kwargs: False),
+    )
+    monkeypatch.setattr(
+        "agent.loop_mixins.planning.PlanningMixin._should_plan",
+        classmethod(lambda cls, message, *, history_len=0: False),
     )
 
     provider = _SequenceProvider(
