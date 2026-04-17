@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/rendering/ -q)",
+      "Bash(python -m pytest -q --ignore=tests/e2e -x --timeout=60)"
+    ]
+  }
+}
