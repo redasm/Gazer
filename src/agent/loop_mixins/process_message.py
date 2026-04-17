@@ -745,12 +745,29 @@ class ProcessMessageMixin:
 
         if pending_media:
             logger.info("Sending response with media: %s", pending_media)
+
+        outbound_metadata: Dict[str, Any] = {}
+        pending_hints = getattr(self, "_pending_render_hints", None)
+        if pending_hints:
+            serialized: List[Dict[str, Any]] = []
+            for hint in pending_hints:
+                to_dict = getattr(hint, "to_dict", None)
+                if callable(to_dict):
+                    try:
+                        serialized.append(to_dict())
+                    except Exception as hint_exc:
+                        logger.warning("Failed to serialize render hint: %s", hint_exc)
+            if serialized:
+                outbound_metadata["render_hints"] = serialized
+        self._pending_render_hints = []
+
         return OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=final_content,
             reply_to=self._resolve_outbound_reply_to(msg),
             media=pending_media,
+            metadata=outbound_metadata,
         )
 
     # ------------------------------------------------------------------

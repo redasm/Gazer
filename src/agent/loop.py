@@ -331,6 +331,11 @@ class AgentLoop(
         self._cancel_token: Optional[CancellationToken] = None
         # Per-turn prompt-cache scope (session/user/channel isolation)
         self._prompt_cache_scope: Dict[str, Any] = {}
+        # Per-turn accumulation of tool-emitted RenderHint objects. Reset at
+        # the top of each _process_message call; tool_execution pushes into
+        # this list after each successful tool execution. _finalize_turn
+        # serializes them onto OutboundMessage.metadata["render_hints"].
+        self._pending_render_hints: List[Any] = []
         # Latest persona-driven tool-policy linkage snapshot (for observability/admin).
         self._persona_tool_policy_linkage_status: Dict[str, Any] = {
             "enabled": False,
@@ -659,6 +664,9 @@ class AgentLoop(
         self._active_model_override = None
         self._tool_policy_model_provider = ""
         self._tool_policy_model_name = ""
+        # Fresh render-hint accumulator for this turn — stale hints from a
+        # prior turn would otherwise leak into the next assistant message.
+        self._pending_render_hints = []
         if self._slow_provider_resolver:
             try:
                 resolved = self._slow_provider_resolver(msg, self.provider)

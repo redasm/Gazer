@@ -95,9 +95,17 @@ class WebChannel(ChannelAdapter):
             self._update_ui(msg.content)
             return
 
-        await chat_manager.broadcast(msg.chat_id, {
-            "type": "chat_end", "content": msg.content, "chat_id": msg.chat_id, "reply_to": msg.reply_to,
-        })
+        end_payload = {
+            "type": "chat_end",
+            "content": msg.content,
+            "chat_id": msg.chat_id,
+            "reply_to": msg.reply_to,
+        }
+        final_metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
+        render_hints = final_metadata.get("render_hints")
+        if isinstance(render_hints, list) and render_hints:
+            end_payload["render_hints"] = render_hints
+        await chat_manager.broadcast(msg.chat_id, end_payload)
         self._update_ui("Sent")
 
     async def _on_typing(self, event: TypingEvent) -> None:

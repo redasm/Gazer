@@ -7,7 +7,7 @@ Contains 13 methods.
 from __future__ import annotations
 
 from agent.constants import *  # noqa: F403
-from tools.base import CancellationToken
+from tools.base import CancellationToken, RenderHintScope
 from tools.registry import ToolPolicy
 from tools.batching import ToolBatchPlan
 from tools.planner import ToolPlannerPlan
@@ -138,20 +138,23 @@ class ToolExecutionMixin:
             retryable = True
             try:
                 model_provider, model_name = self._current_tool_policy_model_context()
-                result = await asyncio.wait_for(
-                    self.tools.execute(
-                        name,
-                        params,
-                        policy=policy,
-                        cancel_token=self._cancel_token,
-                        sender_id=sender_id,
-                        channel=channel,
-                        model_provider=model_provider,
-                        model_name=model_name,
-                    ),
-                    timeout=timeout,
-                )
-                if isinstance(result, str) and result.startswith("Error") and "Recovery Template:" not in result:
+                with RenderHintScope() as hint_scope:
+                    result = await asyncio.wait_for(
+                        self.tools.execute(
+                            name,
+                            params,
+                            policy=policy,
+                            cancel_token=self._cancel_token,
+                            sender_id=sender_id,
+                            channel=channel,
+                            model_provider=model_provider,
+                            model_name=model_name,
+                        ),
+                        timeout=timeout,
+                    )
+                    collected_hints = list(hint_scope.hints)
+                is_error_result = isinstance(result, str) and result.startswith("Error")
+                if is_error_result and "Recovery Template:" not in result:
                     retryable_result = classify_error_message(result) != "non_retryable"
                     recovery = self._build_tool_failure_recovery_template(
                         tool_name=name,
@@ -159,6 +162,10 @@ class ToolExecutionMixin:
                         budget_remaining=retry_budget.remaining,
                     )
                     result = f"{result}\n{recovery}"
+                if not is_error_result and collected_hints:
+                    sink = getattr(self, "_pending_render_hints", None)
+                    if isinstance(sink, list):
+                        sink.extend(collected_hints)
                 self._tool_call_hooks.after_tool_call(
                     _session_key=session_key,
                     _tool_name=name,
