@@ -88,6 +88,7 @@ Gazer/
 
 ```bash
 git clone https://github.com/redasm/Gazer.git
+git clone https://github.com/redasm/Gazer.git .gazer
 cd gazer
 ```
 

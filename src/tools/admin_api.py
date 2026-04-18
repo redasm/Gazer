@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 from pathlib import Path
@@ -67,8 +68,32 @@ for _router, _prefix, _tags in _ADMIN_ROUTERS:
     if _router is not None:
         app.include_router(_router, prefix=_prefix, tags=_tags)
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_WEB_DIST_DIR = _PROJECT_ROOT / "web" / "dist"
+
+def _resolve_web_dist_dir() -> Optional[Path]:
+    """Locate ``web/dist`` for the React admin UI.
+
+    When Gazer is installed into site-packages (e.g. Docker ``pip install .``),
+    ``__file__`` lives under ``site-packages/``; walking upward never reaches the
+    app workdir, so we check ``GAZER_PROJECT_ROOT`` and ``cwd`` (Docker ``WORKDIR``)
+    before scanning ancestors (editable / source runs).
+    """
+    env_root = os.environ.get("GAZER_PROJECT_ROOT", "").strip()
+    if env_root:
+        env_dist = Path(env_root) / "web" / "dist"
+        if env_dist.is_dir():
+            return env_dist
+    cwd_dist = Path.cwd() / "web" / "dist"
+    if cwd_dist.is_dir():
+        return cwd_dist
+    here = Path(__file__).resolve()
+    for p in here.parents:
+        cand = p / "web" / "dist"
+        if cand.is_dir():
+            return cand
+    return None
+
+
+_WEB_DIST_DIR = _resolve_web_dist_dir()
 
 # --- Serve built React frontend from web/dist (production / Docker) ---
 if _WEB_DIST_DIR.is_dir():
@@ -79,12 +104,26 @@ if _WEB_DIST_DIR.is_dir():
     if _assets_dir.is_dir():
         app.mount("/assets", _StaticFiles(directory=str(_assets_dir)), name="static-assets")
 
-    # SPA fallback: serve index.html for all non-API routes
+    # Mount /icons as static files (SVG app icons referenced by manifest.json)
+    _icons_dir = _WEB_DIST_DIR / "icons"
+    if _icons_dir.is_dir():
+        app.mount("/icons", _StaticFiles(directory=str(_icons_dir)), name="static-icons")
+
+    # SPA fallback: serve static files from dist root when they exist, else index.html
     _index_html = _WEB_DIST_DIR / "index.html"
     if _index_html.is_file():
         @app.get("/{path:path}", include_in_schema=False)
         async def _spa_fallback(path: str):
-            # Let API routes take priority (they're registered before this catch-all)
+            # Serve known root-level static files (manifest.json, favicon.ico, …)
+            # before falling back to the SPA shell.
+            if path:
+                candidate = (_WEB_DIST_DIR / path).resolve()
+                try:
+                    candidate.relative_to(_WEB_DIST_DIR.resolve())
+                    if candidate.is_file():
+                        return FileResponse(str(candidate))
+                except ValueError:
+                    pass  # path traversal attempt — fall through to index.html
             return FileResponse(str(_index_html), media_type="text/html")
 
 

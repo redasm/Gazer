@@ -38,6 +38,7 @@ doc/
 design/
 electronics/
 hardware/
+!hardware/
 tests/
 .windsurfrules
 AGENTS.md

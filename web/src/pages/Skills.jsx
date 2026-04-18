@@ -69,6 +69,8 @@ const SkillCard = ({ skill, selected, onClick }) => (
 
 const Skills = ({ t }) => {
     const [skills, setSkills] = useState([]);
+    const [fetchError, setFetchError] = useState(null); // null | 'auth' | 'network'
+    const [isLoading, setIsLoading] = useState(false);
     const [selectedSkill, setSelectedSkill] = useState(null);
     const [skillFiles, setSkillFiles] = useState([]);
     const [selectedFile, setSelectedFile] = useState("SKILL.md");
@@ -84,11 +86,17 @@ const Skills = ({ t }) => {
     };
 
     const fetchSkills = async () => {
+        setIsLoading(true);
+        setFetchError(null);
         try {
             const res = await axios.get(`${API_BASE}/skills`);
             setSkills(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
+            const status = err?.response?.status;
+            setFetchError(status === 401 || status === 403 ? 'auth' : 'network');
             console.error("Failed to fetch skills", err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -231,8 +239,8 @@ const Skills = ({ t }) => {
                             }}
                         />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                            <button onClick={() => { setIsCreating(false); setNewSkillName(""); }} className="btn-ghost">{t.cancel}</button>
-                            <button onClick={handleCreate} className="btn-primary">{t.create}</button>
+                            <button onClick={() => { setIsCreating(false); setNewSkillName(""); }} className="btn btn-ghost">{t.cancel}</button>
+                            <button onClick={handleCreate} className="btn btn-primary">{t.create}</button>
                         </div>
                     </div>
                 )}
@@ -248,7 +256,24 @@ const Skills = ({ t }) => {
                         <Cpu size={10} color="var(--text-muted)" />,
                         extensionSkills
                     )}
-                    {skills.length === 0 && (
+                    {isLoading && (
+                        <div style={{ color: '#556', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                            Loading…
+                        </div>
+                    )}
+                    {!isLoading && fetchError && (
+                        <div style={{ padding: 16, textAlign: 'center' }}>
+                            <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 10 }}>
+                                {fetchError === 'auth'
+                                    ? (t.authRequired || 'Authentication required. Please log in and retry.')
+                                    : (t.loadFailed || 'Failed to load skills.')}
+                            </div>
+                            <button className="btn btn-secondary" onClick={fetchSkills}>
+                                {t.retry || 'Retry'}
+                            </button>
+                        </div>
+                    )}
+                    {!isLoading && !fetchError && skills.length === 0 && (
                         <div style={{ color: '#556', fontSize: 13, textAlign: 'center', padding: 20 }}>
                             {t.noSkills || 'No skills found.'}
                         </div>
@@ -282,7 +307,7 @@ const Skills = ({ t }) => {
                                 {selectedFile.endsWith('.md') && (
                                     <button
                                         onClick={() => setEditMode(!editMode)}
-                                        className="btn-ghost"
+                                        className="btn btn-ghost"
                                         style={{ gap: 5 }}
                                     >
                                         {editMode
@@ -292,7 +317,7 @@ const Skills = ({ t }) => {
                                     </button>
                                 )}
                                 {(editMode || !selectedFile.endsWith('.md')) && (
-                                    <button onClick={handleSave} className="btn-primary">
+                                    <button onClick={handleSave} className="btn btn-primary">
                                         <Save size={14} /> {t.saveChanges}
                                     </button>
                                 )}
