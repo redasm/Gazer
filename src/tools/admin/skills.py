@@ -8,17 +8,21 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from runtime.paths import resolve_runtime_root
 from tools.admin.state import logger
 from tools.admin.utils import _is_subpath
 from .auth import verify_admin_token
 
 router = APIRouter(tags=["skills"])
 
-# Skill directory paths — relative to source tree
-SKILLS_BUILTIN = os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills")
-SKILLS_EXTENSION = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "skills")
-SKILLS_BUILTIN_PATH = Path(SKILLS_BUILTIN)
-SKILLS_EXTENSION_PATH = Path(SKILLS_EXTENSION)
+# Skill directory paths — anchored to the runtime root so they work
+# both in source checkouts and in installed/Dockerized deployments.
+# Mirrors the runtime SkillLoader roots in ``runtime.subsystems.tools``.
+_RUNTIME_ROOT = resolve_runtime_root()
+SKILLS_BUILTIN_PATH = _RUNTIME_ROOT / "src" / "skills"
+SKILLS_EXTENSION_PATH = _RUNTIME_ROOT / "skills"
+SKILLS_BUILTIN = str(SKILLS_BUILTIN_PATH)
+SKILLS_EXTENSION = str(SKILLS_EXTENSION_PATH)
 
 
 def _scan_skill_dir(root: str, builtin: bool) -> list:
