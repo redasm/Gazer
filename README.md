@@ -2,6 +2,10 @@
 
 Gazer 是一个桌面级具身 AI 伴侣系统，采用 `Runtime + Agent + Tools + Memory + Soul + Devices` 的分层架构。
 
+## 硬件效果图
+
+![Gazer 硬件效果图](design/gazer.png)
+
 ## 界面预览
 
 | 对话 | 记忆图谱 | 人格定制 |
@@ -13,7 +17,7 @@ Gazer 是一个桌面级具身 AI 伴侣系统，采用 `Runtime + Agent + Tools
 - **双脑执行路径** — 快响应与深度推理分层（`fast_brain` / `slow_brain`）。
 - **工具治理** — 统一 `ToolRegistry` + 分层策略管线 + 安全等级（Tier）控制。
 - **长期记忆** — OpenViking 语义记忆与长期提炼，数据落在 `data/openviking`。
-- **Soul 体系** — 三槽位 `WorkingContext`、预算管理、主动推断、人格演化宪法约束。
+- **Soul 体系** — 整合人格向量、情绪引擎与工作上下文，基于记忆和当前状态组装提示词，并通过主动推断与人格边界约束保持长期陪伴风格稳定。
 - **多通道与多节点** — `MessageBus` 解耦 Channel/Agent，支持 Telegram、Discord、飞书、Slack 等通道及卫星节点接入。
 - **管理可观测** — FastAPI Admin API + React 控制台 + WebSocket 实时事件。
 
