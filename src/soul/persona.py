@@ -93,7 +93,18 @@ class GazerPersonality:
             memory_port=self.memory_port,
         )
 
-        self.proactive_engine = ProactiveInferenceEngine()
+        # Proactive inference. The optional LLM layer (nuanced signals) is
+        # opt-in via personality.proactive.llm_enabled and wired separately
+        # via enable_proactive_llm() once a fast provider is available.
+        proactive_cfg = config.get("personality.proactive", {}) or {}
+        if not isinstance(proactive_cfg, dict):
+            proactive_cfg = {}
+        self._proactive_llm_enabled = bool(proactive_cfg.get("llm_enabled", False))
+        try:
+            confidence_threshold = float(proactive_cfg.get("confidence_threshold", 0.6))
+        except (TypeError, ValueError):
+            confidence_threshold = 0.6
+        self.proactive_engine = ProactiveInferenceEngine(confidence_threshold=confidence_threshold)
         self.budget_manager = ContextBudgetManager()
 
         # 4. SessionDistiller + IdentityConstitution (Issue-06 Layer-2 + Issue-11)
@@ -771,6 +782,26 @@ class GazerPersonality:
             return False
         every = max(1, int(getattr(self, "_distill_every_turns", 20) or 20))
         return self._turns_since_distill >= every
+
+    def enable_proactive_llm(self, llm_provider: Any, model: Optional[str] = None) -> bool:
+        """Enable the LLM layer of proactive inference using a fast provider.
+
+        No-op (returns False) when ``personality.proactive.llm_enabled`` is
+        off or no provider is supplied. Wraps the provider in the structured
+        adapter the engine expects (``call_structured``).
+        """
+        if not self._proactive_llm_enabled or llm_provider is None:
+            return False
+        from soul.llm_adapter import LLMProviderStructuredAdapter
+
+        self.proactive_engine._llm = LLMProviderStructuredAdapter(llm_provider, model)
+        logger.info("Proactive inference LLM layer enabled (fast brain).")
+        return True
+
+    @property
+    def proactive_llm_enabled(self) -> bool:
+        """Whether the proactive LLM layer is configured AND wired."""
+        return self._proactive_llm_enabled and self.proactive_engine._llm is not None
 
     # ------------------------------------------------------------------
     # Session lifecycle (Fix #13)

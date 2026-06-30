@@ -112,6 +112,10 @@ class GazerAgent(MultiAgentMixin):
             llm_provider=self.provider,
             usage_tracker=self.loop.usage,
         )
+        # Wire the fast brain into proactive inference's optional LLM layer
+        # (opt-in via personality.proactive.llm_enabled).
+        if self._fast_provider is not None:
+            self.personality.enable_proactive_llm(self._fast_provider, self._fast_model)
         self._register_turn_hooks()
 
         # Dispatch task will be started in start()
@@ -138,6 +142,7 @@ class GazerAgent(MultiAgentMixin):
             int(payload.get("history_len", 0) or 0),
         )
         self._inject_persona_enrichment(payload)
+        await self._inject_proactive_hint(payload)
 
     def _inject_persona_enrichment(self, payload: Dict[str, Any]) -> None:
         """Build live persona state from GazerPersonality and inject into context builder."""
@@ -153,14 +158,12 @@ class GazerAgent(MultiAgentMixin):
                 f"当前情绪：{affect.to_label()}"
                 f"（valence={affect.valence:.2f}, arousal={affect.arousal:.2f}）"
             )
+            # Bias memory recall toward the current mood (Issue-05). This runs
+            # before prepare_memory_context in the same turn.
+            self.context_builder.set_affect_valence(affect.valence)
 
             # Mental state
             parts.append(f"认知状态：{self.personality.current_state.description}")
-
-            # Proactive inference hints (rule-based; no extra LLM latency)
-            proactive_hint = self._build_proactive_hint(affect)
-            if proactive_hint:
-                parts.append(proactive_hint)
 
             # Drives & goals
             motivation = self.personality._build_motivation_context()
@@ -173,38 +176,76 @@ class GazerAgent(MultiAgentMixin):
                 trust_prompt = self.personality.trust_system.get_relationship_prompt(sender_id)
                 parts.append(f"用户关系：{trust_prompt}")
 
-            enrichment = "\n".join(parts)
-            self.context_builder.set_persona_enrichment(enrichment)
+            # Remember the base so the (possibly async) proactive hint can be
+            # appended without rebuilding everything.
+            self._persona_enrichment_base = "\n".join(parts)
+            self.context_builder.set_persona_enrichment(
+                self._bound_enrichment(self._persona_enrichment_base)
+            )
         except Exception:
             logger.debug("Failed to inject persona enrichment", exc_info=True)
 
-    def _build_proactive_hint(self, affect: Any) -> str:
-        """Run rule-based proactive inference over current affect + history.
+    def _bound_enrichment(self, text: str) -> str:
+        """Bound the persona enrichment block to the agent_context token budget.
 
-        Returns a single newline-joined hint block, or "" when no signal
-        clears the confidence threshold.
+        Reuses the soul ContextBudgetManager so the live persona/affect head
+        respects the same Lost-in-the-Middle budget the design defines for the
+        agent_context slot, instead of growing unbounded.
+        """
+        try:
+            mgr = self.personality.budget_manager
+            budget = mgr._budget.agent_context
+            return mgr._truncate(text, budget)
+        except Exception:
+            return text
+
+    async def _inject_proactive_hint(self, payload: Dict[str, Any]) -> None:
+        """Run proactive inference (rule-based always, LLM layer if enabled)
+        and append the hints to the persona enrichment.
+
+        The rule-based layer is zero-latency; the optional LLM layer only runs
+        when ``personality.proactive.llm_enabled`` is set and a fast provider
+        was wired, so the default path adds no LLM latency at prompt build.
         """
         try:
             from soul.memory.working_context import WorkingContext
 
             engine = self.personality.proactive_engine
+            affect = self.personality.affect_manager.current_affect()
             history = self.personality.affect_manager.get_history()
             ctx = WorkingContext(
                 affect=affect,
-                turn_count=self.personality.get_goal_progress().get("turns", 0),
+                turn_count=int(self.personality.get_goal_progress().get("turns", 0) or 0),
+                session_context=tuple(self._recent_session_inputs(payload)),
             )
-            signals = engine._rule_based_infer(ctx, history)
-            filtered = [s for s in signals if s.confidence >= engine._confidence_threshold]
-            if not filtered:
-                return ""
+            # engine.infer() runs rule-based heuristics and, when the LLM layer
+            # is wired, the nuanced LLM inference too — deduped by signal type.
+            signals = await engine.infer(ctx, affect_history=history)
+            if not signals:
+                return
             lines = [
                 f"- [{s.signal_type.value} {s.confidence:.0%}] {s.suggested_response_hint}"
-                for s in filtered
+                for s in signals
             ]
-            return "主动观察：\n" + "\n".join(lines)
+            hint_block = "主动观察：\n" + "\n".join(lines)
+            base = getattr(self, "_persona_enrichment_base", "") or ""
+            combined = f"{base}\n{hint_block}" if base else hint_block
+            self.context_builder.set_persona_enrichment(self._bound_enrichment(combined))
         except Exception:
             logger.debug("Proactive inference failed", exc_info=True)
-            return ""
+
+    def _recent_session_inputs(self, payload: Dict[str, Any]) -> List[str]:
+        """Recent user/assistant lines for the LLM proactive layer's context."""
+        try:
+            history = self.loop._get_history(str(payload.get("session_key", "")))
+        except Exception:
+            return []
+        lines: List[str] = []
+        for item in history[-5:]:
+            content = str(item.get("content", "") or "").strip()
+            if content:
+                lines.append(content)
+        return lines
 
     async def _hook_after_tool_result(self, payload: Dict[str, Any]) -> None:
         tool_name = str(payload.get("tool_name", "") or "").strip()

@@ -25,6 +25,10 @@ class GazerContextBuilder(ContextBuilder):
         self.skill_loader: Optional[SkillLoader] = None
         self._companion_context: Optional[str] = None
         self._persona_enrichment: Optional[str] = None
+        # Live emotional valence from GazerPersonality, used to bias memory
+        # recall toward mood-congruent memories (Issue-05). None → fall back
+        # to the day-average sentiment inside get_companion_context.
+        self._affect_valence: Optional[float] = None
         self._memory_context_stats: Dict[str, Any] = {
             "memory_context_chars": 0,
             "recall_count": 0,
@@ -57,6 +61,8 @@ class GazerContextBuilder(ContextBuilder):
                         guard.get("include_recent_observation", True)
                     ),
                 }
+            if self._affect_valence is not None:
+                kwargs["affect_valence"] = float(self._affect_valence)
             self._companion_context = await self.memory_manager.get_companion_context(
                 current_message,
                 working_memory,
@@ -123,6 +129,10 @@ class GazerContextBuilder(ContextBuilder):
     def set_persona_enrichment(self, text: str) -> None:
         """Set live persona state (OCEAN traits, affect, motivation, trust) for prompt injection."""
         self._persona_enrichment = text.strip() if text else None
+
+    def set_affect_valence(self, valence: Optional[float]) -> None:
+        """Set the live emotional valence used to bias memory recall (Issue-05)."""
+        self._affect_valence = float(valence) if valence is not None else None
 
     def get_memory_context_stats(self) -> Dict[str, Any]:
         return dict(self._memory_context_stats)

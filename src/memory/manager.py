@@ -144,12 +144,20 @@ class MemoryManager:
         include_time_reminders: bool = True,
         include_emotion_context: bool = True,
         include_recent_observation: bool = True,
+        affect_valence: Optional[float] = None,
     ) -> str:
-        user_sentiment = (
-            self.emotions._today_data.avg_sentiment
-            if self.emotions._today_data
-            else 0.0
-        )
+        # Prefer the live, evolving affect from GazerPersonality when provided
+        # (mood-congruent recall, Issue-05); otherwise fall back to the
+        # day-average sentiment snapshot.
+        if affect_valence is not None:
+            try:
+                user_sentiment = max(-1.0, min(1.0, float(affect_valence)))
+            except (TypeError, ValueError):
+                user_sentiment = 0.0
+        else:
+            user_sentiment = (
+                self.emotions._today_data.avg_sentiment if self.emotions._today_data else 0.0
+            )
         recall_result = await self.recall.get_relevant_memories(
             current_message,
             user_sentiment,
@@ -271,7 +279,9 @@ class MemoryManager:
                     sender=str(item.get("sender", "")).strip(),
                     content=str(item.get("content", "")).strip(),
                     timestamp=ts,
-                    metadata=item.get("metadata", {}) if isinstance(item.get("metadata"), dict) else {},
+                    metadata=(
+                        item.get("metadata", {}) if isinstance(item.get("metadata"), dict) else {}
+                    ),
                 )
             )
         return WorkingMemory(memories=memories[-max(1, int(limit)) :])
