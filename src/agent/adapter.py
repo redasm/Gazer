@@ -903,14 +903,21 @@ class GazerAgent(MultiAgentMixin):
                 "chat_id": str(msg.chat_id or ""),
                 "sender_id": str(msg.sender_id or ""),
             }
-            await self.memory_manager.save_entry(
-                MemoryEntry(sender="user", content=user_content, metadata=metadata)
-            )
+            user_entry = MemoryEntry(sender="user", content=user_content, metadata=metadata)
+            await self.memory_manager.save_entry(user_entry)
             await self.memory_manager.save_entry(
                 MemoryEntry(sender="Gazer", content=assistant_text, metadata=metadata)
             )
             self._feed_personality_after_turn(msg, user_content, assistant_text)
-            await self._feed_affect_after_turn(msg, user_content, assistant_text)
+            # Reuse the emotion/sentiment save_entry already computed for the
+            # user message instead of running a second LLM analysis.
+            await self._feed_affect_after_turn(
+                msg,
+                user_content,
+                assistant_text,
+                emotion=getattr(user_entry, "emotion", None),
+                sentiment=getattr(user_entry, "sentiment", None),
+            )
             return True
         except Exception as e:
             logger.error("Failed to persist turn memory: %s", e)
@@ -955,34 +962,37 @@ class GazerAgent(MultiAgentMixin):
         msg: InboundMessage,
         user_content: str,
         assistant_text: str,
+        emotion: Optional[str] = None,
+        sentiment: Optional[float] = None,
     ) -> None:
         """Drive the live affect/emotion + Layer-1 feedback loop.
 
         This replaces the dead ``GazerPersonality.process()`` path: the
         emotional state and personality now actually evolve per turn.
+
+        ``emotion``/``sentiment`` are the values ``save_entry`` already
+        computed for the user message; forwarding them avoids a duplicate
+        LLM emotion analysis.
         """
         try:
-            await self.personality.observe_turn_affect(user_content, assistant_text)
+            await self.personality.observe_turn_affect(
+                user_content, assistant_text, emotion=emotion, sentiment=sentiment
+            )
         except Exception:
             logger.debug("Failed to feed affect after turn", exc_info=True)
 
     async def _hook_session_end(self, payload: Dict[str, Any]) -> None:
         """Periodically trigger Layer-2 personality distillation.
 
-        ``session:end`` fires after every turn; we only distill every
-        ``distill_every_turns`` turns and only when feedback has accumulated.
+        ``session:end`` fires after every turn; we distill once the
+        personality's monotonic turn counter reaches ``distill_every_turns``
+        and feedback has accumulated. The counter (not the capped session
+        history length) is the source of truth for cadence.
         """
         try:
             p = self.personality
-            if not getattr(p, "_evolution_enabled", False):
+            if not p.due_for_distillation():
                 return
-            if not p._session_feedback:
-                return
-            message_count = int(payload.get("message_count", 0) or 0)
-            every = int(getattr(p, "_distill_every_turns", 20) or 20)
-            if message_count <= 0 or message_count % every != 0:
-                return
-
             transcript = self._build_session_transcript(str(payload.get("session_key", "")))
             await p.on_session_end(transcript)
         except Exception:

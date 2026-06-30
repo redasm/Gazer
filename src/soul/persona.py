@@ -139,6 +139,11 @@ class GazerPersonality:
             constitution=self._constitution,
         )
         self._session_feedback: list = []  # collects FeedbackEvents during session
+        # Monotonic per-turn counter driving Layer-2 distillation cadence.
+        # Do NOT derive cadence from session-history length: that is capped
+        # (HISTORY_CACHE_LIMIT) and stops advancing, so a modulo on it would
+        # silently stop triggering distillation in long sessions.
+        self._turns_since_distill: int = 0
         # [/NEW Phase 1-3 Components]
 
         from soul.consolidation import NightlyConsolidator
@@ -683,7 +688,32 @@ class GazerPersonality:
 
         return AffectiveState(valence=valence, arousal=arousal, dominance=dominance), trigger_key
 
-    async def observe_turn_affect(self, user_text: str, reply_text: str) -> "AffectiveState":
+    def _affect_delta_from_emotion(
+        self, emotion: str, sentiment: float
+    ) -> tuple["AffectiveState", str]:
+        """Map a known ``(emotion, sentiment)`` pair into a VAD delta.
+
+        Pure (no LLM) — used to reuse the emotion analysis ``save_entry``
+        already performed, avoiding a duplicate LLM call per turn.
+        """
+        emotion = str(emotion or "neutral")
+        try:
+            sentiment_f = float(sentiment)
+        except (TypeError, ValueError):
+            sentiment_f = 0.0
+        valence = max(-1.0, min(1.0, sentiment_f))
+        arousal = self._EMOTION_AROUSAL.get(emotion, 0.0)
+        dominance = self._EMOTION_DOMINANCE.get(emotion, 0.0)
+        trigger_key = self._EMOTION_TRIGGER.get(emotion, "default")
+        return AffectiveState(valence=valence, arousal=arousal, dominance=dominance), trigger_key
+
+    async def observe_turn_affect(
+        self,
+        user_text: str,
+        reply_text: str,
+        emotion: Optional[str] = None,
+        sentiment: Optional[float] = None,
+    ) -> "AffectiveState":
         """Analyze a completed turn, register the emotional event, and return
         the resulting composite affect.
 
@@ -691,8 +721,22 @@ class GazerPersonality:
         makes the affect system actually evolve, replacing the dead
         ``process()`` path. It also drives Layer-1 feedback when the user's
         sentiment is strong enough.
+
+        Args:
+            user_text: The user's message.
+            reply_text: Gazer's reply.
+            emotion: Pre-computed emotion label (e.g. from ``save_entry``),
+                reused to avoid a second LLM emotion analysis on the same
+                text. When ``None`` the analyzer is invoked.
+            sentiment: Pre-computed sentiment score paired with *emotion*.
         """
-        affect_delta, trigger_key = await self._analyze_affect_delta(user_text, reply_text)
+        # Advance the distillation cadence counter once per observed turn.
+        self._turns_since_distill += 1
+
+        if emotion is not None and sentiment is not None:
+            affect_delta, trigger_key = self._affect_delta_from_emotion(emotion, sentiment)
+        else:
+            affect_delta, trigger_key = await self._analyze_affect_delta(user_text, reply_text)
         half_life = AffectiveStateManager.HALF_LIFE_MAP.get(
             trigger_key, AffectiveStateManager.HALF_LIFE_MAP["default"]
         )
@@ -715,6 +759,19 @@ class GazerPersonality:
         await self.affect_manager.flush_consolidations()
         return self.affect_manager.current_affect()
 
+    def due_for_distillation(self) -> bool:
+        """Whether enough turns have elapsed to run Layer-2 distillation.
+
+        Uses the monotonic per-turn counter (reset after each distillation),
+        not the capped session-history length.
+        """
+        if not self._evolution_enabled:
+            return False
+        if not self._session_feedback:
+            return False
+        every = max(1, int(getattr(self, "_distill_every_turns", 20) or 20))
+        return self._turns_since_distill >= every
+
     # ------------------------------------------------------------------
     # Session lifecycle (Fix #13)
     # ------------------------------------------------------------------
@@ -729,10 +786,13 @@ class GazerPersonality:
         if not self._evolution_enabled:
             logger.debug("Personality evolution disabled; skipping distillation.")
             self._session_feedback.clear()
+            self._turns_since_distill = 0
             return
 
         if not self._session_distiller.has_llm:
             logger.debug("SessionDistiller has no LLM; skipping distillation.")
+            self._session_feedback.clear()
+            self._turns_since_distill = 0
             return
 
         feedback = [
@@ -757,6 +817,7 @@ class GazerPersonality:
             logger.warning("Session distillation failed: %s", exc)
         finally:
             self._session_feedback.clear()
+            self._turns_since_distill = 0
 
     # ------------------------------------------------------------------
     # Layer-1 immediate feedback (per-turn)
