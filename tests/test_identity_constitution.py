@@ -74,11 +74,7 @@ class TestIdentityConstitution:
 
     @pytest.mark.asyncio
     async def test_soft_check_rejects(self) -> None:
-        llm = FakeDictLLM({
-            "pass": False,
-            "reason": "AI过度妥协",
-            "rule": "独立判断原则"
-        })
+        llm = FakeDictLLM({"pass": False, "reason": "AI过度妥协", "rule": "独立判断原则"})
         constitution = IdentityConstitution(llm_client=llm)
 
         before = PersonalityVector(agreeableness=0.5)
@@ -100,4 +96,28 @@ class TestIdentityConstitution:
 
         result = await constitution.validate(before, after)
         # Must pass (fallback) if LLM crashes
+        assert result.passed
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_fail_closed_rejects(self) -> None:
+        llm = FailingLLM()
+        constitution = IdentityConstitution(llm_client=llm, fail_closed=True)
+
+        before = PersonalityVector(agreeableness=0.5)
+        after = PersonalityVector(agreeableness=0.6)  # Within hard bounds
+
+        result = await constitution.validate(before, after)
+        # fail_closed=True rejects when the soft check crashes.
+        assert not result.passed
+        assert result.violated_rule == "边界完整原则"
+
+    @pytest.mark.asyncio
+    async def test_soft_check_skipped_without_llm(self) -> None:
+        # No LLM client → soft check is silently skipped, only hard bounds apply.
+        constitution = IdentityConstitution(llm_client=None, enable_soft_check=True)
+
+        before = PersonalityVector(agreeableness=0.5)
+        after = PersonalityVector(agreeableness=0.6)
+
+        result = await constitution.validate(before, after)
         assert result.passed

@@ -103,16 +103,28 @@ class AffectiveStateManager:
     def current_affect(self) -> AffectiveState:
         """Compute current composite emotional state.
 
-        Starts from the baseline and drifts toward each active event's
-        direction, weighted by its remaining intensity.
+        Starts from the baseline and drifts toward the intensity-weighted
+        average of all active event directions in a single transition. This
+        makes the result **order-independent**: the same set of events yields
+        the same affect regardless of the order they were added.
         """
         now = time.time()
-        affect = self._baseline
-        for event in self._events:
-            intensity = event.current_intensity(now)
-            if intensity > 0.01:
-                affect = affect.transition_toward(event.affect_delta, intensity)
-        return affect
+        active = [(e, e.current_intensity(now)) for e in self._events]
+        active = [(e, i) for (e, i) in active if i > 0.01]
+        if not active:
+            return self._baseline
+
+        total = sum(i for (_, i) in active)
+        # Intensity-weighted average target direction.
+        target = AffectiveState(
+            valence=sum(e.affect_delta.valence * i for (e, i) in active) / total,
+            arousal=sum(e.affect_delta.arousal * i for (e, i) in active) / total,
+            dominance=sum(e.affect_delta.dominance * i for (e, i) in active) / total,
+        )
+        # Aggregate pull strength saturates at 1.0 so many faint events do
+        # not overshoot a single strong one.
+        aggregate_intensity = min(1.0, total)
+        return self._baseline.transition_toward(target, aggregate_intensity)
 
     def get_history(self, n: int = 10) -> list[AffectiveState]:
         """Return the affect directions from the most recent *n* events.
@@ -136,24 +148,31 @@ class AffectiveStateManager:
         keeps the synchronous ``add_event()`` path free of async calls.
         """
         now = time.time()
-        expired = [e for e in self._events if e.current_intensity(now) <= threshold]
-        active = [e for e in self._events if e.current_intensity(now) > threshold]
+        expired: list[EmotionalEvent] = []
+        active: list[EmotionalEvent] = []
+        for e in self._events:
+            if e.current_intensity(now) <= threshold:
+                expired.append(e)
+            else:
+                active.append(e)
 
         if expired and self._memory_port is not None:
-            self._pending_consolidations.append({
-                "type": "emotional_consolidation",
-                "timestamp": now,
-                "events": [
-                    {
-                        "trigger": e.trigger,
-                        "valence": e.affect_delta.valence,
-                        "arousal": e.affect_delta.arousal,
-                        "dominance": e.affect_delta.dominance,
-                        "half_life": e.half_life_seconds,
-                    }
-                    for e in expired
-                ],
-            })
+            self._pending_consolidations.append(
+                {
+                    "type": "emotional_consolidation",
+                    "timestamp": now,
+                    "events": [
+                        {
+                            "trigger": e.trigger,
+                            "valence": e.affect_delta.valence,
+                            "arousal": e.affect_delta.arousal,
+                            "dominance": e.affect_delta.dominance,
+                            "half_life": e.half_life_seconds,
+                        }
+                        for e in expired
+                    ],
+                }
+            )
 
         self._events = active
 

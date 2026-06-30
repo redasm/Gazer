@@ -1,4 +1,3 @@
-
 import asyncio
 import json
 import logging
@@ -38,23 +37,39 @@ logger = logging.getLogger("GazerAdapter")
 PROCESS_MESSAGE_TIMEOUT = 60.0
 FAST_BRAIN_MAX_LENGTH = 50  # Messages shorter than this may use fast_brain
 FAST_BRAIN_PATTERNS = {
-    "hi", "hello", "hey", "你好", "嗨", "在吗", "在不",
-    "thanks", "thank you", "谢谢", "ok", "good", "好的",
-    "bye", "再见", "晚安", "早安", "gn", "gm",
+    "hi",
+    "hello",
+    "hey",
+    "你好",
+    "嗨",
+    "在吗",
+    "在不",
+    "thanks",
+    "thank you",
+    "谢谢",
+    "ok",
+    "good",
+    "好的",
+    "bye",
+    "再见",
+    "晚安",
+    "早安",
+    "gn",
+    "gm",
 }
 MEMORY_TURN_HEALTH_REPORT = Path("data/reports/memory_turn_health.jsonl")
 TOOL_PERSIST_REPORT = Path("data/reports/tool_result_persistence.jsonl")
 
 
-
 class GazerAgent(MultiAgentMixin):
     """Gazer's core agent -- orchestrates LLM calls, tools, and message routing."""
+
     def __init__(self, workspace: Path, memory_manager: MemoryManager):
         self.workspace = workspace
         self.memory_manager = memory_manager
         self.bus = MessageBus()
         self.turn_hooks = TurnHookManager()
-        
+
         # Resolve provider credentials from ModelRegistry (slow_brain = reasoning)
         self.router: Optional[RouterProvider] = None
         self._router_fallback_provider: Optional[LLMProvider] = None
@@ -65,15 +80,19 @@ class GazerAgent(MultiAgentMixin):
         self._fast_provider: Optional[LiteLLMProvider] = None
         self._fast_model: Optional[str] = None
         self._init_fast_brain()
-        
+
         # Initialize Context
         self.context_builder = GazerContextBuilder(workspace, memory_manager)
         if isinstance(self.provider, LiteLLMProvider):
-            context_window = self.provider.get_model_context_window(self.provider.get_default_model())
+            context_window = self.provider.get_model_context_window(
+                self.provider.get_default_model()
+            )
             if context_window and context_window > 0:
                 self.context_builder.pruner.max_tokens = context_window
-                logger.info("Context pruner max_tokens set from model contextWindow=%s", context_window)
-        
+                logger.info(
+                    "Context pruner max_tokens set from model contextWindow=%s", context_window
+                )
+
         # Initialize Loop (pass fast_brain for quick response routing)
         self.loop = AgentLoop(
             bus=self.bus,
@@ -94,7 +113,7 @@ class GazerAgent(MultiAgentMixin):
             usage_tracker=self.loop.usage,
         )
         self._register_turn_hooks()
-        
+
         # Dispatch task will be started in start()
         self._dispatch_task = None
         self._multi_agent_worker_budget: _MultiAgentWorkerBudget | None = None
@@ -110,6 +129,7 @@ class GazerAgent(MultiAgentMixin):
         self.turn_hooks.on_before_prompt_build(self._hook_before_prompt_build)
         self.turn_hooks.on_after_tool_result(self._hook_after_tool_result)
         self.turn_hooks.on_after_turn(self._hook_after_turn)
+        self.turn_hooks.on_session_end(self._hook_session_end)
 
     async def _hook_before_prompt_build(self, payload: Dict[str, Any]) -> None:
         logger.debug(
@@ -124,10 +144,10 @@ class GazerAgent(MultiAgentMixin):
         try:
             parts = []
 
-            # OCEAN personality traits
-            parts.append(self.personality.personality.to_prompt())
+            # OCEAN personality rendered as behavioral guidance (not raw numbers)
+            parts.append(self.personality.personality.to_behavioral_prompt())
 
-            # Current affective state
+            # Current affective state (now genuinely evolves via observe_turn_affect)
             affect = self.personality.affect_manager.current_affect()
             parts.append(
                 f"当前情绪：{affect.to_label()}"
@@ -136,6 +156,11 @@ class GazerAgent(MultiAgentMixin):
 
             # Mental state
             parts.append(f"认知状态：{self.personality.current_state.description}")
+
+            # Proactive inference hints (rule-based; no extra LLM latency)
+            proactive_hint = self._build_proactive_hint(affect)
+            if proactive_hint:
+                parts.append(proactive_hint)
 
             # Drives & goals
             motivation = self.personality._build_motivation_context()
@@ -153,9 +178,41 @@ class GazerAgent(MultiAgentMixin):
         except Exception:
             logger.debug("Failed to inject persona enrichment", exc_info=True)
 
+    def _build_proactive_hint(self, affect: Any) -> str:
+        """Run rule-based proactive inference over current affect + history.
+
+        Returns a single newline-joined hint block, or "" when no signal
+        clears the confidence threshold.
+        """
+        try:
+            from soul.memory.working_context import WorkingContext
+
+            engine = self.personality.proactive_engine
+            history = self.personality.affect_manager.get_history()
+            ctx = WorkingContext(
+                affect=affect,
+                turn_count=self.personality.get_goal_progress().get("turns", 0),
+            )
+            signals = engine._rule_based_infer(ctx, history)
+            filtered = [s for s in signals if s.confidence >= engine._confidence_threshold]
+            if not filtered:
+                return ""
+            lines = [
+                f"- [{s.signal_type.value} {s.confidence:.0%}] {s.suggested_response_hint}"
+                for s in filtered
+            ]
+            return "主动观察：\n" + "\n".join(lines)
+        except Exception:
+            logger.debug("Proactive inference failed", exc_info=True)
+            return ""
+
     async def _hook_after_tool_result(self, payload: Dict[str, Any]) -> None:
         tool_name = str(payload.get("tool_name", "") or "").strip()
-        result_payload = payload.get("result_payload", {}) if isinstance(payload.get("result_payload"), dict) else {}
+        result_payload = (
+            payload.get("result_payload", {})
+            if isinstance(payload.get("result_payload"), dict)
+            else {}
+        )
         raw_result = str(payload.get("tool_result", "") or "")
         should_persist, reason = self._should_persist_tool_result(
             tool_name=tool_name,
@@ -302,7 +359,10 @@ class GazerAgent(MultiAgentMixin):
             return False, "deny_tools"
         if policy["mode"] == "allowlist" and tool not in policy["allow"]:
             return False, "not_in_allowlist"
-        if not policy["persist_on_error"] and str(result_payload.get("status", "")).strip().lower() == "error":
+        if (
+            not policy["persist_on_error"]
+            and str(result_payload.get("status", "")).strip().lower() == "error"
+        ):
             return False, "status_error"
         text = str(raw_result or "").strip()
         if len(text) < int(policy["min_result_chars"]):
@@ -383,7 +443,9 @@ class GazerAgent(MultiAgentMixin):
         raw_strict_api_mode = provider_cfg.get("strict_api_mode")
         if raw_strict_api_mode is None:
             raw_strict_api_mode = provider_cfg.get("strictApiMode")
-        strict_api_mode = bool(raw_strict_api_mode) if isinstance(raw_strict_api_mode, bool) else True
+        strict_api_mode = (
+            bool(raw_strict_api_mode) if isinstance(raw_strict_api_mode, bool) else True
+        )
         raw_reasoning_param = provider_cfg.get("reasoning_param")
         if raw_reasoning_param is None:
             raw_reasoning_param = provider_cfg.get("reasoningParam")
@@ -436,7 +498,9 @@ class GazerAgent(MultiAgentMixin):
             refs.append(primary_ref)
         fallbacks_raw = model_cfg.get("fallbacks", [])
         if isinstance(fallbacks_raw, list):
-            refs.extend(str(item or "").strip() for item in fallbacks_raw if str(item or "").strip())
+            refs.extend(
+                str(item or "").strip() for item in fallbacks_raw if str(item or "").strip()
+            )
 
         for ref in refs:
             if "/" in ref:
@@ -521,7 +585,9 @@ class GazerAgent(MultiAgentMixin):
                     merged_outlier = dict(router_cfg.get("outlier_ejection", {}) or {})
                     merged_outlier.update(tpl.get("outlier_ejection", {}))
                     router_cfg = dict(router_cfg)
-                    router_cfg["strategy"] = tpl.get("strategy", router_cfg.get("strategy", "priority"))
+                    router_cfg["strategy"] = tpl.get(
+                        "strategy", router_cfg.get("strategy", "priority")
+                    )
                     router_cfg["budget"] = merged_budget
                     router_cfg["outlier_ejection"] = merged_outlier
                     logger.info("Applied router strategy template: %s", template_name)
@@ -545,12 +611,18 @@ class GazerAgent(MultiAgentMixin):
             registry = get_provider_registry()
 
             if isinstance(target_candidates, list) and target_candidates:
-                target_map = registry.list_deployment_targets() if hasattr(registry, "list_deployment_targets") else {}
+                target_map = (
+                    registry.list_deployment_targets()
+                    if hasattr(registry, "list_deployment_targets")
+                    else {}
+                )
                 for raw_target_id in target_candidates:
                     target_id = str(raw_target_id).strip()
                     if not target_id:
                         continue
-                    target_cfg = target_map.get(target_id, {}) if isinstance(target_map, dict) else {}
+                    target_cfg = (
+                        target_map.get(target_id, {}) if isinstance(target_map, dict) else {}
+                    )
                     if not isinstance(target_cfg, dict):
                         continue
                     provider_name = str(target_cfg.get("provider", "")).strip()
@@ -610,7 +682,11 @@ class GazerAgent(MultiAgentMixin):
                     provider = self._build_litellm_provider(pname)
                     if provider is None:
                         continue
-                    profile = deployment_profiles.get(pname, {}) if isinstance(deployment_profiles, dict) else {}
+                    profile = (
+                        deployment_profiles.get(pname, {})
+                        if isinstance(deployment_profiles, dict)
+                        else {}
+                    )
                     routes.append(
                         ProviderRoute(
                             name=pname,
@@ -620,13 +696,17 @@ class GazerAgent(MultiAgentMixin):
                             default_model=provider.get_default_model(),
                             capacity_rpm=int(profile.get("capacity_rpm", 120) or 120),
                             cost_tier=str(profile.get("cost_tier", "medium")),
-                            latency_target_ms=float(profile.get("latency_target_ms", 2000.0) or 2000.0),
+                            latency_target_ms=float(
+                                profile.get("latency_target_ms", 2000.0) or 2000.0
+                            ),
                             traffic_weight=float(profile.get("traffic_weight", 1.0) or 1.0),
                         )
                     )
             if routes:
                 budget_cfg = router_cfg.get("budget", {}) if isinstance(router_cfg, dict) else {}
-                outlier_cfg = router_cfg.get("outlier_ejection", {}) if isinstance(router_cfg, dict) else {}
+                outlier_cfg = (
+                    router_cfg.get("outlier_ejection", {}) if isinstance(router_cfg, dict) else {}
+                )
                 complexity_cfg = (
                     router_cfg.get("complexity_routing", {}) if isinstance(router_cfg, dict) else {}
                 )
@@ -659,13 +739,19 @@ class GazerAgent(MultiAgentMixin):
                 if provider is not None:
                     self._fast_provider = provider
                     self._fast_model = provider.get_default_model()
-                    logger.info("Fast brain initialized: provider=%s model=%s", provider_name, self._fast_model)
+                    logger.info(
+                        "Fast brain initialized: provider=%s model=%s",
+                        provider_name,
+                        self._fast_model,
+                    )
                     return
 
             fb_key, fb_base, fb_model, _fb_headers = ModelRegistry.resolve_model("fast_brain")
             if fb_key and fb_model:
                 self._fast_provider = LiteLLMProvider(
-                    api_key=fb_key, api_base=fb_base, default_model=fb_model,
+                    api_key=fb_key,
+                    api_base=fb_base,
+                    default_model=fb_model,
                 )
                 self._fast_model = fb_model
                 logger.info("Fast brain initialized: %s", fb_model)
@@ -683,14 +769,14 @@ class GazerAgent(MultiAgentMixin):
         """Start the agent loop in background."""
         self._dispatch_task = asyncio.create_task(self.bus.dispatch_outbound())
         await self.loop.run()
-        
+
     def stop(self) -> None:
         """Stop the agent loop."""
         self.loop.stop()
         self.bus.stop()
         if self._dispatch_task:
             self._dispatch_task.cancel()
-        
+
     async def process_message(self, content: str, sender: str = "User") -> str:
         """
         Primary entry point for Gazer's Brain to send a message to the agent.
@@ -698,19 +784,14 @@ class GazerAgent(MultiAgentMixin):
         """
         # Use a consistent chat_id for the main session
         chat_id = "main"
-        
-        msg = InboundMessage(
-            channel="gazer",
-            chat_id=chat_id,
-            sender_id=sender,
-            content=content
-        )
-        
+
+        msg = InboundMessage(channel="gazer", chat_id=chat_id, sender_id=sender, content=content)
+
         # Create future for response
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._response_futures[chat_id] = future
-        
+
         try:
             await self.bus.publish_inbound(msg)
             # Wait for response with timeout
@@ -735,13 +816,15 @@ class GazerAgent(MultiAgentMixin):
         """
         # Build messages the same way the loop does
         session_key = f"gazer:main"
-        if hasattr(self.context_builder, 'prepare_memory_context'):
+        if hasattr(self.context_builder, "prepare_memory_context"):
             await self.context_builder.prepare_memory_context(content)
 
         history = self.loop._get_history(session_key)
         messages = self.loop.context.build_messages(
-            history=history, current_message=content,
-            channel="gazer", chat_id="main",
+            history=history,
+            current_message=content,
+            channel="gazer",
+            chat_id="main",
         )
 
         # Run the tool-call iterations (non-streaming)
@@ -758,9 +841,13 @@ class GazerAgent(MultiAgentMixin):
             )
             if response.has_tool_calls:
                 import json as _json
+
                 tool_call_dicts = [
-                    {"id": tc.id, "type": "function",
-                     "function": {"name": tc.name, "arguments": _json.dumps(tc.arguments)}}
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": _json.dumps(tc.arguments)},
+                    }
                     for tc in response.tool_calls
                 ]
                 messages = self.loop.context.add_assistant_message(
@@ -773,9 +860,7 @@ class GazerAgent(MultiAgentMixin):
                         sender_id=sender,
                         channel="gazer",
                     )
-                    messages = self.loop.context.add_tool_result(
-                        messages, tc.id, tc.name, result
-                    )
+                    messages = self.loop.context.add_tool_result(messages, tc.id, tc.name, result)
                 continue
             else:
                 # Final turn — stream it
@@ -799,9 +884,7 @@ class GazerAgent(MultiAgentMixin):
     async def _save_to_memory(self, user_content: str, assistant_content: str, sender: str) -> None:
         """Persist user + assistant messages to long-term memory."""
         try:
-            await self.memory_manager.save_entry(
-                MemoryEntry(sender=sender, content=user_content)
-            )
+            await self.memory_manager.save_entry(MemoryEntry(sender=sender, content=user_content))
             await self.memory_manager.save_entry(
                 MemoryEntry(sender="Gazer", content=assistant_content)
             )
@@ -827,13 +910,17 @@ class GazerAgent(MultiAgentMixin):
                 MemoryEntry(sender="Gazer", content=assistant_text, metadata=metadata)
             )
             self._feed_personality_after_turn(msg, user_content, assistant_text)
+            await self._feed_affect_after_turn(msg, user_content, assistant_text)
             return True
         except Exception as e:
             logger.error("Failed to persist turn memory: %s", e)
             return False
 
     def _feed_personality_after_turn(
-        self, msg: InboundMessage, user_content: str, assistant_text: str,
+        self,
+        msg: InboundMessage,
+        user_content: str,
+        assistant_text: str,
     ) -> None:
         """Feed turn results back into GazerPersonality state machine."""
         try:
@@ -850,10 +937,12 @@ class GazerAgent(MultiAgentMixin):
             sender_id = str(msg.sender_id or "").strip()
             if sender_id:
                 from security.owner import get_owner_manager
+
                 is_owner = False
                 try:
                     is_owner = get_owner_manager().is_owner_sender(
-                        str(msg.channel or ""), sender_id,
+                        str(msg.channel or ""),
+                        sender_id,
                     )
                 except Exception:
                     pass
@@ -861,8 +950,61 @@ class GazerAgent(MultiAgentMixin):
         except Exception:
             logger.debug("Failed to feed personality after turn", exc_info=True)
 
+    async def _feed_affect_after_turn(
+        self,
+        msg: InboundMessage,
+        user_content: str,
+        assistant_text: str,
+    ) -> None:
+        """Drive the live affect/emotion + Layer-1 feedback loop.
 
+        This replaces the dead ``GazerPersonality.process()`` path: the
+        emotional state and personality now actually evolve per turn.
+        """
+        try:
+            await self.personality.observe_turn_affect(user_content, assistant_text)
+        except Exception:
+            logger.debug("Failed to feed affect after turn", exc_info=True)
 
+    async def _hook_session_end(self, payload: Dict[str, Any]) -> None:
+        """Periodically trigger Layer-2 personality distillation.
+
+        ``session:end`` fires after every turn; we only distill every
+        ``distill_every_turns`` turns and only when feedback has accumulated.
+        """
+        try:
+            p = self.personality
+            if not getattr(p, "_evolution_enabled", False):
+                return
+            if not p._session_feedback:
+                return
+            message_count = int(payload.get("message_count", 0) or 0)
+            every = int(getattr(p, "_distill_every_turns", 20) or 20)
+            if message_count <= 0 or message_count % every != 0:
+                return
+
+            transcript = self._build_session_transcript(str(payload.get("session_key", "")))
+            await p.on_session_end(transcript)
+        except Exception:
+            logger.debug("Failed to run session-end distillation", exc_info=True)
+
+    def _build_session_transcript(self, session_key: str) -> List[Dict[str, Any]]:
+        """Assemble a {user, assistant} transcript from session history."""
+        try:
+            history = self.loop._get_history(session_key)
+        except Exception:
+            return []
+        transcript: List[Dict[str, Any]] = []
+        pending_user: Optional[str] = None
+        for item in history:
+            role = str(item.get("role", "")).strip().lower()
+            content = str(item.get("content", "") or "")
+            if role == "user":
+                pending_user = content
+            elif role == "assistant" and pending_user is not None:
+                transcript.append({"user": pending_user, "assistant": content})
+                pending_user = None
+        return transcript
 
     def set_skill_loader(self, loader: SkillLoader) -> None:
         """Attach a SkillLoader so its metadata is injected into the system prompt."""
