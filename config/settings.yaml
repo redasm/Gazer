@@ -92,6 +92,9 @@ personality:
     constitution:
       enable_soft_check: true
       fail_closed: false
+  proactive:
+    llm_enabled: false
+    confidence_threshold: 0.6
   mental_process:
     initial_state: IDLE
     states:
@@ -370,6 +373,9 @@ web:
         - wikipedia
         - bing_rss
 memory:
+  consolidation:
+    enabled: true
+    at_hour: 4
   context_backend:
     enabled: false
     mode: openviking

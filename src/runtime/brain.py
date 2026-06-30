@@ -35,6 +35,7 @@ logging.basicConfig(
 
 # Install log sanitizer to prevent sensitive data leakage
 from runtime.log_sanitizer import install_log_sanitizer
+
 install_log_sanitizer(also_on_root=True)
 
 logger = logging.getLogger("GazerBrain")
@@ -56,6 +57,7 @@ class GazerBrain:
         self.spatial = None
         if config.get("perception.spatial_enabled", False):
             from perception.spatial import get_spatial
+
             self.spatial = get_spatial()
 
         self.ui_queue = ui_queue
@@ -75,7 +77,9 @@ class GazerBrain:
         self.app_context.personality = self.agent.personality
 
         self.canvas_state = init_canvas(
-            config, self.app_context, self._get_canvas_on_change(),
+            config,
+            self.app_context,
+            self._get_canvas_on_change(),
         )
         self._email_client = init_email_client(config)
 
@@ -87,16 +91,26 @@ class GazerBrain:
             default_target=config.get("devices.default_target", "local-desktop"),
         )
         self._rust_sidecar_client = init_devices(
-            config, self.device_registry, self.capture_manager,
-            self.body, self.spatial,
-            self.audio, self.ui_queue, self._rust_sidecar_client,
+            config,
+            self.device_registry,
+            self.capture_manager,
+            self.body,
+            self.spatial,
+            self.audio,
+            self.ui_queue,
+            self._rust_sidecar_client,
         )
 
         self.channels: List[Any] = init_channels(
-            config, self.agent.bus, self.ui_queue, self.app_context,
+            config,
+            self.agent.bus,
+            self.ui_queue,
+            self.app_context,
         )
         self._gmail_push_manager = init_gmail_push(
-            config, self.agent.bus, self.app_context,
+            config,
+            self.agent.bus,
+            self.app_context,
         )
 
         self.cron_scheduler = None
@@ -104,10 +118,12 @@ class GazerBrain:
         self._agent_task = None
         self._cron_task = None
         self._heartbeat_task = None
+        self._consolidation_task = None
 
     @staticmethod
     def _get_canvas_on_change():
         from tools.admin_api import _canvas_on_change
+
         return _canvas_on_change
 
     def _sync_soul_single_source(self, workspace_path: Path) -> None:
@@ -182,15 +198,19 @@ class GazerBrain:
         """Callback for the cron scheduler — runs a job as an agent turn."""
         try:
             result = await self.agent.process_auto(
-                content=job.message, sender="cron",
+                content=job.message,
+                sender="cron",
             )
             if job.delivery_channel and job.delivery_chat_id:
                 from bus.events import OutboundMessage
-                await self.agent.bus.publish_outbound(OutboundMessage(
-                    channel=job.delivery_channel,
-                    chat_id=job.delivery_chat_id,
-                    content=f"[Cron: {job.name}]\n{result}",
-                ))
+
+                await self.agent.bus.publish_outbound(
+                    OutboundMessage(
+                        channel=job.delivery_channel,
+                        chat_id=job.delivery_chat_id,
+                        content=f"[Cron: {job.name}]\n{result}",
+                    )
+                )
             return result
         except Exception as exc:
             logger.error("Cron job %s execution error: %s", job.id, exc)
@@ -229,6 +249,7 @@ class GazerBrain:
 
         self._start_cron_task()
         self._start_heartbeat_task()
+        self._start_consolidation_task()
 
         channel_tasks = self._start_channel_tasks()
 
@@ -253,6 +274,7 @@ class GazerBrain:
         if not config.get("scheduler.heartbeat_enabled", True):
             return
         from scheduler.heartbeat import HeartbeatRunner
+
         workspace_path = resolve_runtime_root(config)
         self.heartbeat_runner = HeartbeatRunner(
             workspace=workspace_path,
@@ -261,6 +283,47 @@ class GazerBrain:
         )
         self._heartbeat_task = asyncio.create_task(self.heartbeat_runner.start())
         logger.info("HeartbeatRunner started.")
+
+    def _start_consolidation_task(self) -> None:
+        """Start the daily memory-consolidation loop (NightlyConsolidator).
+
+        Runs ``GazerPersonality.consolidator.run_nightly()`` once per day at
+        ``memory.consolidation.at_hour`` (local). This drives identity
+        extraction, story extraction, and relationship consolidation — the
+        long-term memory maintenance that otherwise never runs in the live
+        path. Disabled via ``memory.consolidation.enabled: false``.
+        """
+        if not config.get("memory.consolidation.enabled", True):
+            logger.info("Daily memory consolidation disabled by config.")
+            return
+        self._consolidation_task = asyncio.create_task(self._run_consolidation_loop())
+        logger.info("Daily memory consolidation loop started.")
+
+    async def _run_consolidation_loop(self) -> None:
+        """Sleep until the configured hour each day, then consolidate."""
+        import datetime
+
+        last_run_date: Optional[datetime.date] = None
+        while self.is_running:
+            try:
+                at_hour = int(config.get("memory.consolidation.at_hour", 4) or 4)
+                at_hour = max(0, min(23, at_hour))
+                now = datetime.datetime.now()
+                if now.hour == at_hour and last_run_date != now.date():
+                    consolidator = getattr(
+                        getattr(self.agent, "personality", None), "consolidator", None
+                    )
+                    if consolidator is not None:
+                        logger.info("Running daily memory consolidation...")
+                        await consolidator.run_nightly()
+                    last_run_date = now.date()
+                # Check a few times per hour so we catch the target hour.
+                await asyncio.sleep(600)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error("Daily consolidation loop error: %s", exc, exc_info=True)
+                await asyncio.sleep(600)
 
     def _start_channel_tasks(self) -> list[asyncio.Task]:
         tasks: list[asyncio.Task] = []
@@ -319,6 +382,7 @@ class GazerBrain:
                         asr_meta = {}
                 if text and keyword.lower() in text.lower():
                     from bus.events import InboundMessage
+
                     metadata = {"source": "wake_word"}
                     if asr_meta:
                         metadata["asr"] = asr_meta
@@ -377,7 +441,11 @@ class GazerBrain:
             self.agent.stop()
         if self._agent_task:
             self._agent_task.cancel()
-        for task in (self._cron_task, self._heartbeat_task):
+        for task in (
+            self._cron_task,
+            self._heartbeat_task,
+            getattr(self, "_consolidation_task", None),
+        ):
             if task:
                 task.cancel()
         logger.info("Gazer Brain stopped.")
