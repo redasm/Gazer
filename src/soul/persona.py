@@ -30,8 +30,6 @@ logger = logging.getLogger("GazerSoul")
 _CONSOLIDATION_THRESHOLD = 20
 
 
-
-
 class GazerPersonality:
     """Gazer's core personality (cognitive state machine).
 
@@ -79,8 +77,10 @@ class GazerPersonality:
         from soul.cognitive.proactive_inference_engine import ProactiveInferenceEngine
         from soul.cognitive.context_budget_manager import ContextBudgetManager
 
-        # 1. PersonalityVector first — it drives the emotional baseline
-        self.personality = PersonalityVector()
+        # 1. PersonalityVector first — it drives the emotional baseline.
+        #    Load any persisted personality so traits survive restarts.
+        self._personality_path = self._resolve_personality_path()
+        self.personality = self._load_personality()
 
         # 2. MemoryPort (with emotion-aware decorator)
         raw_port = OpenVikingMemoryPort(self.memory_manager.backend)
@@ -99,12 +99,42 @@ class GazerPersonality:
         # 4. SessionDistiller + IdentityConstitution (Issue-06 Layer-2 + Issue-11)
         from soul.personality.identity_constitution import IdentityConstitution
         from soul.personality.evolution_service import SessionDistiller
+        from soul.llm_adapter import LLMProviderStructuredAdapter
+
+        evo_cfg = config.get("personality.evolution", {}) or {}
+        if not isinstance(evo_cfg, dict):
+            evo_cfg = {}
+        self._evolution_enabled = bool(evo_cfg.get("enabled", True))
+        try:
+            self._distill_every_turns = max(1, int(evo_cfg.get("distill_every_turns", 20) or 20))
+        except (TypeError, ValueError):
+            self._distill_every_turns = 20
+        try:
+            self._feedback_sentiment_threshold = float(
+                evo_cfg.get("feedback_sentiment_threshold", 0.5)
+            )
+        except (TypeError, ValueError):
+            self._feedback_sentiment_threshold = 0.5
+        const_cfg = (
+            evo_cfg.get("constitution", {}) if isinstance(evo_cfg.get("constitution"), dict) else {}
+        )
+        enable_soft_check = bool(const_cfg.get("enable_soft_check", True))
+        fail_closed = bool(const_cfg.get("fail_closed", False))
+
+        # Provider-backed structured LLM client (reuses the routed provider).
+        structured_llm = (
+            LLMProviderStructuredAdapter(llm_provider, model_name)
+            if llm_provider is not None
+            else None
+        )
 
         self._constitution = IdentityConstitution(
-            llm_client=None, enable_soft_check=False  # hard bounds only for now
+            llm_client=structured_llm,
+            enable_soft_check=enable_soft_check and structured_llm is not None,
+            fail_closed=fail_closed,
         )
         self._session_distiller = SessionDistiller(
-            llm_client=None,  # wired later when LLM is resolved
+            llm_client=structured_llm,  # may be replaced by legacy step below
             memory_port=self.memory_port,
             constitution=self._constitution,
         )
@@ -112,6 +142,7 @@ class GazerPersonality:
         # [/NEW Phase 1-3 Components]
 
         from soul.consolidation import NightlyConsolidator
+
         self.consolidator = NightlyConsolidator(
             self.memory_manager,
             self.memory_manager.relationships,
@@ -120,6 +151,7 @@ class GazerPersonality:
         )
 
         from soul.models import ModelRegistry
+
         api_key, base_url, model_name, headers = ModelRegistry.resolve_model("slow_brain")
 
         # Prefer the injected LLMProvider (handles openai-responses, litellm, etc.)
@@ -140,20 +172,82 @@ class GazerPersonality:
                 default_headers=headers,
             )
 
-        # Wire LLM client into SessionDistiller
+        # Wire LLM client into SessionDistiller (legacy fallback path only —
+        # the provider-backed adapter is already injected above when a
+        # provider is available).
         if self.legacy_cognitive_step is not None:
-            self._session_distiller.set_llm_client(AsyncOpenAIAdapter(self.legacy_cognitive_step.client, model_name))
+            legacy_llm = AsyncOpenAIAdapter(self.legacy_cognitive_step.client, model_name)
+            self._session_distiller.set_llm_client(legacy_llm)
+            self._constitution._llm = legacy_llm
+            if self._constitution._enable_soft is False and const_cfg.get(
+                "enable_soft_check", True
+            ):
+                self._constitution._enable_soft = True
 
         self.system_prompt: str = config.get(
             "personality.system_prompt", "You are Gazer, an AI companion."
         )
 
     @staticmethod
+    def _resolve_personality_path() -> str:
+        """Resolve the on-disk path for persisted personality state.
+
+        Stored alongside ``trust.json`` under the memory data dir so all
+        relational/identity state lives together.
+        """
+        import os
+
+        base_dir = str(
+            config.get("memory.context_backend.data_dir", "data/openviking") or "data/openviking"
+        )
+        return os.path.join(base_dir, "personality.json")
+
+    def _load_personality(self) -> "PersonalityVector":
+        """Load persisted personality from disk, falling back to defaults."""
+        import os
+        from soul.personality.personality_vector import PersonalityVector
+
+        path = self._personality_path
+        if not path or not os.path.exists(path):
+            return PersonalityVector()
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            personality = PersonalityVector.from_dict(data)
+            logger.info("Loaded persisted personality from %s", path)
+            return personality
+        except (json.JSONDecodeError, OSError, TypeError) as exc:
+            logger.warning("Failed to load personality (%s); using defaults: %s", path, exc)
+            return PersonalityVector()
+
+    def _save_personality(self) -> None:
+        """Persist the current personality vector to disk (best-effort)."""
+        import os
+
+        path = self._personality_path
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(self.personality.to_dict(), fh, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            logger.warning("Failed to persist personality to %s: %s", path, exc)
+
+    @staticmethod
     def _resolve_drives_and_goals() -> tuple[list[str], list[str]]:
         drives_raw = config.get("personality.drives", []) or []
         goals_raw = config.get("personality.goals", []) or []
-        drives = [str(item).strip() for item in drives_raw if str(item).strip()] if isinstance(drives_raw, list) else []
-        goals = [str(item).strip() for item in goals_raw if str(item).strip()] if isinstance(goals_raw, list) else []
+        drives = (
+            [str(item).strip() for item in drives_raw if str(item).strip()]
+            if isinstance(drives_raw, list)
+            else []
+        )
+        goals = (
+            [str(item).strip() for item in goals_raw if str(item).strip()]
+            if isinstance(goals_raw, list)
+            else []
+        )
         return drives, goals
 
     def _build_motivation_context(self) -> str:
@@ -268,9 +362,7 @@ class GazerPersonality:
             transitions = {"IDLE": "INTERACTING", "THINKING": "INTERACTING"}
         return states, initial_state_name, transitions
 
-    async def _run_llm(
-        self, prompt: str, system_prompt: str, tools: list = None
-    ) -> MemoryEntry:
+    async def _run_llm(self, prompt: str, system_prompt: str, tools: list = None) -> MemoryEntry:
         """Run LLM via injected provider or legacy cognitive step."""
         if self._llm_provider is not None:
             messages = [
@@ -295,8 +387,7 @@ class GazerPersonality:
             if resp.tool_calls:
                 metadata = {
                     "tool_calls": [
-                        {"name": tc.name, "args": tc.arguments}
-                        for tc in resp.tool_calls
+                        {"name": tc.name, "args": tc.arguments} for tc in resp.tool_calls
                     ]
                 }
             return MemoryEntry(
@@ -341,9 +432,7 @@ class GazerPersonality:
         has_llm = self._llm_provider is not None or self.legacy_cognitive_step is not None
 
         if has_llm:
-            current_system_prompt = config.get(
-                "personality.system_prompt", self.system_prompt
-            )
+            current_system_prompt = config.get("personality.system_prompt", self.system_prompt)
 
             # 0. Inject current affect
             context = context.with_update(affect=self.affect_manager.current_affect())
@@ -370,7 +459,9 @@ class GazerPersonality:
                     "Soul received empty tool list (Available Tools: []). "
                     "Registry holds %d tool(s); sender_id=%r channel=%r. "
                     "If total>0, all tools were filtered out by access policy.",
-                    total_registered, sender_id, channel,
+                    total_registered,
+                    sender_id,
+                    channel,
                 )
             motivation_context = self._build_motivation_context()
 
@@ -396,14 +487,10 @@ class GazerPersonality:
             context = self.proactive_engine.inject_hints(context, signals)
 
             # 4. Build prompt via ContextBudgetManager (replaces AdapterCognitiveStep)
-            prompt = self.budget_manager.build_prompt(
-                context, personality=self.personality
-            )
+            prompt = self.budget_manager.build_prompt(context, personality=self.personality)
 
             # Run LLM
-            response_entry = await self._run_llm(
-                prompt, current_system_prompt, tools=tools_desc
-            )
+            response_entry = await self._run_llm(prompt, current_system_prompt, tools=tools_desc)
             context = context.with_update(turn_count=context.turn_count + 1)
 
             # 5. Tool-call loop
@@ -459,9 +546,7 @@ class GazerPersonality:
                     await self.memory_manager.save_entry(tool_result)
 
                 # Rebuild prompt and re-run LLM
-                prompt = self.budget_manager.build_prompt(
-                    context, personality=self.personality
-                )
+                prompt = self.budget_manager.build_prompt(context, personality=self.personality)
                 response_entry = await self._run_llm(
                     prompt, current_system_prompt, tools=tools_desc
                 )
@@ -481,17 +566,20 @@ class GazerPersonality:
 
             # 6. Connect Affect Event (meaningful delta from emotion analysis)
             affect_delta, trigger_key = await self._analyze_affect_delta(
-                user_input, response_text,
+                user_input,
+                response_text,
             )
             half_life = AffectiveStateManager.HALF_LIFE_MAP.get(
                 trigger_key,
                 AffectiveStateManager.HALF_LIFE_MAP["default"],
             )
-            self.affect_manager.add_event(EmotionalEvent(
-                trigger=trigger_key,
-                affect_delta=affect_delta,
-                half_life_seconds=half_life,
-            ))
+            self.affect_manager.add_event(
+                EmotionalEvent(
+                    trigger=trigger_key,
+                    affect_delta=affect_delta,
+                    half_life_seconds=half_life,
+                )
+            )
 
             # 7. Memory consolidation (still uses legacy WorkingMemory internally)
             try:
@@ -520,9 +608,7 @@ class GazerPersonality:
         )
         await self.memory_manager.save_entry(incoming_entry)
         if response_text:
-            await self.memory_manager.save_entry(
-                MemoryEntry(sender="Gazer", content=response_text)
-            )
+            await self.memory_manager.save_entry(MemoryEntry(sender="Gazer", content=response_text))
 
         # Flush any deferred emotional consolidation writes
         await self.affect_manager.flush_consolidations()
@@ -535,18 +621,34 @@ class GazerPersonality:
 
     # Emotion → arousal / dominance mapping for VAD construction
     _EMOTION_AROUSAL: dict[str, float] = {
-        "happy": 0.3, "excited": 0.6, "calm": -0.3, "neutral": 0.0,
-        "tired": -0.4, "anxious": 0.4, "sad": -0.2, "angry": 0.5,
+        "happy": 0.3,
+        "excited": 0.6,
+        "calm": -0.3,
+        "neutral": 0.0,
+        "tired": -0.4,
+        "anxious": 0.4,
+        "sad": -0.2,
+        "angry": 0.5,
     }
     _EMOTION_DOMINANCE: dict[str, float] = {
-        "happy": 0.1, "excited": 0.2, "calm": 0.0, "neutral": 0.0,
-        "tired": -0.2, "anxious": -0.3, "sad": -0.3, "angry": 0.3,
+        "happy": 0.1,
+        "excited": 0.2,
+        "calm": 0.0,
+        "neutral": 0.0,
+        "tired": -0.2,
+        "anxious": -0.3,
+        "sad": -0.3,
+        "angry": 0.3,
     }
     _EMOTION_TRIGGER: dict[str, str] = {
-        "happy": "user_praise", "excited": "user_praise",
-        "sad": "user_criticism", "angry": "user_criticism",
-        "anxious": "user_criticism", "tired": "default",
-        "calm": "default", "neutral": "default",
+        "happy": "user_praise",
+        "excited": "user_praise",
+        "sad": "user_criticism",
+        "angry": "user_criticism",
+        "anxious": "user_criticism",
+        "tired": "default",
+        "calm": "default",
+        "neutral": "default",
     }
 
     async def _analyze_affect_delta(
@@ -581,18 +683,53 @@ class GazerPersonality:
 
         return AffectiveState(valence=valence, arousal=arousal, dominance=dominance), trigger_key
 
+    async def observe_turn_affect(self, user_text: str, reply_text: str) -> "AffectiveState":
+        """Analyze a completed turn, register the emotional event, and return
+        the resulting composite affect.
+
+        This is the live-runtime entry point (called from a turn hook) that
+        makes the affect system actually evolve, replacing the dead
+        ``process()`` path. It also drives Layer-1 feedback when the user's
+        sentiment is strong enough.
+        """
+        affect_delta, trigger_key = await self._analyze_affect_delta(user_text, reply_text)
+        half_life = AffectiveStateManager.HALF_LIFE_MAP.get(
+            trigger_key, AffectiveStateManager.HALF_LIFE_MAP["default"]
+        )
+        self.affect_manager.add_event(
+            EmotionalEvent(
+                trigger=trigger_key,
+                affect_delta=affect_delta,
+                half_life_seconds=half_life,
+            )
+        )
+
+        # Layer-1 feedback when the user's sentiment is unambiguous.
+        if abs(affect_delta.valence) >= self._feedback_sentiment_threshold:
+            self.apply_feedback_signal(
+                positive=affect_delta.valence > 0,
+                content=user_text,
+                source="sentiment",
+            )
+
+        await self.affect_manager.flush_consolidations()
+        return self.affect_manager.current_affect()
+
     # ------------------------------------------------------------------
     # Session lifecycle (Fix #13)
     # ------------------------------------------------------------------
 
-    async def on_session_end(
-        self, transcript: list[dict[str, Any]]
-    ) -> None:
+    async def on_session_end(self, transcript: list[dict[str, Any]]) -> None:
         """Called when a conversation session ends.
 
         Triggers Layer-2 personality evolution via ``SessionDistiller``.
         """
         from soul.personality.evolution_service import FeedbackEvent
+
+        if not self._evolution_enabled:
+            logger.debug("Personality evolution disabled; skipping distillation.")
+            self._session_feedback.clear()
+            return
 
         if not self._session_distiller.has_llm:
             logger.debug("SessionDistiller has no LLM; skipping distillation.")
@@ -609,11 +746,39 @@ class GazerPersonality:
                 feedback_events=feedback,
                 current_personality=self.personality,
             )
+            changed = new_personality.to_dict() != self.personality.to_dict()
             self.personality = new_personality
             # Recompute affect baseline from updated personality
             self.affect_manager.update_baseline(self.personality.to_affect_baseline())
+            if changed:
+                self._save_personality()
             logger.info("Personality distilled after session end.")
         except Exception as exc:
             logger.warning("Session distillation failed: %s", exc)
         finally:
             self._session_feedback.clear()
+
+    # ------------------------------------------------------------------
+    # Layer-1 immediate feedback (per-turn)
+    # ------------------------------------------------------------------
+
+    def apply_feedback_signal(
+        self, positive: bool, content: str, source: str = "sentiment"
+    ) -> None:
+        """Apply Layer-1 per-turn feedback and persist the result.
+
+        Also accumulates the signal for the Layer-2 session distillation.
+        No-op when evolution is disabled.
+        """
+        if not self._evolution_enabled:
+            return
+        from soul.personality.personality_vector import FeedbackSignal
+
+        signal = FeedbackSignal(positive=positive, content=content, source=source)
+        before = self.personality.to_dict()
+        self.personality = self.personality.apply_feedback(signal)
+        # Keep the emotional baseline in sync with the evolving personality.
+        self.affect_manager.update_baseline(self.personality.to_affect_baseline())
+        self._session_feedback.append({"positive": positive, "content": content})
+        if self.personality.to_dict() != before:
+            self._save_personality()

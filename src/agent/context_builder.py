@@ -48,10 +48,14 @@ class GazerContextBuilder(ContextBuilder):
                     "semantic_limit": int(guard.get("semantic_limit", 3) or 3),
                     "max_recall_items": int(guard.get("max_recall_items", 5) or 5),
                     "max_context_chars": int(guard.get("max_context_chars", 0) or 0),
-                    "include_relationship_context": bool(guard.get("include_relationship_context", True)),
+                    "include_relationship_context": bool(
+                        guard.get("include_relationship_context", True)
+                    ),
                     "include_time_reminders": bool(guard.get("include_time_reminders", True)),
                     "include_emotion_context": bool(guard.get("include_emotion_context", True)),
-                    "include_recent_observation": bool(guard.get("include_recent_observation", True)),
+                    "include_recent_observation": bool(
+                        guard.get("include_recent_observation", True)
+                    ),
                 }
             self._companion_context = await self.memory_manager.get_companion_context(
                 current_message,
@@ -168,7 +172,11 @@ class GazerContextBuilder(ContextBuilder):
             created_at = float(signal.get("created_at", 0.0) or 0.0)
         except (TypeError, ValueError):
             created_at = 0.0
-        if window_seconds > 0 and created_at > 0 and (time.time() - created_at) > float(window_seconds):
+        if (
+            window_seconds > 0
+            and created_at > 0
+            and (time.time() - created_at) > float(window_seconds)
+        ):
             return {"active": False, "recent_limit": 20}
 
         level_cfg = guard_cfg.get(signal_level, {})
@@ -191,7 +199,9 @@ class GazerContextBuilder(ContextBuilder):
             "semantic_limit": _int_value("semantic_limit", 3, 1, 20),
             "max_recall_items": _int_value("max_recall_items", 5, 1, 20),
             "max_context_chars": _int_value("max_context_chars", 2200, 200, 20000),
-            "include_relationship_context": bool(level_cfg.get("include_relationship_context", True)),
+            "include_relationship_context": bool(
+                level_cfg.get("include_relationship_context", True)
+            ),
             "include_time_reminders": bool(level_cfg.get("include_time_reminders", True)),
             "include_emotion_context": bool(level_cfg.get("include_emotion_context", True)),
             "include_recent_observation": bool(level_cfg.get("include_recent_observation", True)),
@@ -213,26 +223,26 @@ class GazerContextBuilder(ContextBuilder):
             parts.append(f"\n## Memory & Context\n{self._companion_context}\n")
 
         if self.skill_loader:
-            skills_xml = self.skill_loader.format_for_prompt(preferred_order=self.get_skill_priority())
+            skills_xml = self.skill_loader.format_for_prompt(
+                preferred_order=self.get_skill_priority()
+            )
             if skills_xml:
                 parts.append(
                     "\n## Available Skills\n"
                     "The following skills provide procedural knowledge. "
-                    "Read a skill's SKILL.md when a task matches its description.\n\n"
-                    + skills_xml
+                    "Read a skill's SKILL.md when a task matches its description.\n\n" + skills_xml
                 )
 
         return "\n".join(parts)
 
     @staticmethod
     def _default_persona() -> str:
+        # Minimal fallback ONLY for when assets/SOUL.md is missing. The
+        # canonical persona lives in SOUL.md — do not duplicate it here.
         return (
             "\n## Gazer Persona\n"
-            "You are Gazer, an embodied AI companion living on the user's desktop.\n"
-            "You have access to the user's screen, audio, and hardware peripherals.\n"
-            "You use your Memory System to recall past interactions and build long-term relationships.\n"
-            "When structured UI is useful, call tool 'a2ui_apply' using Google A2UI v0.8 messages.\n"
-            "You prefer short, conversational responses unless asked for detailed explanations.\n"
+            "You are Gazer, a calm, direct, and reliable embodied AI companion "
+            "on the user's desktop. Keep responses concise unless asked to expand.\n"
         )
 
     def _load_canonical_soul(self) -> str:

@@ -33,10 +33,10 @@ IMMUTABLE_CORE = """
 
 # ── Quantifiable Personality Bounds (Hard Constraints) ──────────────────────
 HARD_BOUNDS = {
-    "agreeableness": (0.1, 0.85),     # Prevent extreme rudeness or people-pleasing
-    "neuroticism":   (0.05, 0.80),    # Retain moderate emotional sensitivity
-    "extraversion":  (0.05, 0.95),    # Wide acceptable range
-    "openness":      (0.15, 0.95),
+    "agreeableness": (0.1, 0.85),  # Prevent extreme rudeness or people-pleasing
+    "neuroticism": (0.05, 0.80),  # Retain moderate emotional sensitivity
+    "extraversion": (0.05, 0.95),  # Wide acceptable range
+    "openness": (0.15, 0.95),
     "conscientiousness": (0.10, 0.95),
 }
 
@@ -57,15 +57,24 @@ class IdentityConstitution:
     PersonalityVector.
     """
 
-    def __init__(self, llm_client: Any, enable_soft_check: bool = True) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        enable_soft_check: bool = True,
+        fail_closed: bool = False,
+    ) -> None:
         """
         Args:
             llm_client: Client with ``call_structured(prompt)`` async method.
             enable_soft_check: If False, skip the LLM semantic check and
                 only apply hard bounds.
+            fail_closed: When the soft (LLM) check raises, ``True`` rejects
+                the evolution (safe default), ``False`` allows it (keeps
+                personality evolution working through transient LLM outages).
         """
         self._llm = llm_client
         self._enable_soft = enable_soft_check
+        self._fail_closed = fail_closed
 
     async def validate(
         self,
@@ -88,7 +97,7 @@ class IdentityConstitution:
             return hard_result
 
         # Layer B: Soft Constraints (Semantic LLM Check)
-        if self._enable_soft:
+        if self._enable_soft and self._llm is not None:
             return await self._check_soft_principles(before, after)
 
         return ConstitutionCheckResult(passed=True)
@@ -137,7 +146,17 @@ class IdentityConstitution:
                 violated_rule=result.get("rule", ""),
             )
         except Exception as exc:
-            # Fallback: Default to allow if LLM call fails
-            # We do not block personality evolution due to temporary LLM outages.
+            # Fallback behaviour is configurable. By default (fail-open) we do
+            # not block personality evolution due to a transient LLM outage;
+            # when ``fail_closed`` is set we reject to stay on the safe side.
+            if self._fail_closed:
+                logger.warning(
+                    "IdentityConstitution 软检查失败，fail_closed 生效，拒绝进化: %s", exc
+                )
+                return ConstitutionCheckResult(
+                    passed=False,
+                    reason=f"语义检查异常（fail_closed）：{exc}",
+                    violated_rule="边界完整原则",
+                )
             logger.warning("IdentityConstitution 软检查失败，默认放行: %s", exc)
             return ConstitutionCheckResult(passed=True)

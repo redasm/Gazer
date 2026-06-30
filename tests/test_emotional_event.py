@@ -118,3 +118,38 @@ class TestAffectiveStateManager:
     def test_half_life_map(self) -> None:
         assert AffectiveStateManager.HALF_LIFE_MAP["user_praise"] == 180.0
         assert AffectiveStateManager.HALF_LIFE_MAP["default"] == 300.0
+
+    def test_current_affect_is_order_independent(self) -> None:
+        # The composite affect must not depend on the order events were added.
+        baseline = AffectiveState(valence=0.0, arousal=0.0, dominance=0.0)
+        now = time.time()
+        e1 = EmotionalEvent(
+            trigger="a",
+            affect_delta=AffectiveState(valence=0.8, arousal=0.4),
+            timestamp=now,
+            half_life_seconds=300.0,
+        )
+        e2 = EmotionalEvent(
+            trigger="b",
+            affect_delta=AffectiveState(valence=-0.4, arousal=0.6),
+            timestamp=now,
+            half_life_seconds=300.0,
+        )
+
+        m1 = AffectiveStateManager(baseline=baseline)
+        m1.add_event(e1)
+        m1.add_event(e2)
+
+        m2 = AffectiveStateManager(baseline=baseline)
+        m2.add_event(e2)
+        m2.add_event(e1)
+
+        a1, a2 = m1.current_affect(), m2.current_affect()
+        assert abs(a1.valence - a2.valence) < 1e-9
+        assert abs(a1.arousal - a2.arousal) < 1e-9
+        assert abs(a1.dominance - a2.dominance) < 1e-9
+
+    def test_current_affect_no_events_returns_baseline(self) -> None:
+        baseline = AffectiveState(valence=0.3, arousal=-0.1)
+        manager = AffectiveStateManager(baseline=baseline)
+        assert manager.current_affect().to_dict() == baseline.to_dict()

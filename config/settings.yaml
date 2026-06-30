@@ -85,6 +85,13 @@ personality:
   goals:
   - deliver_reliable_task_results
   - reduce_tool_failures
+  evolution:
+    enabled: true
+    distill_every_turns: 20
+    feedback_sentiment_threshold: 0.5
+    constitution:
+      enable_soft_check: true
+      fail_closed: false
   mental_process:
     initial_state: IDLE
     states:

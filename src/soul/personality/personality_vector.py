@@ -45,16 +45,19 @@ class FeedbackSignal:
 
         Positive feedback → reinforce current style.
         Negative feedback → shift toward opposite style.
+
+        All eight dimensions receive a (small) directional nudge so that no
+        trait is permanently frozen regardless of how much feedback arrives.
         """
         direction = 1.0 if self.positive else -1.0
         return PersonalityDelta(
-            openness=0.0,
-            conscientiousness=0.0,
-            extraversion=0.0,
+            openness=direction * 0.04,
+            conscientiousness=direction * 0.04,
+            extraversion=direction * 0.05,
             agreeableness=direction * 0.1,
             neuroticism=-direction * 0.05,
             humor_level=direction * 0.05,
-            verbosity=0.0,
+            verbosity=direction * 0.03,
             formality=-direction * 0.03,
         )
 
@@ -78,19 +81,26 @@ class PersonalityVector:
     """OCEAN five-factor personality model with interaction style.
 
     All dimension values are in [0.0, 1.0].
+
+    Defaults reflect Gazer's canonical persona (``assets/SOUL.md``): calm and
+    grounded (low neuroticism), reliable and precise (high conscientiousness),
+    curious (moderately high openness), warm but not effusive (moderate
+    extraversion/agreeableness). The baseline mapping in
+    ``to_affect_baseline`` is centred on 0.5, so these values yield a resting
+    affect close to calm/neutral rather than agitated.
     """
 
-    # OCEAN five factors
-    openness: float = 0.5
-    conscientiousness: float = 0.5
-    extraversion: float = 0.5
-    agreeableness: float = 0.5
-    neuroticism: float = 0.5
+    # OCEAN five factors — tuned to Gazer's persona, not a flat 0.5 baseline
+    openness: float = 0.65
+    conscientiousness: float = 0.75
+    extraversion: float = 0.45
+    agreeableness: float = 0.6
+    neuroticism: float = 0.3
 
     # Interaction style (learned from user feedback)
-    humor_level: float = 0.5
-    verbosity: float = 0.5
-    formality: float = 0.5
+    humor_level: float = 0.4
+    verbosity: float = 0.35
+    formality: float = 0.45
 
     # Learning rate: controls how fast personality changes (lower = more stable)
     learning_rate: float = 0.03
@@ -98,16 +108,17 @@ class PersonalityVector:
     def __post_init__(self) -> None:
         """Enforce [0.0, 1.0] bounds on all dimensions."""
         for field_name in (
-            "openness", "conscientiousness", "extraversion",
-            "agreeableness", "neuroticism",
-            "humor_level", "verbosity", "formality",
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "neuroticism",
+            "humor_level",
+            "verbosity",
+            "formality",
         ):
-            object.__setattr__(
-                self, field_name, self._clamp(getattr(self, field_name))
-            )
-        object.__setattr__(
-            self, "learning_rate", max(0.0, min(1.0, self.learning_rate))
-        )
+            object.__setattr__(self, field_name, self._clamp(getattr(self, field_name)))
+        object.__setattr__(self, "learning_rate", max(0.0, min(1.0, self.learning_rate)))
 
     def to_affect_baseline(self) -> AffectiveState:
         """Derive the emotional baseline from personality.
@@ -115,13 +126,18 @@ class PersonalityVector:
         This binds personality to emotion — the two systems are connected
         through this method.
 
+        The OCEAN dimensions are centred on 0.5 before mapping, so a neutral
+        personality (all 0.5) produces a near-zero VAD baseline (calm/neutral)
+        rather than a spuriously "alert" state. Traits shift the baseline
+        relative to that neutral centre.
+
         Returns:
             An ``AffectiveState`` representing the resting emotional tone.
         """
         return AffectiveState(
-            valence=self.agreeableness * 0.6 - self.neuroticism * 0.4,
-            arousal=self.extraversion * 0.5 + self.openness * 0.3,
-            dominance=self.conscientiousness * 0.5,
+            valence=(self.agreeableness - 0.5) * 0.8 - (self.neuroticism - 0.5) * 0.6,
+            arousal=(self.extraversion - 0.5) * 0.7 + (self.openness - 0.5) * 0.3,
+            dominance=(self.conscientiousness - 0.5) * 0.8,
             inertia=1.0 - self.neuroticism * 0.5,
         )
 
@@ -136,24 +152,14 @@ class PersonalityVector:
             conscientiousness=self._clamp(
                 self.conscientiousness + delta.conscientiousness * self.learning_rate
             ),
-            extraversion=self._clamp(
-                self.extraversion + delta.extraversion * self.learning_rate
-            ),
+            extraversion=self._clamp(self.extraversion + delta.extraversion * self.learning_rate),
             agreeableness=self._clamp(
                 self.agreeableness + delta.agreeableness * self.learning_rate
             ),
-            neuroticism=self._clamp(
-                self.neuroticism + delta.neuroticism * self.learning_rate
-            ),
-            humor_level=self._clamp(
-                self.humor_level + delta.humor_level * self.learning_rate
-            ),
-            verbosity=self._clamp(
-                self.verbosity + delta.verbosity * self.learning_rate
-            ),
-            formality=self._clamp(
-                self.formality + delta.formality * self.learning_rate
-            ),
+            neuroticism=self._clamp(self.neuroticism + delta.neuroticism * self.learning_rate),
+            humor_level=self._clamp(self.humor_level + delta.humor_level * self.learning_rate),
+            verbosity=self._clamp(self.verbosity + delta.verbosity * self.learning_rate),
+            formality=self._clamp(self.formality + delta.formality * self.learning_rate),
             learning_rate=self.learning_rate,
         )
 
@@ -167,24 +173,14 @@ class PersonalityVector:
             conscientiousness=self._clamp(
                 self.conscientiousness + delta.conscientiousness * self.learning_rate
             ),
-            extraversion=self._clamp(
-                self.extraversion + delta.extraversion * self.learning_rate
-            ),
+            extraversion=self._clamp(self.extraversion + delta.extraversion * self.learning_rate),
             agreeableness=self._clamp(
                 self.agreeableness + delta.agreeableness * self.learning_rate
             ),
-            neuroticism=self._clamp(
-                self.neuroticism + delta.neuroticism * self.learning_rate
-            ),
-            humor_level=self._clamp(
-                self.humor_level + delta.humor_level * self.learning_rate
-            ),
-            verbosity=self._clamp(
-                self.verbosity + delta.verbosity * self.learning_rate
-            ),
-            formality=self._clamp(
-                self.formality + delta.formality * self.learning_rate
-            ),
+            neuroticism=self._clamp(self.neuroticism + delta.neuroticism * self.learning_rate),
+            humor_level=self._clamp(self.humor_level + delta.humor_level * self.learning_rate),
+            verbosity=self._clamp(self.verbosity + delta.verbosity * self.learning_rate),
+            formality=self._clamp(self.formality + delta.formality * self.learning_rate),
             learning_rate=self.learning_rate,
         )
 
@@ -197,6 +193,34 @@ class PersonalityVector:
             f"交互风格：幽默感={self.humor_level:.2f} 话语量={self.verbosity:.2f} "
             f"正式度={self.formality:.2f}"
         )
+
+    def to_behavioral_prompt(self) -> str:
+        """Serialize personality into behavioral guidance (not raw numbers).
+
+        Raw OCEAN scores are low-signal for an LLM. This renders each trait
+        as a short behavioral instruction only when it deviates meaningfully
+        from neutral (0.5), so the prompt stays terse and actionable.
+        """
+        lines: list[str] = []
+
+        def _describe(value: float, high: str, low: str, margin: float = 0.15) -> None:
+            if value >= 0.5 + margin:
+                lines.append(f"- {high}")
+            elif value <= 0.5 - margin:
+                lines.append(f"- {low}")
+
+        _describe(self.openness, "对新想法保持好奇与开放", "聚焦务实、避免发散")
+        _describe(self.conscientiousness, "严谨可靠，注重准确与条理", "灵活随性，不拘泥细节")
+        _describe(self.extraversion, "表达主动、有活力", "克制内敛，言简意赅")
+        _describe(self.agreeableness, "友善体贴，照顾对方感受", "直接坦率，不为礼貌而委婉")
+        _describe(self.neuroticism, "对情绪与风险更敏感", "情绪稳定、沉着")
+        _describe(self.humor_level, "适时使用干练的幽默", "保持严肃、少用玩笑")
+        _describe(self.verbosity, "可展开充分说明", "默认简短，点到为止")
+        _describe(self.formality, "用语更正式", "用语轻松口语化")
+
+        if not lines:
+            return "行为风格：均衡中性。"
+        return "行为风格：\n" + "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dictionary."""
@@ -216,3 +240,31 @@ class PersonalityVector:
     def _clamp(v: float) -> float:
         """Clamp *v* to [0.0, 1.0]."""
         return max(0.0, min(1.0, v))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PersonalityVector":
+        """Reconstruct a ``PersonalityVector`` from a ``to_dict`` payload.
+
+        Unknown keys are ignored and missing keys fall back to class
+        defaults, so persisted snapshots remain forward/backward compatible.
+        """
+        if not isinstance(data, dict):
+            return cls()
+
+        def _f(key: str, default: float) -> float:
+            try:
+                return float(data.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        return cls(
+            openness=_f("openness", 0.65),
+            conscientiousness=_f("conscientiousness", 0.75),
+            extraversion=_f("extraversion", 0.45),
+            agreeableness=_f("agreeableness", 0.6),
+            neuroticism=_f("neuroticism", 0.3),
+            humor_level=_f("humor_level", 0.4),
+            verbosity=_f("verbosity", 0.35),
+            formality=_f("formality", 0.45),
+            learning_rate=_f("learning_rate", 0.03),
+        )
